@@ -1,6 +1,6 @@
 # SpektraCam
 
-**v0.2.3 · iPhone · iOS 27.2+**
+**v0.2.3 · iPhone · iOS 26.0+**（fork 版将最低版本由上游的 iOS 27.2 降至 26.0）
 
 此App是基于 Andrea Volpato 的 [spektrafilm][upstream] 原生移植的 iPhone 照片编辑器。
 免费、开源，支持简体中文与英文。
@@ -51,10 +51,10 @@ Export is currently SDR, sRGB, 8-bit only. Export at full resolution is limited 
 
 ## 构建 / Build
 
-使用 Xcode 27.2 打开 [SpektraCam.xcodeproj](SpektraCam.xcodeproj)，选择模拟器或 iPhone 后运行。
+使用 Xcode 26 或更高版本打开 [SpektraCam.xcodeproj](SpektraCam.xcodeproj)，选择模拟器或 iPhone 后运行。
 真机安装需要选择自己的开发团队。Python 3 用于本机测试；UI 测试需先在测试模拟器中加入两张不同照片。
 
-Open [SpektraCam.xcodeproj](SpektraCam.xcodeproj) in Xcode 27.2, select a Simulator or iPhone, and run. Select your development team for device installation. Python 3 runs the native checks; UI tests need two different photos in the test Simulator.
+Open [SpektraCam.xcodeproj](SpektraCam.xcodeproj) in Xcode 26 or later, select a Simulator or iPhone, and run. Select your development team for device installation. Python 3 runs the native checks; UI tests need two different photos in the test Simulator.
 
 ```sh
 python3 Scripts/core-checks.py
