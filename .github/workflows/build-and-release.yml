@@ -1,0 +1,129 @@
+name: Build and Release
+
+# 编译 SpektraCam（未签名 IPA）并自动发布到 GitHub Release。
+# - 手动触发：Actions 页 Run workflow
+# - 被 sync-upstream.yml 在同步到新代码后以 workflow_call 调用
+# 发布标签形如 v0.2.3-fork.1（上游标签 v0.2.3 已被 fork 继承，不能重用；
+# 同一版本重复构建自动递增 fork.N）。
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-and-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # 工程要求 Xcode 27 / iOS 27.2 SDK，GitHub 目前只有 xcode-27 预览镜像带 Xcode 27
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select newest Xcode 27
+        run: |
+          XCODE_APP="$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$XCODE_APP" ]; then
+            XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          fi
+          echo "Using $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          xcodebuild -showsdks
+
+      - name: Read version and pick release tag
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(grep -m1 '"MARKETING_VERSION"' SpektraCam.xcodeproj/project.xcproj | sed -E 's/.*"MARKETING_VERSION": *"([^"]+)".*/\1/')"
+          BUILD="$(grep -m1 '"CURRENT_PROJECT_VERSION"' SpektraCam.xcodeproj/project.xcproj | sed -E 's/.*"CURRENT_PROJECT_VERSION": *"([^"]+)".*/\1/')"
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read MARKETING_VERSION from project.xcproj"
+            exit 1
+          fi
+          N=1
+          while gh release view "v${VERSION}-fork.${N}" >/dev/null 2>&1 \
+             || git rev-parse -q --verify "refs/tags/v${VERSION}-fork.${N}" >/dev/null; do
+            N=$((N + 1))
+          done
+          TAG="v${VERSION}-fork.${N}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Version $VERSION (build $BUILD), release tag $TAG"
+
+      - name: Build (unsigned, generic iOS device)
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild build \
+            -project SpektraCam.xcodeproj \
+            -scheme SpektraCam \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            | tee build/xcodebuild.log
+
+      - name: Package unsigned IPA
+        id: pkg
+        run: |
+          APP="build/DerivedData/Build/Products/Release-iphoneos/SpektraCam.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::Built .app not found at $APP"
+            ls -R build/DerivedData/Build/Products || true
+            exit 1
+          fi
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"
+          rm -rf build/Payload
+          mkdir -p build/Payload
+          cp -R "$APP" build/Payload/
+          IPA="SpektraCam-${{ steps.ver.outputs.tag }}-unsigned.ipa"
+          (cd build && zip -qry "../$IPA" Payload)
+          ls -lh "$IPA"
+          echo "ipa=$IPA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.ipa }}
+          path: |
+            ${{ steps.pkg.outputs.ipa }}
+            build/xcodebuild.log
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          UPSTREAM_SHA="$(git rev-parse --short HEAD)"
+          cat > build/release-notes.md <<EOF
+          SpektraCam ${{ steps.ver.outputs.version }}（构建 ${{ steps.ver.outputs.build }}）— fork 自动构建
+
+          - 源码提交：${UPSTREAM_SHA}（上游 runzeni/SpektraCam 同步线）
+          - 资产 \`${{ steps.pkg.outputs.ipa }}\` 为**未签名 IPA**，需用 AltStore / SideStore 等工具重签后安装到 iPhone
+          - 要求 iOS 27.2+，仅 iPhone 竖屏
+
+          Unsigned IPA built by GitHub Actions (Xcode 27, signing disabled). Sideload with AltStore/SideStore.
+          EOF
+          gh release create "$TAG" \
+            "${{ steps.pkg.outputs.ipa }}" \
+            --title "SpektraCam $TAG" \
+            --notes-file build/release-notes.md \
+            --target "$GITHUB_SHA"
+          echo "Published release $TAG"
