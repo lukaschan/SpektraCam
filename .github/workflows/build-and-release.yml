@@ -128,3 +128,19 @@ jobs:
             --notes-file build/release-notes.md \
             --target "$GITHUB_SHA"
           echo "Published release $TAG"
+
+      - name: Update AltStore source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/update_altstore_source.py
+          if git diff --quiet -- altstore.json && [ -z "$(git status --porcelain -- altstore.json)" ]; then
+            echo "AltStore source unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add altstore.json
+          git commit -m "chore: update AltStore source for ${{ steps.ver.outputs.tag }}"
+          git push origin HEAD:main
+          echo "AltStore source committed back to main"

@@ -77,3 +77,15 @@ Code: [GPLv3](LICENSE). spektrafilm profiles and LUT data: [CC BY-SA 4.0](SPEKTR
 [profile-data]: https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/src/spektrafilm/profiles/io.py
 [model-notes]: https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/README.md#introduction
 [kodak]: https://www.kodakprofessional.com/sites/default/files/wysiwyg/pro/resources/e4000_ektachrome_100.pdf
+
+## AltStore 订阅源（本 fork）
+
+iOS 可通过 AltStore、SideStore 等兼容应用订阅安装本 fork 的未签名 IPA，版本随 GitHub Release 自动更新（每日同步上游后也会保留并继续更新），最低支持 iOS 26.0：
+
+<p align="center">
+<a href="https://altdirect.app/?url=https://raw.githubusercontent.com/lukaschan/SpektraCam/refs/heads/main/altstore.json" target="_blank">
+<img src="https://raw.githubusercontent.com/bebound/AltGallery/master/assets/add-alt-source.png" alt="Add AltSource" width="200">
+</a>
+</p>
+
+手动添加时填订阅源地址：`https://raw.githubusercontent.com/lukaschan/SpektraCam/refs/heads/main/altstore.json`

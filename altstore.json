@@ -1,0 +1,28 @@
+{
+  "name": "SpektraCam (fork)",
+  "identifier": "com.lukaschan.spektracam.source",
+  "subtitle": "SpektraCam 的 AltStore 订阅源（fork 自动构建）",
+  "description": "上游 runzeni/SpektraCam 的 fork 订阅源：未签名 IPA 随 GitHub Release 自动更新，最低系统已降至 iOS 26.0，可用于 AltStore、SideStore 等兼容应用。",
+  "iconURL": "https://raw.githubusercontent.com/lukaschan/SpektraCam/refs/heads/main/assets/app-icon.png",
+  "website": "https://github.com/lukaschan/SpektraCam",
+  "apps": [
+    {
+      "name": "SpektraCam",
+      "bundleIdentifier": "io.github.runzeni.andreavolpato-spektrafilm",
+      "developerName": "runzeni（fork 构建：lukaschan）",
+      "subtitle": "胶片模拟照片编辑器 · spektrafilm 原生移植",
+      "localizedDescription": "基于 spektrafilm 的 iPhone 照片编辑器：胶片与印相模拟、裁剪、调整、颗粒、光晕与柔光，支持 .cube LUT 与 RAW 拍摄。fork 版最低支持 iOS 26.0。",
+      "iconURL": "https://raw.githubusercontent.com/lukaschan/SpektraCam/refs/heads/main/assets/app-icon.png",
+      "versions": [
+        {
+          "version": "0.2.3",
+          "date": "2026-11-04",
+          "localizedDescription": "SpektraCam 0.2.3（构建 8）— fork 自动构建\n\n- 源码提交：d17f766（上游 runzeni/SpektraCam 同步线）\n- 资产 `SpektraCam-v0.2.3-fork.2-unsigned.ipa` 为**未签名 IPA**，需用 AltStore / SideStore 等工具重签后安装到 iPhone\n- 要求 iOS 26.0+（fork 已将最低版本由上游的 iOS 27.2 降至 26.0），仅 iPhone 竖屏\n\nUnsigned IPA built by GitHub Actions (Xcode 27, signing disabled). Minimum iOS lowered from upstream's 27.2 to 26.0 in this fork. Sideload with AltStore/SideStore.",
+          "downloadURL": "https://github.com/lukaschan/SpektraCam/releases/download/v0.2.3-fork.2/SpektraCam-v0.2.3-fork.2-unsigned.ipa",
+          "size": 30889307,
+          "minOSVersion": "26.0"
+        }
+      ]
+    }
+  ]
+}
