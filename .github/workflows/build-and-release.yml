@@ -19,8 +19,9 @@ concurrency:
 
 jobs:
   build:
-    # fork 已将最低系统版本降到 iOS 26.0，用 GitHub 正式 macos-26 镜像（Xcode 26.x）即可编译
-    runs-on: macos-26
+    # 工程是 Xcode 27 的新格式（project.xcproj，无 pbxproj），Xcode 26 打不开，
+    # 必须用 xcode-27 预览镜像编译；最低系统版本已降到 iOS 26.0 只是部署目标，与编译器无关
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -28,9 +29,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Select newest Xcode 26
+      - name: Select newest Xcode 27
         run: |
-          XCODE_APP="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+          XCODE_APP="$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)"
           if [ -z "$XCODE_APP" ]; then
             XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
           fi
@@ -119,7 +120,7 @@ jobs:
           - 资产 \`${{ steps.pkg.outputs.ipa }}\` 为**未签名 IPA**，需用 AltStore / SideStore 等工具重签后安装到 iPhone
           - 要求 iOS 26.0+（fork 已将最低版本由上游的 iOS 27.2 降至 26.0），仅 iPhone 竖屏
 
-          Unsigned IPA built by GitHub Actions (Xcode 26, signing disabled). Minimum iOS lowered from upstream's 27.2 to 26.0 in this fork. Sideload with AltStore/SideStore.
+          Unsigned IPA built by GitHub Actions (Xcode 27, signing disabled). Minimum iOS lowered from upstream's 27.2 to 26.0 in this fork. Sideload with AltStore/SideStore.
           EOF
           gh release create "$TAG" \
             "${{ steps.pkg.outputs.ipa }}" \

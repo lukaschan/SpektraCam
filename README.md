@@ -51,10 +51,10 @@ Export is currently SDR, sRGB, 8-bit only. Export at full resolution is limited 
 
 ## 构建 / Build
 
-使用 Xcode 26 或更高版本打开 [SpektraCam.xcodeproj](SpektraCam.xcodeproj)，选择模拟器或 iPhone 后运行。
+使用 Xcode 27.2 打开 [SpektraCam.xcodeproj](SpektraCam.xcodeproj)，选择模拟器或 iPhone 后运行（工程为 Xcode 27 新格式，Xcode 26 无法打开；fork 发布的 IPA 最低支持 iOS 26.0）。
 真机安装需要选择自己的开发团队。Python 3 用于本机测试；UI 测试需先在测试模拟器中加入两张不同照片。
 
-Open [SpektraCam.xcodeproj](SpektraCam.xcodeproj) in Xcode 26 or later, select a Simulator or iPhone, and run. Select your development team for device installation. Python 3 runs the native checks; UI tests need two different photos in the test Simulator.
+Open [SpektraCam.xcodeproj](SpektraCam.xcodeproj) in Xcode 27.2, select a Simulator or iPhone, and run. (The project uses Xcode 27's new format and cannot be opened by Xcode 26; the fork's IPA builds support iOS 26.0+.) Select your development team for device installation. Python 3 runs the native checks; UI tests need two different photos in the test Simulator.
 
 ```sh
 python3 Scripts/core-checks.py
