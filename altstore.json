@@ -16,10 +16,10 @@
       "versions": [
         {
           "version": "0.2.3",
-          "date": "2026-11-04",
-          "localizedDescription": "SpektraCam 0.2.3（构建 8）— fork 自动构建\n\n- 源码提交：95ff17a（上游 runzeni/SpektraCam 同步线）\n- 资产 `SpektraCam-v0.2.3-fork.3-unsigned.ipa` 为**未签名 IPA**，需用 AltStore / SideStore 等工具重签后安装到 iPhone\n- 要求 iOS 26.0+（fork 已将最低版本由上游的 iOS 27.2 降至 26.0），仅 iPhone 竖屏\n\nUnsigned IPA built by GitHub Actions (Xcode 27, signing disabled). Minimum iOS lowered from upstream's 27.2 to 26.0 in this fork. Sideload with AltStore/SideStore.",
-          "downloadURL": "https://github.com/lukaschan/SpektraCam/releases/download/v0.2.3-fork.3/SpektraCam-v0.2.3-fork.3-unsigned.ipa",
-          "size": 30889313,
+          "date": "2026-11-09",
+          "localizedDescription": "SpektraCam 0.2.3（构建 8）— fork 自动构建\n\n- 源码提交：fad68af（上游 runzeni/SpektraCam 同步线）\n- 资产 `SpektraCam-v0.2.3-fork.4-unsigned.ipa` 为**未签名 IPA**，需用 AltStore / SideStore 等工具重签后安装到 iPhone\n- 要求 iOS 26.0+（fork 已将最低版本由上游的 iOS 27.2 降至 26.0），仅 iPhone 竖屏\n\nUnsigned IPA built by GitHub Actions (Xcode 27, signing disabled). Minimum iOS lowered from upstream's 27.2 to 26.0 in this fork. Sideload with AltStore/SideStore.",
+          "downloadURL": "https://github.com/lukaschan/SpektraCam/releases/download/v0.2.3-fork.4/SpektraCam-v0.2.3-fork.4-unsigned.ipa",
+          "size": 30889306,
           "minOSVersion": "26.0"
         }
       ]
