@@ -142,5 +142,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add altstore.json
           git commit -m "chore: update AltStore source for ${{ steps.ver.outputs.tag }}"
+          git fetch origin main
+          git rebase origin/main
           git push origin HEAD:main
           echo "AltStore source committed back to main"
