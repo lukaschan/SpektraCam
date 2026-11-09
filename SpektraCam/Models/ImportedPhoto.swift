@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 nonisolated struct ImportedPhoto: Sendable {
     static let thumbnailMaximumPixelSize = 384
-    static let previewMaximumPixelSize = 1080
+    static let previewMaximumPixelSize = 2160
 
     let data: Data
     let preview: CGImage
@@ -13,25 +13,34 @@ nonisolated struct ImportedPhoto: Sendable {
     let height: Int
     let rawTemperature: Double?
     var metadata = PhotoMetadata()
+    var sourceType: String? = nil
+    var sourceDescription: PhotoSource.Description? = nil
 
-    static func decode(_ data: Data, maximum: Int = previewMaximumPixelSize) -> Self? {
+    func resizedPreview(maximum: Int) -> Self? {
+        guard let image = PhotoSource.preview(preview, maximum: maximum) else { return nil }
+        return .init(
+            data: data, preview: image, width: width, height: height,
+            rawTemperature: rawTemperature, metadata: metadata,
+            sourceType: sourceType, sourceDescription: sourceDescription)
+    }
+
+    static func decode(
+        _ data: Data, maximum: Int = previewMaximumPixelSize, typeHint: String? = nil,
+        neutralPreview: CGImage? = nil
+    )
+        -> Self?
+    {
         guard
-            let source = CGImageSourceCreateWithData(
-                data as CFData,
-                [kCGImageSourceShouldCache: false] as CFDictionary),
-            let preview = CGImageSourceCreateThumbnailAtIndex(
-                source, 0,
-                [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceShouldCacheImmediately: true,
-                    kCGImageSourceThumbnailMaxPixelSize: maximum,
-                ] as CFDictionary)
+            let description = PhotoSource.describe(data, typeHint: typeHint),
+            let source = PhotoSource.imageSource(data, typeHint: description.type),
+            let preview = neutralPreview.flatMap({ PhotoSource.preview($0, maximum: maximum) })
+                ?? PhotoSource.preview(data, description: description, maximum: maximum)
         else { return nil }
         // Materialize ImageIO's lazy provider before UI and renderer share it.
         // A plain bitmap also avoids concurrent lazy-decoder locks on Simulator.
         let space =
-            preview.colorSpace?.model == .rgb ? preview.colorSpace! : CGColorSpace(name: CGColorSpace.sRGB)!
+            preview.colorSpace?.model == .rgb
+            ? preview.colorSpace! : CGColorSpace(name: CGColorSpace.sRGB)!
         guard
             let bitmap = CGContext(
                 data: nil, width: preview.width, height: preview.height,
@@ -40,26 +49,16 @@ nonisolated struct ImportedPhoto: Sendable {
         else { return nil }
         bitmap.draw(preview, in: CGRect(x: 0, y: 0, width: preview.width, height: preview.height))
         guard let decodedPreview = bitmap.makeImage() else { return nil }
-        var properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
-        var temperature: Double?
-        if let type = CGImageSourceGetType(source), UTType(type as String)?.conforms(to: .rawImage) == true {
-            // A RAW embedded thumbnail is not a substitute for a supported RAW decoder.
-            guard let raw = CIRAWFilter(imageData: data, identifierHint: type as String),
-                raw.nativeSize.width > 0, raw.nativeSize.height > 0
-            else { return nil }
-            let value = Double(raw.neutralTemperature)
-            guard value.isFinite, (1000...50000).contains(value) else { return nil }
-            temperature = value
-            // iOS ImageIO may report the DNG's embedded preview dimensions.
-            properties[kCGImagePropertyPixelWidth] = Int(raw.nativeSize.width)
-            properties[kCGImagePropertyPixelHeight] = Int(raw.nativeSize.height)
-        }
+        var properties = PhotoSource.captureProperties(source, data: data)
+        properties[kCGImagePropertyPixelWidth] = description.width
+        properties[kCGImagePropertyPixelHeight] = description.height
         return .init(
             data: data, preview: decodedPreview,
             width: properties[kCGImagePropertyPixelWidth] as? Int ?? preview.width,
             height: properties[kCGImagePropertyPixelHeight] as? Int ?? preview.height,
-            rawTemperature: temperature,
+            rawTemperature: description.temperature,
             metadata: PhotoMetadata(
-                properties: properties, type: CGImageSourceGetType(source), image: decodedPreview))
+                properties: properties, type: description.type as CFString, image: decodedPreview),
+            sourceType: description.type, sourceDescription: description)
     }
 }

@@ -1,3 +1,4 @@
+import Combine
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
@@ -8,19 +9,32 @@ struct ContentView: View {
     @State private var failure: String?
     @State private var showCamera = false
     @State private var libraryPath: [UUID] = []
+    @State private var libraryScrollRequest = 0
     @State private var captureImportFailure: String?
     @Environment(\.scenePhase) private var scenePhase
+    private var checkingCameraControl: Bool {
+        #if DEBUG
+            ProcessInfo.processInfo.arguments.contains("--ui-test-camera-controls")
+        #else
+            false
+        #endif
+    }
     var body: some View {
         Group {
-            if let library {
-                LibraryView(library: library, path: $libraryPath)
+            if checkingCameraControl {
+                #if DEBUG
+                    CameraExposureControlPreview()
+                #endif
+            } else if let library {
+                LibraryView(library: library, path: $libraryPath, scrollToLatestRequest: libraryScrollRequest)
                     .environment(\.openCamera, { showCamera = true })
                     .fullScreenCover(isPresented: $showCamera) {
                         CameraView(library: library) {
-                            do { try library.flushPending() } catch {
+                            do { try library.flushForLibrary() } catch {
                                 library.saveFailure = error.localizedDescription
                             }
                             libraryPath.removeAll()
+                            libraryScrollRequest += 1
                             showCamera = false
                         }
                     }
@@ -28,6 +42,10 @@ struct ContentView: View {
                         await recoverCaptures(library)
                         try? await library.luts.load()
                         try? await library.repairRAWDimensions()
+                        #if DEBUG || PERFORMANCE_CHECKS
+                            await RenderPerformanceChecks.run(library)
+                            await ExportValidation.checkSDR(library)
+                        #endif
                         #if DEBUG
                             await ExportValidation.checkBypass(library)
                             await ExportValidation.run(library)
@@ -52,7 +70,15 @@ struct ContentView: View {
                     String(localized: "app.opening_library", defaultValue: "Opening library…"))
             }
         }
-        .task { if library == nil { openLibrary() } }
+        .task { if !checkingCameraControl && library == nil { openLibrary() } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            if let library {
+                Task {
+                    await library.images.discardMemory()
+                    await library.files.discardPreparedPhoto()
+                }
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 do { try library?.flushPending() } catch {

@@ -2,6 +2,7 @@ import Foundation
 
 /// Stable upstream parameter paths keep UI names separate from the physical model.
 nonisolated struct EditRecipe: Codable, Equatable, Sendable {
+    static let currentVersion = 4
     struct Source: Codable, Equatable, Sendable {
         var exposureEV = 0.0
         var warmth = 0.0
@@ -59,17 +60,29 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
         var mix = 1.0
     }
     struct Look: Codable, Equatable, Sendable {
+        // Model callers and legacy saved recipes retain their existing enabled look.
+        // A new editor session explicitly starts with this disabled.
+        var enabled = true
         var mode = LookMode.spektrafilm
         var first = LUTSlot()
         var second = LUTSlot(mix: 0)
         var identifiers: Set<String> { Set([first.id, second.id].compactMap { $0 }) }
+        init() {}
+        enum CodingKeys: String, CodingKey { case enabled, mode, first, second }
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+            mode = try values.decodeIfPresent(LookMode.self, forKey: .mode) ?? .spektrafilm
+            first = try values.decodeIfPresent(LUTSlot.self, forKey: .first) ?? LUTSlot()
+            second = try values.decodeIfPresent(LUTSlot.self, forKey: .second) ?? LUTSlot(mix: 0)
+        }
     }
     var look = Look()
     var tone = Tone()
     var monochromeGrain = false
     var source = Source()
     var mix = 1.0
-    var version = 3
+    var version = Self.currentVersion
     var upstreamRevision = "3bb2c2d2801ff68b92019cf1dbcbb133d60832bc"
     var filmID = "kodak_portra_400"
     var printID = "kodak_portra_endura"
@@ -98,11 +111,11 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
         source = try values.decodeIfPresent(Source.self, forKey: .source) ?? Source()
         mix = try values.decodeIfPresent(Double.self, forKey: .mix) ?? 1
         version = try values.decodeIfPresent(Int.self, forKey: .version) ?? 1
-        guard (1...3).contains(version) else {
+        guard (1...Self.currentVersion).contains(version) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .version, in: values, debugDescription: "Unsupported edit-recipe version")
         }
-        version = 3  // Tone carries its own algorithm version to preserve older grades.
+        version = Self.currentVersion  // Tone keeps its own algorithm for older grades.
         upstreamRevision =
             try values.decodeIfPresent(String.self, forKey: .upstreamRevision) ?? upstreamRevision
         filmID = try values.decodeIfPresent(String.self, forKey: .filmID) ?? filmID
@@ -156,6 +169,7 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
         copy.geometry = ImageGeometry()
         return copy
     }
+    var inputMode: LookMode { look.enabled ? look.mode : .lut }
     func removingLUTs(_ ids: Set<String>) -> Self {
         var copy = self
         if let id = copy.look.first.id, ids.contains(id) { copy.look.first.id = nil }

@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Browse the album without loading full-resolution data for each thumbnail.
 struct PhotoDetailView: View {
+    @AppStorage(PreviewQuality.libraryKey) private var previewMaximum = PreviewQuality.defaultMaximum
     @Environment(\.dismiss) private var dismiss
     let library: PhotoLibrary
     let filter: LibraryFilter
@@ -15,6 +16,7 @@ struct PhotoDetailView: View {
     }
     @State private var histogram = PhotoHistogram.empty
     @State private var image: UIImage?
+    @State private var imageIdentity: String?
     @State private var editor: EditorSession?
     @State private var export: ExportRequest?
     @State private var working = false
@@ -23,6 +25,7 @@ struct PhotoDetailView: View {
         let id = UUID()
         let session: EditorSession?
         let originalURL: URL
+        let sourceFilename: String
     }
     private var photo: LibraryPhoto? { library.photo(selectedID) }
     private var photos: [LibraryPhoto] { library.photos.filter { filter.includes($0) } }
@@ -65,8 +68,11 @@ struct PhotoDetailView: View {
                 if let photo { PhotoBanner(photo: photo) }
             }
             ToolbarItem(placement: .topBarTrailing) { CameraButton() }
+                .sharedBackgroundVisibility(.hidden)
         }
-        .task(id: "\(selectedID)-\(photo?.renderKey ?? "")") { await loadPreview() }
+        .task(id: "\(selectedID)-\(photo?.renderKey ?? "")-\(previewMaximum)") {
+            await loadPreview()
+        }
         .task(id: selectedID) {
             sourceLens = nil
             if let photo {
@@ -82,16 +88,15 @@ struct PhotoDetailView: View {
         }
         .navigationDestination(item: $editor) { session in
             EditorView(session: session, locationName: photo?.locationName, library: library) {
-                let recipe = session.recipe
-                let preview = await session.currentPreview()
-                try await library.finishEditing(selectedID, recipe: recipe, preview: preview)
+                let recipe = session.hasEdits ? session.recipe : nil
+                try await library.finishEditing(selectedID, recipe: recipe)
             }
         }
         .sheet(item: $export) { request in
             if let session = request.session {
                 ExportPanel(session: session)
             } else {
-                ExportPanel(originalURL: request.originalURL)
+                ExportPanel(originalURL: request.originalURL, sourceFilename: request.sourceFilename)
             }
         }
         .alert(
@@ -107,7 +112,7 @@ struct PhotoDetailView: View {
         photo?.recipeData.flatMap { try? JSONDecoder().decode(EditRecipe.self, from: $0) }
     }
     private var filmTitle: String {
-        guard let recipe = savedRecipe else {
+        guard let recipe = savedRecipe, recipe.look.enabled else {
             return String(localized: "photo.original", defaultValue: "Original")
         }
         if recipe.look.mode == .lut { return "3D LUT" }
@@ -115,7 +120,7 @@ struct PhotoDetailView: View {
             ?? String(localized: "photo.film", defaultValue: "Film")
     }
     private var printTitle: String {
-        guard let recipe = savedRecipe else {
+        guard let recipe = savedRecipe, recipe.look.enabled else {
             return photo?.isRAW == true
                 ? "RAW"
                 : photo?.metadata.formatLabel
@@ -140,8 +145,15 @@ struct PhotoDetailView: View {
             let frame = try await library.images.image(photo, thumbnail: false)
             try Task.checkCancellation()
             image = UIImage(cgImage: frame)
+            imageIdentity = "\(photo.id)-\(photo.renderKey)"
             let stats = await HistogramWorker.shared.make(frame)
             if !Task.isCancelled { histogram = stats }
+            // The precise viewer is already visible. Prepare one neutral source after
+            // a short pause; fast paging cancels this before another RAW decode starts.
+            if photo.hasEdits {
+                try await Task.sleep(for: .milliseconds(150))
+                _ = try? await library.files.decodedPhoto(photo)
+            }
         } catch { if !Task.isCancelled { histogram = .empty } }
     }
     private func revertPhoto() {
@@ -173,7 +185,7 @@ struct PhotoDetailView: View {
         do {
             let recipe = try library.recipe(photo.id)
             if exporting && recipe == nil {
-                export = ExportRequest(session: nil, originalURL: library.files.sourceURL(photo))
+                export = ExportRequest(session: nil, originalURL: library.files.sourceURL(photo), sourceFilename: photo.filename)
                 return
             }
             if let recipe, recipe.upstreamRevision != EditRecipe().upstreamRevision {
@@ -183,12 +195,17 @@ struct PhotoDetailView: View {
             Task {
                 defer { working = false }
                 do {
-                    let imported = try await library.files.decodedPhoto(photo)
-                    let session = EditorSession(photo: imported, recipe: recipe, luts: library.luts)
+                    let neutral = !photo.hasEdits && imageIdentity == "\(photo.id)-\(photo.renderKey)"
+                        ? image?.cgImage : nil
+                    let imported = try await library.files.decodedPhoto(photo, neutralPreview: neutral)
+                    guard selectedID == photo.id else { return }
+                    let session = EditorSession(
+                        photo: imported, recipe: recipe, luts: library.luts,
+                        resources: library.images.resources, sourceFilename: photo.filename)
                     if let image, photo.hasEdits { session.displayImage = image }
                     if exporting {
                         export = ExportRequest(
-                            session: session, originalURL: library.files.sourceURL(photo))
+                            session: session, originalURL: library.files.sourceURL(photo), sourceFilename: photo.filename)
                     } else {
                         session.recipeDidChange = { recipe, immediate in
                             library.queueRecipe(recipe, for: photo.id, immediate: immediate)
@@ -287,11 +304,10 @@ private struct PhotoViewerControls: View {
             Button {
                 confirmRevert = true
             } label: {
-                Image(systemName: "arrow.uturn.backward").frame(width: 28, height: 28)
+                Label(String(localized: "common.revert", defaultValue: "Revert"), systemImage: "arrow.uturn.backward")
             }
             .accessibilityLabel(String(localized: "common.revert", defaultValue: "Revert"))
-            .controlSize(.regular).buttonStyle(.glass)
-            .buttonBorderShape(.circle)
+            .photoActionStyle()
             .disabled(!canRevert).accessibilityIdentifier("photo.revert")
             .confirmationDialog(
                 String(localized: "photo.revert_to_original", defaultValue: "Revert to original?"),
@@ -312,17 +328,13 @@ private struct PhotoViewerControls: View {
                     horizontal: true, vertical: false
                 )
                 .padding(.horizontal, 24)
-        }.buttonStyle(.glassProminent).accessibilityIdentifier("photo.develop")
+        }.buttonStyle(.glassProminent).foregroundStyle(.white).accessibilityIdentifier("photo.develop")
     }
     private var exportButton: some View {
         Button(action: export) {
-            Image(systemName: "square.and.arrow.up").frame(width: 28, height: 28)
+            Label(String(localized: "common.export", defaultValue: "Export"), systemImage: "square.and.arrow.up")
         }
-        .accessibilityLabel(String(localized: "common.export", defaultValue: "Export")).controlSize(
-            .regular
-        ).buttonStyle(.glass).buttonBorderShape(
-            .circle
-        ).accessibilityIdentifier(
+        .accessibilityLabel(String(localized: "common.export", defaultValue: "Export")).photoActionStyle().accessibilityIdentifier(
             "photo.export")
     }
     private var deleteButton: some View { PhotoDeleteButton(action: delete) }
@@ -335,13 +347,9 @@ private struct PhotoDeleteButton: View {
         Button(role: .destructive) {
             confirmDelete = true
         } label: {
-            Image(systemName: "trash").frame(width: 28, height: 28)
+            Label(String(localized: "common.delete", defaultValue: "Delete"), systemImage: "trash")
         }
-        .accessibilityLabel(String(localized: "common.delete", defaultValue: "Delete")).controlSize(
-            .regular
-        ).buttonStyle(.glass).buttonBorderShape(
-            .circle
-        ).accessibilityIdentifier(
+        .accessibilityLabel(String(localized: "common.delete", defaultValue: "Delete")).photoActionStyle().accessibilityIdentifier(
             "photo.delete"
         )
         .confirmationDialog(
@@ -364,6 +372,7 @@ private struct PhotoDeleteButton: View {
 
 /// Each page loads a cached preview; full originals stay outside the paging view.
 struct AlbumPhotoPage: View {
+    @AppStorage(PreviewQuality.libraryKey) private var previewMaximum = PreviewQuality.defaultMaximum
     let photo: LibraryPhoto
     let images: LibraryImages
     @State private var image: UIImage?
@@ -372,7 +381,8 @@ struct AlbumPhotoPage: View {
     var body: some View {
         Group {
             if let image {
-                PhotoViewport(image: image, topInset: 0, edited: photo.hasEdits, topAligned: false)
+                PhotoViewport(image: image, topInset: PhotoInfoPanel.collapsedHeight + 4,
+                    edited: photo.hasEdits, topAligned: false, usePortraitReference: true)
             } else if let failure {
                 ContentUnavailableView {
                     Label(
@@ -390,13 +400,19 @@ struct AlbumPhotoPage: View {
                     String(localized: "photo.loading_photo", defaultValue: "Loading photo…"))
             }
         }
-        .task(id: "\(photo.renderKey)-\(retry)") {
+        .task(id: "\(photo.renderKey)-\(retry)-\(previewMaximum)") {
             do {
+                if image == nil, let thumbnail = await images.cachedThumbnail(photo) {
+                    try Task.checkCancellation()
+                    image = UIImage(cgImage: thumbnail)
+                }
                 let frame = try await images.image(photo, thumbnail: false)
                 try Task.checkCancellation()
                 image = UIImage(cgImage: frame)
                 failure = nil
-            } catch { if !Task.isCancelled { failure = error.localizedDescription } }
+            } catch {
+                if !Task.isCancelled { image = nil; failure = error.localizedDescription }
+            }
         }
     }
 }

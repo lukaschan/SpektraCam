@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// App-level input controls precede the pinned photographic model. Auto metering uses the
 /// unchanged baseline source so it cannot cancel the user's source exposure adjustment.
 nonisolated enum SourceImageRenderer {
+    enum Intent: Hashable { case sceneLinear, developedPhoto }
     struct Input: Sendable { let pixels: [SIMD4<Float>], width: Int, height: Int }
     enum Failure: LocalizedError {
         case decode, raw
@@ -28,43 +29,84 @@ nonisolated enum SourceImageRenderer {
         .workingColorSpace: linear, .workingFormat: CIFormat.RGBAf, .cacheIntermediates: false,
     ])
 
+    /// Owned by one preview resolution inside PhotoRenderer's actor. Mutable RAW filters
+    /// never cross workers; export uses the uncached one-shot path instead.
+    final class Decoder {
+        lazy var context = CIContext(options: [
+            .workingColorSpace: SourceImageRenderer.linear, .workingFormat: CIFormat.RGBAf,
+            .cacheIntermediates: true,
+        ])
+        private var filters: [Intent: (CIRAWFilter, Float, Float)] = [:]
+        private var maximum: Int?
+        func raw(
+            _ data: Data, type: String?, intent: Intent, maximum: Int
+        ) throws -> (CIRAWFilter, Float, Float) {
+            if self.maximum != maximum { filters.removeAll(); self.maximum = maximum }
+            if let cached = filters[intent] { return cached }
+            let result = try SourceImageRenderer.raw(data, type: type, intent: intent, maximum: maximum)
+            filters[intent] = result
+            return result
+        }
+    }
+
+    private static func raw(
+        _ data: Data, type: String?, intent: Intent, maximum: Int
+    ) throws -> (CIRAWFilter, Float, Float) {
+        guard let raw = CIRAWFilter(imageData: data, identifierHint: type),
+            raw.nativeSize.width > 0, raw.nativeSize.height > 0
+        else { throw Failure.raw }
+        raw.scaleFactor = Float(
+            min(1, Double(maximum) / max(raw.nativeSize.width, raw.nativeSize.height)))
+        if intent == .sceneLinear {
+            raw.baselineExposure = 0
+            raw.shadowBias = 0
+            raw.boostAmount = 0
+            raw.localToneMapAmount = 0
+            raw.isGamutMappingEnabled = false
+        }
+        return (raw, raw.neutralTemperature, raw.neutralTint)
+    }
+
     static func prepare(
         data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int,
-        renderedSource: CIImage? = nil
+        renderedSource: CIImage? = nil, sourceType: String? = nil, intent: Intent? = nil,
+        description: PhotoSource.Description? = nil, decoder: Decoder? = nil
     ) throws -> Input {
-        try autoreleasepool {
+        try Task.checkCancellation()
+        return try autoreleasepool {
             try preparePixels(
                 data: data, fallback: fallback, recipe: recipe, maximum: maximum,
-                renderedSource: renderedSource)
+                renderedSource: renderedSource, sourceType: sourceType,
+                intent: intent
+                    ?? (recipe.inputMode == .spektrafilm ? .sceneLinear : .developedPhoto),
+                description: description, decoder: decoder)
         }
     }
     private static func preparePixels(
-        data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int, renderedSource: CIImage?
+        data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int, renderedSource: CIImage?,
+        sourceType: String?, intent: Intent, description known: PhotoSource.Description?, decoder: Decoder?
     ) throws
         -> Input
     {
         var image: CIImage
         var rawInput = false
-        if renderedSource == nil, let data, recipe.temperature != nil {
-            guard let raw = CIRAWFilter(imageData: data, identifierHint: nil),
-                raw.nativeSize.width > 0, raw.nativeSize.height > 0
-            else { throw Failure.raw }
+        let description = known ?? data.flatMap { PhotoSource.describe($0, typeHint: sourceType) }
+        if data != nil && description == nil { throw Failure.decode }
+        if renderedSource == nil, let data, description?.isRAW == true {
+            let (raw, temperature, tint) = try decoder?.raw(
+                data, type: description?.type, intent: intent, maximum: maximum)
+                ?? Self.raw(data, type: description?.type, intent: intent, maximum: maximum)
             rawInput = true
-            raw.scaleFactor = Float(
-                min(1, Double(maximum) / max(raw.nativeSize.width, raw.nativeSize.height)))
             // The film model needs scene light. Photo LUTs expect a rendered sRGB photograph:
             // retain the decoder's per-file baseline and default look for that input contract.
             // A fixed ProRAW EV offset cannot replace the DNG's image-specific rendering tags.
-            if recipe.look.mode == .spektrafilm {
-                raw.baselineExposure = 0
-                raw.shadowBias = 0
-                raw.boostAmount = 0
-                raw.localToneMapAmount = 0
-                raw.isGamutMappingEnabled = false
-            }
-            raw.exposure = 0  // One linear EV operation is shared by preview and export below.
-            if let temperature = recipe.temperature { raw.neutralTemperature = Float(temperature) }
-            raw.neutralTint = min(max(raw.neutralTint + Float(recipe.source.tint), -150), 150)
+            // RAW exposure belongs before the decoder's nonlinear development look.
+            let exposure = Float(recipe.source.exposureEV)
+            let white = recipe.temperature.map(Float.init) ?? temperature
+            let adjustedTint = min(max(tint + Float(recipe.source.tint), -150), 150)
+            if raw.exposure != exposure { raw.exposure = exposure }
+            if raw.neutralTemperature != white { raw.neutralTemperature = white }
+            if raw.neutralTint != adjustedTint { raw.neutralTint = adjustedTint }
             guard let output = raw.outputImage else { throw Failure.raw }
             image = output
         } else {
@@ -75,24 +117,30 @@ nonisolated enum SourceImageRenderer {
                     data: data,
                     options: [
                         .applyOrientationProperty: true,
-                        .expandToHDR: recipe.look.mode == .spektrafilm,
+                        .expandToHDR: intent == .sceneLinear,
+                        .toneMapHDRtoSDR: false,
                     ])
             {
                 // The display thumbnail is 8-bit. Processing decodes original pixels before downsampling.
-                let scale = min(1, Double(maximum) / max(native.extent.width, native.extent.height))
-                image = native.clampedToExtent().applyingFilter(
-                    "CILanczosScaleTransform",
-                    parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
-                image = image.cropped(
-                    to: CGRect(
-                        x: native.extent.minX * scale, y: native.extent.minY * scale,
-                        width: max(1, floor(native.extent.width * scale)),
-                        height: max(1, floor(native.extent.height * scale))))
+                image = PhotoSource.resized(
+                    intent == .developedPhoto ? PhotoSource.toSDR(native) : native,
+                    maximum: maximum)
             } else {
                 image = CIImage(cgImage: fallback)
+                if intent == .developedPhoto {
+                    let recorded = fallback.contentHeadroom
+                    let headroom = recorded > 0 ? recorded : fallback.calculatedContentHeadroom
+                    if headroom > 1 {
+                        image = image.applyingFilter(
+                            "CIToneMapHeadroom",
+                            parameters: [
+                                "inputSourceHeadroom": headroom, "inputTargetHeadroom": 1.0,
+                            ])
+                    }
+                }
             }
         }
-        if recipe.source.exposureEV != 0 {
+        if !rawInput && recipe.source.exposureEV != 0 {
             image = image.applyingFilter(
                 "CIExposureAdjust", parameters: [kCIInputEVKey: recipe.source.exposureEV])
         }
@@ -120,12 +168,13 @@ nonisolated enum SourceImageRenderer {
         guard width > 0, height > 0 else { throw Failure.decode }
         var pixels = Array(repeating: SIMD4<Float>.zero, count: width * height)
         pixels.withUnsafeMutableBytes { bytes in
-            context.render(
+            (decoder?.context ?? context).render(
                 image, toBitmap: bytes.baseAddress!, rowBytes: width * 16,
                 bounds: CGRect(x: 0, y: 0, width: width, height: height), format: .RGBAf,
                 colorSpace: linear)
         }
-        guard pixels.allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.z.isFinite }) else {
+        guard pixels.allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.z.isFinite && $0.w > 0.99 })
+        else {
             throw Failure.decode
         }
         return .init(pixels: pixels, width: width, height: height)

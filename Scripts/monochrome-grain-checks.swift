@@ -66,37 +66,32 @@ private func linear(_ x: Float) -> Double {
             recipe.numbers["film_render.grain.blur"] = 3
             recipe.numbers["film_render.grain.particle_area_um2"] = 10
             let pipeline = try FilmPipeline(library: library, recipe: recipe)
-            let oldNoisy = try await gpu.processImage(
-                pixels, width: edgeWidth, height: edgeHeight,
-                pipeline: pipeline, autoExposureEV: 0)
-            let oldMean = try await gpu.processImage(
-                pixels, width: edgeWidth, height: edgeHeight,
-                pipeline: pipeline, autoExposureEV: 0, grainMean: true)
             let restored = try await gpu.processGrainPair(
                 pixels, width: edgeWidth, height: edgeHeight,
                 pipeline: pipeline, autoExposureEV: 0)
-            let oldA = try PhotoColorBridge.decode(oldNoisy)
-            let oldB = try PhotoColorBridge.decode(oldMean)
             let newA = try PhotoColorBridge.decode(restored.0)
             let newB = try PhotoColorBridge.decode(restored.1)
-            var before: Float = 0
-            var after: Float = 0
+            var mean: Float = 0
+            var energy: Float = 0
             var count: Float = 0
             for y in 8..<edgeHeight - 8 {
                 for x in edgeWidth / 2..<edgeWidth / 2 + 8 {
                     let i = y * edgeWidth + x
-                    before +=
-                        abs(oldA[i].x - oldB[i].x) + abs(oldA[i].y - oldB[i].y) + abs(oldA[i].z - oldB[i].z)
-                    after +=
-                        abs(newA[i].x - newB[i].x) + abs(newA[i].y - newB[i].y) + abs(newA[i].z - newB[i].z)
-                    count += 3
+                    let delta = newA[i] - newB[i]
+                    let luminance = delta.x * 0.2126 + delta.y * 0.7152 + delta.z * 0.0722
+                    mean += luminance
+                    energy += luminance * luminance
+                    count += 1
                 }
             }
             print(
-                "Grain highlight edge, peak", peak, "old mean", before / count, "restored mean", after / count
+                "Grain highlight edge, peak", peak, "mean exposure EV", mean / count * 3.321928,
+                "density RMS", sqrt(energy / count)
             )
             precondition(
-                after < before * 0.8, "Density restoration did not reduce highlight-edge grain artifacts")
+                abs(mean / count * 3.321928) < 0.01,
+                "LUT grain introduced a systematic highlight-edge fringe above 0.01 EV")
+            precondition(energy > 1e-10, "Highlight-edge control removed the grain texture")
         }
     }
 }

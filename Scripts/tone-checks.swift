@@ -126,7 +126,7 @@ import Foundation
                 "Wide shadows reversed tonal order")
         }
         let legacy = try JSONDecoder().decode(EditRecipe.self, from: Data("{\"version\":1}".utf8))
-        precondition(legacy.version == 3 && legacy.tone.isIdentity && !legacy.monochromeGrain)
+        precondition(legacy.version == 4 && legacy.tone.isIdentity && !legacy.monochromeGrain)
         for version in 1...5 {
             var savedTone = EditRecipe.Tone()
             savedTone.algorithm = version

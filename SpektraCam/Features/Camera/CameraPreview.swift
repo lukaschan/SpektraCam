@@ -89,7 +89,6 @@ struct CameraViewfinder: SwiftUI.View {
     let model: CameraModel
     @State private var focusPoint: CGPoint?
     @State private var focusRevision = UUID()
-    @State private var adjustingExposure = false
     var body: some SwiftUI.View {
         Group {
             if let source = model.source {
@@ -124,50 +123,18 @@ struct CameraViewfinder: SwiftUI.View {
             if let point = focusPoint, model.state == .ready {
                 GeometryReader { proxy in
                     let origin = proxy.frame(in: .global).origin
-                    let x = min(max(point.x - origin.x, 26), proxy.size.width - 26)
-                    let y = min(max(point.y - origin.y, 80), proxy.size.height - 80)
+                    let x = min(max(point.x - origin.x, 30), proxy.size.width - 30)
+                    let y = min(max(point.y - origin.y, 30), proxy.size.height - 30)
                     Rectangle().stroke(.yellow, lineWidth: 1)
                         .frame(width: 56, height: 56).position(x: x, y: y)
                         .allowsHitTesting(false).accessibilityHidden(true)
-                    VStack(spacing: 4) {
-                        Image(systemName: "sun.max").font(.system(size: 16))
-                        Slider(
-                            value: Binding(
-                                get: { model.exposureBias },
-                                set: {
-                                    model.setExposureBias($0)
-                                    focusRevision = UUID()
-                                }
-                            ), in: model.exposureRange,
-                            onEditingChanged: { value in
-                                adjustingExposure = value
-                                focusRevision = UUID()
-                            }
-                        )
-                        .labelsHidden().tint(.yellow)
-                        .frame(width: 112).rotationEffect(.degrees(-90)).frame(
-                            width: 44, height: 112
-                        )
-                        .accessibilityLabel(
-                            String(
-                                localized: "camera_preview.camera_exposure",
-                                defaultValue: "Camera exposure")
-                        )
-                        .accessibilityValue(String(format: "%+.1f EV", model.exposureBias))
-                        .accessibilityIdentifier("camera.exposure")
-                        Text(String(format: "%+.1f", model.exposureBias)).font(
-                            .caption2.monospacedDigit())
-                    }
-                    .foregroundStyle(.yellow)
-                    .position(x: x < proxy.size.width - 76 ? x + 46 : x - 46, y: y)
-                    .disabled(model.busy)
                 }
             }
         }
         .onChange(of: model.selectedLens?.id) { _, _ in focusPoint = nil }
         .task(id: focusRevision) {
             try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled, !adjustingExposure else { return }
+            guard !Task.isCancelled else { return }
             focusPoint = nil
         }
     }

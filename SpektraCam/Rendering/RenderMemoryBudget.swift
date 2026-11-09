@@ -36,8 +36,11 @@ nonisolated enum RenderMemoryBudget {
         guard pixels <= UInt64(device.maxBufferLength / 16) else { throw Failure() }
         // Full-frame graph storage plus CPU input; decode and pointwise grade have separate lifetimes.
         // Pointwise grading uses 128-row strips, including LUT/noise references.
-        var estimate = pixels * (recipe.look.mode == .lut ? 192 : 176) + 96 * 1024 * 1024
-        if recipe.monochromeGrain && recipe.flag("film_render.grain.active") {
+        var estimate = recipe.look.enabled
+            ? pixels * (recipe.look.mode == .lut ? 192 : 176) + 96 * 1024 * 1024
+            : pixels * 80 + 32 * 1024 * 1024
+        if recipe.look.enabled && recipe.look.mode == .spektrafilm && recipe.mix < 1 { estimate += pixels * 32 }
+        if recipe.look.enabled && recipe.monochromeGrain && recipe.flag("film_render.grain.active") {
             estimate += pixels * 32
         }
         if max(width, height) <= 2048 && !recipe.tone.outputStage.isIdentity {
@@ -45,6 +48,7 @@ nonisolated enum RenderMemoryBudget {
         }
         let pitch = recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
         for prefix in ["camera.diffusion_filter", "enlarger.diffusion_filter"] {
+            guard recipe.look.enabled else { continue }
             if prefix.hasPrefix("enlarger") && recipe.bypassesPrint { continue }
             guard recipe.flag(prefix + ".active"), recipe.number(prefix + ".strength") > 0 else {
                 continue
@@ -64,13 +68,7 @@ nonisolated enum RenderMemoryBudget {
             }
             estimate += power(width + 2 * radius) * power(height + 2 * radius) * 128
         }
-        let processAllowance: UInt64
-        #if os(iOS) && !targetEnvironment(simulator)
-            processAllowance = UInt64(os_proc_available_memory()) * 4 / 5
-        #else
-            processAllowance = min(
-                ProcessInfo.processInfo.physicalMemory / 3, 8 * 1024 * 1024 * 1024)
-        #endif
+        let processAllowance = ImageMemoryAllowance.available
         // Metal's recommended working set is a performance advisory, not an allocation limit.
         // The process headroom and single-buffer limit above are the admission limits.
         guard allowOvercommit || estimate < processAllowance else {

@@ -7,9 +7,9 @@ struct ExportPanel: View {
         self.session = session
         _original = State(initialValue: nil)
     }
-    init(originalURL: URL) {
+    init(originalURL: URL, sourceFilename: String? = nil) {
         session = nil
-        _original = State(initialValue: OriginalPhotoExporter(source: originalURL))
+        _original = State(initialValue: OriginalPhotoExporter(source: originalURL, sourceFilename: sourceFilename))
     }
     @Environment(\.dismiss) private var dismiss
     @State private var format = PhotoExporter.Format.jpeg
@@ -21,16 +21,12 @@ struct ExportPanel: View {
     @State private var url: URL?
     @State private var dimensions = ""
     @State private var failure: String?
-    @State private var canOvercommit = false
-    @State private var confirmOvercommit = false
-    @State private var overcommitKey: String?
-    private var settingsKey: String { "\(size.rawValue)-\(format.rawValue)-\(quality)" }
     @State private var saving = false
     @State private var saved = false
     @State private var saveFailure: String?
     @State private var renderTask: Task<(URL, Int, Int), Error>?
     private struct Request: Hashable {
-        let format: String, size: String, quality: Double, retry: Int, overcommit: Bool
+        let format: String, size: String, quality: Double, retry: Int
     }
 
     var body: some View {
@@ -91,39 +87,7 @@ struct ExportPanel: View {
                     } else if let failure {
                         Text(failure).foregroundStyle(.secondary)
                         Button(String(localized: "common.retry", defaultValue: "Retry")) {
-                            overcommitKey = nil
                             retry += 1
-                        }
-                        if canOvercommit {
-                            Button(
-                                String(
-                                    localized: "export.try_export_anyway",
-                                    defaultValue: "Try Export Anyway")
-                            ) { confirmOvercommit = true }
-                            .accessibilityIdentifier("export.tryAnyway")
-                            .confirmationDialog(
-                                String(
-                                    localized: "export.try_export_anyway_7304a4",
-                                    defaultValue: "Try export anyway?"),
-                                isPresented: $confirmOvercommit,
-                                titleVisibility: .visible
-                            ) {
-                                Button(
-                                    String(
-                                        localized: "export.try_export_anyway",
-                                        defaultValue: "Try Export Anyway"), role: .destructive
-                                ) {
-                                    overcommitKey = settingsKey
-                                }
-                            } message: {
-                                Text(
-                                    String(
-                                        localized: "export.this_may_take_longer_if_memory_runs",
-                                        defaultValue:
-                                            "This may take longer. If memory runs out, iOS may close SpektraCam. Original photos and saved edits remain stored."
-                                    )
-                                )
-                            }
                         }
                     } else {
                         ProgressView(
@@ -158,8 +122,7 @@ struct ExportPanel: View {
             }
             .task(
                 id: Request(
-                    format: format.rawValue, size: size.rawValue, quality: quality, retry: retry,
-                    overcommit: overcommitKey == settingsKey)
+                    format: format.rawValue, size: size.rawValue, quality: quality, retry: retry)
             ) {
                 await prepareExport()
             }
@@ -173,6 +136,7 @@ struct ExportPanel: View {
             .onDisappear {
                 renderTask?.cancel()
                 session?.discardExport()
+                if let url { try? FileManager.default.removeItem(at: url) }
                 if let original { Task { await original.discard() } }
             }
         }
@@ -194,7 +158,7 @@ struct ExportPanel: View {
                                 localized: "export.save_to_photos", defaultValue: "Save to Photos"))
             }.padding(.vertical, 4)
         }
-        .buttonStyle(.glassProminent).disabled(url == nil || saving || saved)
+        .buttonStyle(.glassProminent).foregroundStyle(.white).disabled(url == nil || saving || saved)
         .accessibilityIdentifier("export.save")
     }
     private var shareButton: some View {
@@ -221,9 +185,9 @@ struct ExportPanel: View {
         }
     }
     private func prepareExport() async {
+        let previousURL = url
         url = nil
         failure = nil
-        canOvercommit = false
         saved = false
         saveFailure = nil
         let previous = renderTask
@@ -231,14 +195,13 @@ struct ExportPanel: View {
         let requestedSize = size
         let requestedFormat = format
         let requestedQuality = quality
-        let allowOvercommit = overcommitKey == settingsKey
         let job = Task {
             if let previous { _ = await previous.result }
+            if let previousURL { try? FileManager.default.removeItem(at: previousURL) }
             try Task.checkCancellation()
             if let session {
                 return try await session.export(
-                    size: requestedSize, format: requestedFormat, quality: requestedQuality,
-                    allowOvercommit: allowOvercommit)
+                    size: requestedSize, format: requestedFormat, quality: requestedQuality)
             }
             guard let original else { throw PhotoExporter.Failure.render }
             return try await original.export(
@@ -251,13 +214,15 @@ struct ExportPanel: View {
             } onCancel: {
                 job.cancel()
             }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                try? FileManager.default.removeItem(at: result.0)
+                return
+            }
             url = result.0
             dimensions = "\(result.1) × \(result.2)"
         } catch {
             guard !Task.isCancelled else { return }
             failure = error.localizedDescription
-            canOvercommit = (error as? RenderMemoryBudget.Failure)?.estimated != nil
             detent = .large
         }
     }

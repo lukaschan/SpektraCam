@@ -7,119 +7,177 @@ import ImageIO
 /// frame are cached independently. Mix reuses the film frame; export uses original bytes.
 actor PhotoRenderer {
     private let source: CGImage, data: Data?, initialTemperature: Double?
-    private let previewMaximum: Int
+    private let sourceType: String?
+    private let sourceFilename: String?
+    private let sourceDescription: PhotoSource.Description?
+    private final class PreviewState {
+        let maximum: Int
+        init(maximum: Int) { self.maximum = maximum }
+        let decoder = SourceImageRenderer.Decoder()
+        var neutralKey: EditRecipe.Source?
+        var neutralTemperature: Double?
+        var neutralImage: CGImage?
+        var opticsKey: EditRecipe?
+        var opticsSize = CGSize.zero
+        var opticsImage: CGImage?
+        var grainKey: EditRecipe?
+        var grainSize = CGSize.zero
+        var grainImages: (CGImage, CGImage)?
+        var previousMode: EditRecipe.LookMode?
+        var baseline: SourceImageRenderer.Input?
+        var baselineImage: CIImage?
+        var input: SourceImageRenderer.Input?
+        var inputKey: EditRecipe.Source?
+        var inputTemperature: Double?
+        var inputLookMode: EditRecipe.LookMode?
+        var meter: MeteringCore.Image?
+        var meteredEV = [String: Double]()
+        var filmRecipe: EditRecipe?
+        var filmImage: CGImage?
+    }
+    private var preview: PreviewState
+    // At most the active and one alternate resolution. A drag cannot evict the settled
+    // source/film cache, and a 2160 px setting does not create an unbounded image ladder.
+    private var alternatePreview: (maximum: Int, state: PreviewState)?
+    private var previewMaximum: Int
+    private let previewLimit: Int
     private let renderResources: FilmRenderResources
     private let lutDirectory: URL?
     private var cubes: [String: CubeLUT] = [:]
-    private var opticsKey: EditRecipe?
-    private var opticsSize = CGSize.zero
-    private var opticsImage: CGImage?
-    private var grainKey: EditRecipe?
-    private var grainSize = CGSize.zero
-    private var grainImages: (CGImage, CGImage)?
-    private var previousMode: EditRecipe.LookMode?
-    private var baseline: SourceImageRenderer.Input?
-    private var baselineImage: CIImage?
-    private var input: SourceImageRenderer.Input?
-    private var inputKey: EditRecipe.Source?
-    private var inputTemperature: Double?
-    private var inputLookMode: EditRecipe.LookMode?
-    private var meter: MeteringCore.Image?
-    private var meteredEV = [String: Double]()
-    private var filmRecipe: EditRecipe?
-    private var filmImage: CGImage?
     private var exportKey: EditRecipe?
     private var exportSize: PhotoExporter.Size?
     private var exportImage: CGImage?
 
     init(
         source: CGImage, directory: URL, data: Data? = nil, temperature: Double? = nil,
-        lutDirectory: URL? = nil, previewMaximum: Int = 1080, resources: FilmRenderResources? = nil
+        lutDirectory: URL? = nil, previewMaximum: Int = PreviewQuality.editorMaximum,
+        resources: FilmRenderResources? = nil,
+        sourceType: String? = nil, description: PhotoSource.Description? = nil,
+        sourceFilename: String? = nil
     ) {
+        self.sourceFilename = sourceFilename
         self.source = source
         self.previewMaximum = previewMaximum
+        preview = PreviewState(maximum: previewMaximum)
+        previewLimit = previewMaximum
         renderResources = resources ?? FilmRenderResources(directory: directory)
         self.data = data
-        initialTemperature = temperature
+        let description = description ?? data.flatMap { PhotoSource.describe($0, typeHint: sourceType) }
+        self.sourceDescription = description
+        self.sourceType = description?.type ?? sourceType
+        initialTemperature = temperature ?? description?.temperature
         self.lutDirectory = lutDirectory
     }
-    private func baselineInput() throws -> SourceImageRenderer.Input {
-        if let baseline { return baseline }
+    private func baselineInput(state: PreviewState? = nil) throws -> SourceImageRenderer.Input {
+        let cache = state ?? preview
+        if let baseline = cache.baseline { return baseline }
         var recipe = EditRecipe()
-        recipe.look.mode = inputLookMode ?? .spektrafilm
+        recipe.look.mode = cache.inputLookMode ?? .spektrafilm
         recipe.temperature = initialTemperature
         let result = try SourceImageRenderer.prepare(
-            data: data, fallback: source, recipe: recipe, maximum: previewMaximum)
-        baseline = result
-        baselineImage = SourceImageRenderer.image(result)
+            data: data, fallback: source, recipe: recipe, maximum: cache.maximum,
+            sourceType: sourceType, description: sourceDescription, decoder: cache.decoder)
+        cache.baseline = result
+        if sourceDescription?.isRAW != true { cache.baselineImage = SourceImageRenderer.image(result) }
         return result
     }
-    private func exposure(_ recipe: EditRecipe, library: ModelLibrary) throws -> Double {
+    private func exposure(_ recipe: EditRecipe, library: ModelLibrary, state: PreviewState? = nil) throws -> Double {
+        let cache = state ?? preview
         guard recipe.flag("camera.auto_exposure") else { return 0 }
         let method = recipe.choice("camera.auto_exposure_method")
-        if let value = meteredEV[method] { return value }
-        if meter == nil {
-            let baseline = try baselineInput()
+        if let value = cache.meteredEV[method] { return value }
+        if cache.meter == nil {
+            let baseline = try baselineInput(state: cache)
             let y = ModelLibrary.vector(library.index.meteringY)
             let luminance = baseline.pixels.map {
                 Double($0.x) * y.x + Double($0.y) * y.y + Double($0.z) * y.z
             }
-            meter = try MeteringCore.Image(
+            cache.meter = try MeteringCore.Image(
                 width: baseline.width, height: baseline.height, luminance: luminance
             ).smallPreview()
         }
-        let value = meter!.exposureEV(method: method)
-        meteredEV[method] = value
+        let value = cache.meter!.exposureEV(method: method)
+        cache.meteredEV[method] = value
         return value
     }
     private func selectInputMode(_ mode: EditRecipe.LookMode) {
-        if inputLookMode != mode {
+        if preview.inputLookMode != mode {
             // Film/RAW and SDR photo-LUT input have different rendering intents, including HEIF gain maps.
-            baseline = nil
-            baselineImage = nil
-            input = nil
-            meter = nil
-            meteredEV.removeAll()
+            preview.baseline = nil
+            preview.baselineImage = nil
+            preview.input = nil
+            preview.meter = nil
+            preview.meteredEV.removeAll()
         }
-        inputLookMode = mode
+        preview.inputLookMode = mode
     }
     private func previewInput(_ recipe: EditRecipe) throws -> SourceImageRenderer.Input {
-        selectInputMode(recipe.look.mode)
-        if inputKey == recipe.source, inputTemperature == recipe.temperature, let input {
+        selectInputMode(recipe.inputMode)
+        if preview.inputKey == recipe.source, preview.inputTemperature == recipe.temperature, let input = preview.input {
             return input
         }
         let result: SourceImageRenderer.Input
         if recipe.source == EditRecipe.Source(), recipe.temperature == initialTemperature {
             result = try baselineInput()
         } else {
-            let canReuse =
-                initialTemperature == nil
-                || (recipe.temperature == initialTemperature && recipe.source.tint == 0)
+            let canReuse = sourceDescription?.isRAW != true
             if canReuse { _ = try baselineInput() }
             result = try SourceImageRenderer.prepare(
                 data: canReuse ? nil : data, fallback: source, recipe: recipe,
                 maximum: previewMaximum,
-                renderedSource: canReuse ? baselineImage : nil)
+                renderedSource: canReuse ? preview.baselineImage : nil, sourceType: sourceType,
+                description: sourceDescription, decoder: preview.decoder)
         }
-        input = result
-        inputKey = recipe.source
-        inputTemperature = recipe.temperature
+        preview.input = result
+        preview.inputKey = recipe.source
+        preview.inputTemperature = recipe.temperature
         return result
     }
-    func render(_ recipe: EditRecipe) async throws -> CGImage {
+    func render(_ recipe: EditRecipe, maximum: Int? = nil) async throws -> CGImage {
         try Task.checkCancellation()
-        let (library, gpu) = try await renderResources.load()
-        let input = try previewInput(recipe)
-        if previousMode != recipe.look.mode {
-            filmRecipe = nil
-            filmImage = nil
-            opticsKey = nil
-            opticsImage = nil
-            grainKey = nil
-            grainImages = nil
-            previousMode = recipe.look.mode
+        let requested = min(previewLimit, maximum ?? previewLimit)
+        if requested != previewMaximum {
+            let previous = (maximum: previewMaximum, state: preview)
+            preview = alternatePreview?.maximum == requested
+                ? alternatePreview!.state : PreviewState(maximum: requested)
+            alternatePreview = previous
+            previewMaximum = requested
         }
-        return try await frame(input, recipe: recipe, library: library, gpu: gpu, preview: true)
+        let width = sourceDescription?.width ?? source.width
+        let height = sourceDescription?.height ?? source.height
+        let scale = min(1, Double(requested) / Double(max(width, height)))
+        do {
+            try RenderMemoryBudget.check(
+                width: max(1, Int(ceil(Double(width) * scale))),
+                height: max(1, Int(ceil(Double(height) * scale))), recipe: recipe)
+        } catch {
+            // The alternate is disposable. Do not keep it at the cost of an active preview.
+            guard alternatePreview != nil else { throw error }
+            alternatePreview = nil
+            try RenderMemoryBudget.check(
+                width: max(1, Int(ceil(Double(width) * scale))),
+                height: max(1, Int(ceil(Double(height) * scale))), recipe: recipe)
+        }
+        let input = try previewInput(recipe)
+        try RenderMemoryBudget.check(width: input.width, height: input.height, recipe: recipe)
+        if !recipe.look.enabled {
+            return try neutralFrame(input, recipe: recipe)
+        }
+        let (library, gpu) = try await renderResources.load()
+        try Task.checkCancellation()
+        if preview.previousMode != recipe.look.mode {
+            preview.filmRecipe = nil
+            preview.filmImage = nil
+            preview.opticsKey = nil
+            preview.opticsImage = nil
+            preview.grainKey = nil
+            preview.grainImages = nil
+            preview.previousMode = recipe.look.mode
+        }
+        return try await frame(input, recipe: recipe, library: library, gpu: gpu, preview: true, state: preview)
+    }
+    private func neutralFrame(_ input: SourceImageRenderer.Input, recipe: EditRecipe) throws -> CGImage {
+        try ToneRenderer.render(SourceImageRenderer.workingImage(input), tone: recipe.tone)
     }
     private func applications(_ recipe: EditRecipe) throws -> [CubeLUT.Application] {
         var active: [String: CubeLUT] = [:]
@@ -136,8 +194,9 @@ actor PhotoRenderer {
     }
     private func effectFrames(
         _ input: SourceImageRenderer.Input, recipe: EditRecipe,
-        library: ModelLibrary, gpu: MetalFilmPipeline, preview: Bool
+        library: ModelLibrary, gpu: MetalFilmPipeline, preview: Bool, state: PreviewState
     ) async throws -> (CGImage, CGImage?, CGImage?) {
+        let cache = state
         var physical = EditRecipe()
         // The carrier uses film optics, but its RAW controls share the LUT source reference.
         physical.look.mode = .lut
@@ -172,21 +231,22 @@ actor PhotoRenderer {
         optics.flags = optics.flags.filter { !$0.key.hasPrefix("film_render.grain.") }
         optics.flags["film_render.grain.active"] = false
         let source: CGImage
-        if preview, opticsKey == optics, opticsSize == size, let image = opticsImage {
+        if preview, cache.opticsKey == optics, cache.opticsSize == size, let image = cache.opticsImage {
             source = image
         } else {
             if opticalFlags.contains(where: { optics.flag($0) }) || !optics.tone.rawStage.isIdentity
             {
+                let pipeline = try await renderResources.pipeline(optics)
                 source = try await gpu.processOptics(
                     input.pixels, width: input.width, height: input.height,
-                    pipeline: FilmPipeline(library: library, recipe: optics))
+                    pipeline: pipeline)
             } else {
                 source = try SourceImageRenderer.workingImage(input)
             }
             if preview {
-                opticsKey = optics
-                opticsSize = size
-                opticsImage = source
+                cache.opticsKey = optics
+                cache.opticsSize = size
+                cache.opticsImage = source
             }
         }
         var grain = physical
@@ -201,21 +261,21 @@ actor PhotoRenderer {
         if !grain.flag("film_render.grain.active") {
             noise = nil
             if preview {
-                grainImages = nil
-                grainKey = nil
+                cache.grainImages = nil
+                cache.grainKey = nil
             }
-        } else if preview, grainKey == grain, grainSize == size, let frames = grainImages {
+        } else if preview, cache.grainKey == grain, cache.grainSize == size, let frames = cache.grainImages {
             noise = frames
         } else {
             let exposure = try exposure(grain, library: library)
-            let pipeline = try FilmPipeline(library: library, recipe: grain)
+            let pipeline = try await renderResources.pipeline(grain)
             noise = try await gpu.processGrainPair(
                 input.pixels, width: input.width, height: input.height,
                 pipeline: pipeline, autoExposureEV: exposure)
             if preview {
-                grainKey = grain
-                grainSize = size
-                grainImages = noise
+                cache.grainKey = grain
+                cache.grainSize = size
+                cache.grainImages = noise
             }
         }
         return (source, noise?.0, noise?.1)
@@ -223,14 +283,15 @@ actor PhotoRenderer {
 
     private func frame(
         _ input: SourceImageRenderer.Input, recipe: EditRecipe,
-        library: ModelLibrary, gpu: MetalFilmPipeline, preview: Bool
+        library: ModelLibrary, gpu: MetalFilmPipeline, preview: Bool, state: PreviewState? = nil
     ) async throws -> CGImage {
+        let cache = state ?? PreviewState(maximum: previewMaximum)
         var recipe = recipe
         recipe.numbers["film_render.halation.scatter_amount"] = min(
             max(recipe.number("film_render.halation.scatter_amount"), 0), 1)
         if recipe.look.mode == .lut {
             let frames = try await effectFrames(
-                input, recipe: recipe, library: library, gpu: gpu, preview: preview)
+                input, recipe: recipe, library: library, gpu: gpu, preview: preview, state: cache)
             let residual: (CGImage, CGImage)? = frames.1.flatMap { dirty in
                 frames.2.map { (dirty, $0) }
             }
@@ -244,16 +305,17 @@ actor PhotoRenderer {
         key.tone = recipe.tone.rawStage
         key.look = EditRecipe.Look()
         let film: CGImage
-        if preview, filmRecipe == key, let cached = filmImage {
+        if preview, cache.filmRecipe == key, let cached = cache.filmImage {
             film = cached
         } else {
+            let pipeline = try await renderResources.pipeline(recipe)
             film = try await gpu.processImage(
                 input.pixels, width: input.width, height: input.height,
-                pipeline: FilmPipeline(library: library, recipe: recipe),
-                autoExposureEV: exposure(recipe, library: library))
+                pipeline: pipeline,
+                autoExposureEV: exposure(recipe, library: library, state: cache))
             if preview {
-                filmRecipe = key
-                filmImage = film
+                cache.filmRecipe = key
+                cache.filmImage = film
             }
         }
         try Task.checkCancellation()
@@ -261,9 +323,27 @@ actor PhotoRenderer {
         if recipe.mix >= 1 {
             mixed = film
         } else {
-            let rawSource = try ToneRenderer.working(
-                SourceImageRenderer.workingImage(input), tone: recipe.tone.rawStage,
-                normalizationEV: exposure(recipe, library: library))
+            // Mix endpoints share output reference white, not merely a linear transfer curve.
+            // Scene light belongs inside the film model; the zero endpoint is a developed photo.
+            let neutral: CGImage
+            if preview, cache.neutralKey == recipe.source, cache.neutralTemperature == recipe.temperature,
+                let cached = cache.neutralImage
+            {
+                neutral = cached
+            } else {
+                let developed = try SourceImageRenderer.prepare(
+                    data: data, fallback: source, recipe: recipe,
+                    maximum: max(input.width, input.height), sourceType: sourceType,
+                    intent: .developedPhoto, description: sourceDescription,
+                    decoder: preview ? cache.decoder : nil)
+                neutral = try SourceImageRenderer.workingImage(developed)
+                if preview {
+                    cache.neutralKey = recipe.source
+                    cache.neutralTemperature = recipe.temperature
+                    cache.neutralImage = neutral
+                }
+            }
+            let rawSource = try ToneRenderer.working(neutral, tone: recipe.tone.rawStage)
             mixed = try SourceImageRenderer.blend(
                 film: film, sourceImage: rawSource, amount: recipe.mix)
         }
@@ -282,8 +362,9 @@ actor PhotoRenderer {
         if let cached = exportImage {
             image = cached
         } else {
+            releasePreviewCaches(keepMetering: true)
             guard let data else { throw PhotoExporter.Failure.decode }
-            let dimensions = try PhotoExporter.sourceDimensions(data)
+            let dimensions = try PhotoExporter.sourceDimensions(data, sourceType: sourceType)
             let width = Int(dimensions.width)
             let height = Int(dimensions.height)
             let originalLong = max(width, height)
@@ -298,32 +379,37 @@ actor PhotoRenderer {
                 size.maximum.map { Int(ceil(Double($0) / max(fraction, 1e-6))) } ?? originalLong
             )
             let scale = Double(maximum) / Double(originalLong)
-            let (_, exportGPU) = try await renderResources.load()
-            await exportGPU.releaseWorkingCaches()
-            filmImage = nil
-            opticsImage = nil
-            grainImages = nil
+            if recipe.look.enabled {
+                let (_, exportGPU) = try await renderResources.load()
+                await exportGPU.releaseWorkingCaches()
+            }
+            preview.filmImage = nil
+            preview.opticsImage = nil
+            preview.grainImages = nil
             try RenderMemoryBudget.check(
                 width: max(1, Int(ceil(Double(width) * scale))),
                 height: max(1, Int(ceil(Double(height) * scale))), recipe: recipe,
                 allowOvercommit: allowOvercommit)
             // The RAW input path decodes directly to float; an 8-bit fallback decode is redundant.
-            let decoded =
-                initialTemperature != nil
-                ? source : try PhotoExporter.decodeSource(data, maximum: maximum)
-            selectInputMode(recipe.look.mode)
+            let decoded = source
+            selectInputMode(recipe.inputMode)
             let input = try SourceImageRenderer.prepare(
-                data: data, fallback: decoded, recipe: recipe, maximum: maximum)
-            let (library, gpu) = try await renderResources.load()
+                data: data, fallback: decoded, recipe: recipe, maximum: maximum,
+                sourceType: sourceType)
             let graded: CGImage
-            do {
-                graded = try await frame(
-                    input, recipe: recipe, library: library, gpu: gpu, preview: false)
-            } catch {
+            if recipe.look.enabled {
+                let (library, gpu) = try await renderResources.load()
+                do {
+                    graded = try await frame(
+                        input, recipe: recipe, library: library, gpu: gpu, preview: false)
+                } catch {
+                    await gpu.releaseWorkingCaches()
+                    throw error
+                }
                 await gpu.releaseWorkingCaches()
-                throw error
+            } else {
+                graded = try neutralFrame(input, recipe: recipe)
             }
-            await gpu.releaseWorkingCaches()
             try Task.checkCancellation()
             guard let transformed = GeometryRenderer.render(graded, geometry: recipe.geometry),
                 let cropped = transformed.cropping(
@@ -336,17 +422,30 @@ actor PhotoRenderer {
             exportSize = size
         }
         try Task.checkCancellation()
-        let url = try PhotoExporter.write(image, format: format, quality: quality)
+        let url = try PhotoExporter.write(
+            image, format: format, quality: quality,
+            sourceData: data, sourceType: sourceType, sourceFilename: sourceFilename)
         if Task.isCancelled {
             try? FileManager.default.removeItem(at: url)
             throw CancellationError()
         }
+        // The encoded file owns the export now; do not retain a full-resolution float bitmap.
+        discardExport()
         return (url, image.width, image.height)
     }
     func discardExport() {
         exportImage = nil
         exportKey = nil
         exportSize = nil
+    }
+    func releasePreviewCaches(keepMetering: Bool = false) {
+        let next = PreviewState(maximum: previewMaximum)
+        if keepMetering {
+            next.meter = preview.meter
+            next.meteredEV = preview.meteredEV
+        }
+        preview = next
+        alternatePreview = nil
     }
     private static func resize(_ image: CGImage, maximum: Int?) throws -> CGImage {
         guard let maximum, max(image.width, image.height) > maximum else { return image }

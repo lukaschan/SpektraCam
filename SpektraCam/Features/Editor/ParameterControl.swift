@@ -35,32 +35,37 @@ struct ParameterControl: View {
             )
             .accessibilityIdentifier(definition.id)
         } else if definition.defaultChoice != nil {
-            Menu {
-                Picker(
-                    definition.title,
-                    selection: Binding(
-                        get: { session.recipe.choice(definition.id) },
-                        set: { value in
-                            session.update(key: definition.id) { $0.choices[definition.id] = value }
+            HStack(spacing: 8) {
+                Text(definition.title).foregroundStyle(Color.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityHidden(true)
+                Menu {
+                    Picker(
+                        definition.title,
+                        selection: Binding(
+                            get: { session.recipe.choice(definition.id) },
+                            set: { value in
+                                session.update(key: definition.id) { $0.choices[definition.id] = value }
+                            }
+                        )
+                    ) {
+                        ForEach(definition.options, id: \.self) {
+                            Text(choiceTitle($0)).tag($0)
                         }
-                    )
-                ) {
-                    ForEach(definition.options, id: \.self) {
-                        Text(choiceTitle($0)).tag($0)
                     }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(choiceTitle(session.recipe.choice(definition.id)))
+                            .multilineTextAlignment(.trailing).lineLimit(2)
+                        Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                    }.fixedSize(horizontal: false, vertical: true)
                 }
-            } label: {
-                HStack(spacing: 8) {
-                    Text(definition.title).foregroundStyle(.primary)
-                    Spacer(minLength: 4)
-                    Text(
-                        choiceTitle(session.recipe.choice(definition.id))
-                    )
-                    .foregroundStyle(.secondary).multilineTextAlignment(.trailing)
-                    Image(systemName: "chevron.up.chevron.down").foregroundStyle(.secondary)
-                }.font(.caption).frame(minHeight: 32).contentShape(.rect)
-            }
-            .accessibilityIdentifier(definition.id)
+                .buttonStyle(.glassProminent).foregroundStyle(.white).tint(Color.accentColor)
+                .accessibilityLabel(definition.title)
+                .accessibilityValue(choiceTitle(session.recipe.choice(definition.id)))
+                .accessibilityIdentifier(definition.id)
+            }.font(.caption).frame(minHeight: 44)
         } else {
             NumericControl(
                 title: isScatterMix
@@ -124,16 +129,11 @@ struct NumericControl: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    Text(title)
-                    Spacer(minLength: 8)
-                    valueButton
-                }
-                VStack(alignment: .leading) {
-                    Text(title)
-                    valueButton
-                }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                valueButton
             }
             DefaultSlider(
                 value: $value, range: effectiveRange, step: step, defaultValue: defaultValue,
@@ -146,20 +146,25 @@ struct NumericControl: View {
                 integer: step == 1, unit: unit)
         }
     }
+    private var displayValue: String {
+        let key = identifier.lowercased()
+        let digits = key.contains("exposure") || key.hasSuffix(".pivot") ? 2
+            : key.contains("mix") || key.hasSuffix(".temperature") || key.hasSuffix(".warmth")
+                || key.hasSuffix(".scatter_amount") ? 0 : 1
+        return value.formatted(.number.precision(.fractionLength(digits)))
+            + (unit.isEmpty ? "" : " " + unit)
+    }
     private var valueButton: some View {
         Button {
             showEntry = true
         } label: {
-            Text(
-                value.formatted(.number.precision(.fractionLength(0...(unit == "K" ? 0 : 3))))
-                    + (unit.isEmpty ? "" : " " + unit)
-            )
+            Text(displayValue)
             .monospacedDigit()
             .fixedSize()
             .foregroundStyle(Color.primary)
         }
         .accessibilityLabel(String(localized: "control.enter", defaultValue: "Enter \(title)"))
-        .accessibilityValue(value.formatted() + " " + unit)
+        .accessibilityValue(displayValue)
         .accessibilityIdentifier(identifier + ".value")
     }
 }
@@ -215,7 +220,7 @@ struct DefaultSlider: UIViewRepresentable {
         slider.isUserInteractionEnabled = context.environment.isEnabled
         slider.accessibilityLabel = title
         slider.accessibilityIdentifier = identifier
-        slider.tintColor = UIColor(Color.accentColor)
+        slider.tintColor = slider.isEnabled ? UIColor(Color.accentColor) : .tertiaryLabel
         // Keep UIKit and its tick configuration in the same normalized range.
         let configuration = [
             bounds.lowerBound, bounds.upperBound, defaultValue, fillOrigin ?? defaultValue,

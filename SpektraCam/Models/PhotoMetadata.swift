@@ -91,7 +91,7 @@ nonisolated struct PhotoMetadata: Codable, Equatable, Sendable {
         }
         if !parts.isEmpty { exposure = parts.joined(separator: " · ") }
     }
-    private static func captureDate(exif: [CFString: Any]?, tiff: [CFString: Any]?) -> Date? {
+    static func captureDate(exif: [CFString: Any]?, tiff: [CFString: Any]?) -> Date? {
         guard
             let text = exif?[kCGImagePropertyExifDateTimeOriginal] as? String
                 ?? exif?[kCGImagePropertyExifDateTimeDigitized] as? String

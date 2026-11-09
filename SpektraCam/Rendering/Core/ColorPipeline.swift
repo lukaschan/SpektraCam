@@ -22,7 +22,7 @@ nonisolated struct ColorPipeline: Sendable {
     let meteringY: RGB
 
     init(library: ModelLibrary, recipe: EditRecipe) throws {
-        guard (1...3).contains(recipe.version), recipe.upstreamRevision == library.index.revision else {
+        guard (1...EditRecipe.currentVersion).contains(recipe.version), recipe.upstreamRevision == library.index.revision else {
             throw Failure.unsupportedRecipe
         }
         guard let film = library.index.profiles[recipe.filmID],

@@ -55,14 +55,18 @@ import SwiftData
     }
     private static func order(_ a: LibraryPhoto, _ b: LibraryPhoto) -> Bool {
         a.date == b.date
-            ? (a.importedAt == b.importedAt ? a.id.uuidString < b.id.uuidString : a.importedAt < b.importedAt)
+            ? (a.importedAt == b.importedAt
+                ? a.id.uuidString < b.id.uuidString : a.importedAt < b.importedAt)
             : a.date < b.date
     }
     func photo(_ id: UUID) -> LibraryPhoto? { photos.first { $0.id == id } }
-    @discardableResult func importPhoto(_ url: URL, now: Date = Date(), assetIdentifier: String? = nil)
+    @discardableResult func importPhoto(
+        _ url: URL, now: Date = Date(), assetIdentifier: String? = nil
+    )
         async throws -> LibraryPhoto
     {
-        if let assetIdentifier, let id = sources[assetIdentifier]?.photoID, let existing = photo(id) {
+        if let assetIdentifier, let id = sources[assetIdentifier]?.photoID, let existing = photo(id)
+        {
             return existing
         }
         let imported = try await files.importPhoto(from: url, now: now)
@@ -86,7 +90,9 @@ import SwiftData
         return imported
     }
     private func rememberSource(_ identifier: String?, photoID: UUID) throws {
-        let source = identifier.map { LibrarySchemaV2.PhotosSource(assetIdentifier: $0, photoID: photoID) }
+        let source = identifier.map {
+            LibrarySchemaV2.PhotosSource(assetIdentifier: $0, photoID: photoID)
+        }
         if let source { context.insert(source) }
         do { try context.save() } catch {
             context.rollback()
@@ -128,7 +134,8 @@ import SwiftData
     }
     /// Repair old iOS RAW index entries without decoding pixels or changing originals/edits.
     func repairRAWDimensions() async throws {
-        for photo in photos where photo.isRAW && max(photo.metadata.width, photo.metadata.height) <= 1080 {
+        for photo in photos
+        where photo.isRAW && max(photo.metadata.width, photo.metadata.height) <= 1080 {
             try Task.checkCancellation()
             guard let size = await files.nativeRAWSize(photo), size.width > 0, size.height > 0,
                 let record = records[photo.id]
@@ -159,6 +166,15 @@ import SwiftData
         }
     }
     func flushPending() throws { for id in Array(pending.keys) { try flush(id) } }
+    /// Publish saved editor changes when returning through Camera, without rebuilding
+    /// gallery thumbnails on every slider update while the editor is still open.
+    func flushForLibrary() throws {
+        try flushPending()
+        for index in photos.indices {
+            guard let record = records[photos[index].id], record.renderKey != photos[index].renderKey else { continue }
+            photos[index] = try record.snapshot()
+        }
+    }
     private func flush(_ id: UUID) throws {
         guard let recipe = pending[id], let record = records[id] else { return }
         try persistRecipe(recipe, record: record)
@@ -167,6 +183,7 @@ import SwiftData
     }
     private func persistRecipe(_ recipe: EditRecipe?, record: LibrarySchemaV1.Record) throws {
         let data = try recipe.map(LibraryPhoto.recipeData)
+        guard data != record.recipeData else { return }
         let previousData = record.recipeData
         let previousKey = record.renderKey
         record.recipeData = data
@@ -214,18 +231,42 @@ import SwiftData
             saves[id]?.cancel()
             try persistRecipe(nil, record: record)
             pending[id] = nil
-            if let index = photos.firstIndex(where: { $0.id == id }) { photos[index] = try record.snapshot() }
+            if let index = photos.firstIndex(where: { $0.id == id }) {
+                photos[index] = try record.snapshot()
+            }
         }
         await images.discardMemory()
     }
-    func finishEditing(_ id: UUID, recipe: EditRecipe, preview: CGImage?) async throws {
+    func finishEditing(_ id: UUID, recipe: EditRecipe?) async throws {
         guard let record = records[id] else { throw LibraryFiles.Failure.missing }
         saves[id]?.cancel()
-        pending[id] = recipe
-        try flush(id)
+        if recipe == nil && record.recipeData == nil {
+            pending[id] = nil
+            return
+        }
+        if let recipe, let data = record.recipeData,
+            try JSONDecoder().decode(EditRecipe.self, from: data) == recipe
+        {
+            // Do not rewrite an unchanged legacy recipe just because its decoded schema
+            // is newer. A pending save may already have updated only the database.
+            pending[id] = nil
+            if let index = photos.firstIndex(where: { $0.id == id }) {
+                photos[index] = try record.snapshot()
+            }
+            return
+        }
+        if let recipe {
+            pending[id] = recipe
+            try flush(id)
+        } else {
+            pending[id] = nil
+            try persistRecipe(nil, record: record)
+        }
         let saved = try record.snapshot()
         // Caches are replaceable. A cache failure must not undo a durable recipe save.
-        if let preview { try? await images.store(preview, photo: saved) }
+        // Viewer previews have their own resolution and color policy. Rebuild from the source,
+        // rather than storing an editor interaction proxy under a higher-quality cache key.
+        await images.discardMemory()
         if let index = photos.firstIndex(where: { $0.id == id }) { photos[index] = saved }
     }
     func recipe(_ id: UUID) throws -> EditRecipe? {
@@ -239,7 +280,9 @@ import SwiftData
         guard let record = records[id] else { return }
         record.locationName = name
         try context.save()
-        if let index = photos.firstIndex(where: { $0.id == id }) { photos[index] = try record.snapshot() }
+        if let index = photos.firstIndex(where: { $0.id == id }) {
+            photos[index] = try record.snapshot()
+        }
     }
     func delete(_ ids: Set<UUID>) async throws {
         for id in ids {

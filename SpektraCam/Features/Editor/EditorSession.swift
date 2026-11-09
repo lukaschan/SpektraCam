@@ -4,10 +4,11 @@ import Observation
 import SwiftUI
 
 /// One source, one recipe, and bounded recipe history; never copies source bytes for undo.
-@Observable final class EditorSession: Identifiable, Hashable {
+@MainActor @Observable final class EditorSession: Identifiable, Hashable {
     let id = UUID()
     let photo: ImportedPhoto
     let luts: LUTLibrary?
+    @ObservationIgnored private let uneditedRecipe: EditRecipe
     var recipe: EditRecipe { didSet { luts?.protect(id, ids: usedLUTIdentifiers) } }
     var geometryImage: UIImage
     var histogram = PhotoHistogram.empty
@@ -17,19 +18,31 @@ import SwiftUI
     var isRendering = false
     var renderFailed = false
     var isProcessingFilm = false
+    var isRefiningPreview = false
     var filmRenderFailed = false
     @ObservationIgnored private var failureTask: Task<Void, Never>?
     @ObservationIgnored private static let logger = Logger(
         subsystem: "io.github.runzeni.andreavolpato-spektrafilm", category: "Rendering")
     var hasFilmPreview = false
-    var isBusy: Bool { isRendering || isProcessingFilm }
+    var isBusy: Bool { (isRendering || isProcessingFilm) && !isRefiningPreview }
     @ObservationIgnored private let filmRenderer: PhotoRenderer
     @ObservationIgnored private var filmSource: CGImage
     @ObservationIgnored private var renderedSource: CGImage
     @ObservationIgnored private var filmTask: Task<Void, Never>?
+    @ObservationIgnored private var frameTask: Task<CGImage, Error>?
+    @ObservationIgnored private var frameMaximum = 0
+    @ObservationIgnored private var settleTask: Task<Void, Never>?
+    private var waitingToRefine = false
     @ObservationIgnored private var filmRevision: UInt64 = 0
     @ObservationIgnored private var filmEpoch = UUID()
     @ObservationIgnored private var renderedFilmRecipe: EditRecipe?
+    private var renderedPreviewMaximum = 0
+    var effectivePreviewMaximum = PreviewQuality.editorMaximum
+    var previewWasReduced = false
+    private var requestedPreviewMaximum: Int {
+        interactionKey == nil && !waitingToRefine
+            ? PreviewQuality.editorMaximum : min(720, PreviewQuality.editorMaximum)
+    }
     private var renderedGeometry = ImageGeometry()
     private var renderedCrop = CropSelection.fullImage
     @ObservationIgnored private var renderTask: Task<Void, Never>?
@@ -43,20 +56,37 @@ import SwiftUI
 
     @ObservationIgnored var recipeDidChange: ((EditRecipe, Bool) -> Void)?
 
-    init(photo: ImportedPhoto, recipe restored: EditRecipe? = nil, luts: LUTLibrary? = nil) {
+    init(
+        photo: ImportedPhoto, recipe restored: EditRecipe? = nil, luts: LUTLibrary? = nil,
+        resources: FilmRenderResources? = nil, sourceFilename: String? = nil
+    ) {
         self.photo = photo
         self.luts = luts
         filmSource = photo.preview
         renderedSource = photo.preview
         filmRenderer = PhotoRenderer(
             source: photo.preview, directory: Bundle.main.resourceURL!, data: photo.data,
-            temperature: photo.rawTemperature, lutDirectory: luts?.directory)
-        var initial = restored ?? EditRecipe()
+            temperature: photo.rawTemperature, lutDirectory: luts?.directory,
+            resources: resources, sourceType: photo.sourceType,
+            description: photo.sourceDescription, sourceFilename: sourceFilename
+        )
+        let original = EditorDefaults.originalRecipe(temperature: photo.rawTemperature)
+        uneditedRecipe = original
+        var initial = restored ?? original
         if initial.temperature == nil { initial.temperature = photo.rawTemperature }
         recipe = initial
         let initialPreview = UIImage(cgImage: photo.preview)
         geometryImage = initialPreview
         displayImage = initialPreview
+        if !initial.look.enabled, initial.source == EditRecipe.Source(), initial.tone.isIdentity,
+            max(photo.preview.width, photo.preview.height)
+                >= min(PreviewQuality.editorMaximum, max(photo.width, photo.height))
+        {
+            renderedFilmRecipe = initial.processingRecipe
+            renderedPreviewMaximum = PreviewQuality.editorMaximum
+            effectivePreviewMaximum = min(PreviewQuality.editorMaximum, max(photo.preview.width, photo.preview.height))
+            hasFilmPreview = true
+        }
         luts?.protect(id, ids: usedLUTIdentifiers)
         luts?.registerRemoval(id) { [weak self] ids in self?.removeLUTReferences(ids) }
     }
@@ -72,7 +102,7 @@ import SwiftUI
         let store = luts
         Task { @MainActor in store?.release(owner) }
     }
-    static func == (lhs: EditorSession, rhs: EditorSession) -> Bool { lhs.id == rhs.id }
+    nonisolated static func == (lhs: EditorSession, rhs: EditorSession) -> Bool { lhs.id == rhs.id }
     nonisolated func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
     var usedLUTIdentifiers: Set<String> {
@@ -83,10 +113,9 @@ import SwiftUI
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
     var hasEdits: Bool {
-        var initial = EditRecipe()
-        initial.temperature = photo.rawTemperature
-        return recipe != initial
+        recipe != uneditedRecipe
     }
+    func resetAll() { update(key: "reset") { $0 = uneditedRecipe } }
     func binding<Value>(_ keyPath: WritableKeyPath<EditRecipe, Value>, key: String) -> Binding<
         Value
     > {
@@ -98,15 +127,23 @@ import SwiftUI
     }
     func setInteraction(key: String, active: Bool) {
         if active {
+            settleTask?.cancel()
+            settleTask = nil
+            waitingToRefine = false
             failureTask?.cancel()
             filmRenderFailed = false
             interactionKey = key
             lastKey = ""
+            if frameMaximum > 720, frameTask != nil {
+                // A new touch takes priority over a queued high-quality refinement.
+                filmRevision &+= 1
+                frameTask?.cancel()
+            }
         } else if interactionKey == key {
             interactionKey = nil
             // UIKit can send a final valueChanged after touch-up. Keep it in the same undo group.
             // The next touch-down starts a new group.
-            renderFilmIfNeeded()
+            scheduleRefinement()
             recipeDidChange?(recipe, true)
         }
     }
@@ -128,8 +165,15 @@ import SwiftUI
         let changedFilm = recipe.processingRecipe != next.processingRecipe
         recipe = next
         recipeDidChange?(recipe, false)
-        if changedFilm { renderFilm() }
-        if oldGeometry != next.geometry || oldRect != next.crop.normalizedRect { renderGeometry() }
+        if changedFilm {
+            // Numeric entry, stock changes and switches also deserve a quick first result.
+            if interactionKey == nil { scheduleRefinement() }
+            renderFilm()
+        }
+        if oldGeometry != next.geometry || oldRect != next.crop.normalizedRect {
+            isRefiningPreview = false
+            renderGeometry()
+        }
     }
     func selectFilm(_ stock: FilmStock) {
         update(key: "film") { $0.selectFilm(stock) }
@@ -148,29 +192,36 @@ import SwiftUI
         URL, Int, Int
     ) {
         let snapshot = recipe
+        settleTask?.cancel()
+        settleTask = nil
+        waitingToRefine = false
         await filmTask?.value
         try Task.checkCancellation()
+        // Keep the visible snapshot while the sheet owns the screen. Release larger
+        // intermediate proxies before allocating the full-resolution export graph.
+        let previousSource = filmSource
+        filmSource = photo.preview
+        renderedSource = photo.preview
+        geometryImage = displayImage
+        renderedFilmRecipe = nil
+        renderedPreviewMaximum = 0
+        await GeometryWorker.shared.discard(previousSource)
         return try await filmRenderer.export(
             snapshot, size: size, format: format, quality: quality, allowOvercommit: allowOvercommit
         )
     }
-    /// Cache only a frame which matches the recipe that is being saved.
-    func currentPreview() async -> CGImage? {
-        await filmTask?.value
-        await renderTask?.value
-        guard renderedFilmRecipe == recipe.processingRecipe,
-            renderedGeometry == recipe.geometry, renderedCrop == recipe.crop.normalizedRect,
-            renderedSource === filmSource
-        else { return nil }
-        return displayImage.cgImage
-    }
     func discardExport() { Task { await filmRenderer.discardExport() } }
+    func resumeAfterExport() {
+        scheduleRefinement()
+        renderFilmIfNeeded()
+    }
     func undo() {
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(recipe)
         recipe = previous
         recipeDidChange?(recipe, true)
         lastKey = ""
+        scheduleRefinement()
         renderFilmIfNeeded()
         renderGeometry()
     }
@@ -180,6 +231,7 @@ import SwiftUI
         recipe = next
         recipeDidChange?(recipe, true)
         lastKey = ""
+        scheduleRefinement()
         renderFilmIfNeeded()
         renderGeometry()
     }
@@ -245,8 +297,22 @@ import SwiftUI
     }
 
     func resumeRendering() {
+        // Saved edits need the same quick first frame as a new adjustment. This also
+        // prepares the interactive cache before a user touches the first slider.
+        if !hasFilmPreview && filmTask == nil { scheduleRefinement() }
         let source = photo.preview
-        Task { originalHistogram = await HistogramWorker.shared.make(source) }
+        Task {
+            let stats = await HistogramWorker.shared.make(source)
+            originalHistogram = stats
+            if !recipe.look.enabled, recipe.source == EditRecipe.Source(), recipe.tone.isIdentity,
+                filmSource === source
+            {
+                filmHistogram = stats
+                if recipe.geometry.isIdentity && recipe.crop.normalizedRect == CropSelection.fullImage {
+                    histogram = stats
+                }
+            }
+        }
         renderFilmIfNeeded()
         if renderedSource !== filmSource || recipe.geometry != renderedGeometry
             || recipe.crop.normalizedRect != renderedCrop
@@ -254,8 +320,20 @@ import SwiftUI
             renderGeometry()
         }
     }
+    private func scheduleRefinement() {
+        settleTask?.cancel()
+        waitingToRefine = true
+        settleTask = Task {
+            do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
+            waitingToRefine = false
+            settleTask = nil
+            renderFilmIfNeeded()
+        }
+    }
     private func renderFilmIfNeeded() {
-        if filmTask != nil || renderedFilmRecipe != recipe.processingRecipe {
+        if filmTask != nil || renderedFilmRecipe != recipe.processingRecipe
+            || renderedPreviewMaximum != requestedPreviewMaximum
+        {
             renderFilm()
         } else {
             filmRevision &+= 1
@@ -270,6 +348,7 @@ import SwiftUI
         failureTask?.cancel()
         filmRenderFailed = false
         isProcessingFilm = true
+        isRefiningPreview = hasFilmPreview && renderedFilmRecipe == recipe.processingRecipe
         guard filmTask == nil else { return }
         let epoch = UUID()
         filmEpoch = epoch
@@ -277,17 +356,45 @@ import SwiftUI
             while !Task.isCancelled {
                 let revision = filmRevision
                 let requested = recipe.processingRecipe
+                let maximum = requestedPreviewMaximum
+                isRefiningPreview = hasFilmPreview && renderedFilmRecipe == requested
+                frameMaximum = maximum
                 do {
-                    let image = try await filmRenderer.render(requested)
+                    let image: CGImage
+                    let actualMaximum: Int
+                    do {
+                        let renderer = filmRenderer
+                        let job = Task { try await renderer.render(requested, maximum: maximum) }
+                        frameTask = job
+                        image = try await job.value
+                        guard !Task.isCancelled, filmEpoch == epoch else { return }
+                        frameTask = nil
+                        actualMaximum = maximum
+                    } catch is RenderMemoryBudget.Failure where maximum > 720 {
+                        guard !Task.isCancelled, filmEpoch == epoch else { return }
+                        frameTask = nil
+                        image = try await filmRenderer.render(requested, maximum: 720)
+                        actualMaximum = 720
+                    }
                     let stats = await HistogramWorker.shared.make(image)
                     guard !Task.isCancelled, filmEpoch == epoch else { return }
+                    // One render is in flight: publish the latest completed proxy while
+                    // the loop advances to the newest request. Epoch guards reject cancelled work.
+                    let refiningCurrent = hasFilmPreview && renderedFilmRecipe == requested
+                        && requested == recipe.processingRecipe
+                        && renderedGeometry == recipe.geometry && renderedCrop == recipe.crop.normalizedRect
                     filmSource = image
                     filmHistogram = stats
                     renderedFilmRecipe = requested
+                    renderedPreviewMaximum = maximum
+                    effectivePreviewMaximum = actualMaximum
+                    previewWasReduced = actualMaximum < maximum
                     hasFilmPreview = true
+                    isRefiningPreview = refiningCurrent
                     renderGeometry()
                 } catch {
                     guard !Task.isCancelled, filmEpoch == epoch else { return }
+                    frameTask = nil
                     if revision != filmRevision { continue }
                     Self.logger.error(
                         "Preview failed: \(String(describing: error), privacy: .public), film \(requested.filmID, privacy: .public)"
@@ -314,17 +421,24 @@ import SwiftUI
     }
 
     func cancelRendering() {
+        settleTask?.cancel()
+        settleTask = nil
+        waitingToRefine = false
+        frameTask?.cancel()
+        frameTask = nil
         failureTask?.cancel()
         filmTask?.cancel()
         filmTask = nil
         filmEpoch = UUID()
         isProcessingFilm = false
+        isRefiningPreview = false
         renderTask?.cancel()
         renderTask = nil
         renderEpoch = UUID()
         isRendering = false
         let source = filmSource
         Task { await GeometryWorker.shared.discard(source) }
+        Task { await filmRenderer.releasePreviewCaches() }
     }
 }
 

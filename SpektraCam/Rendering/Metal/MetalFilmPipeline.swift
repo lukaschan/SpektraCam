@@ -12,6 +12,23 @@ actor MetalFilmPipeline {
     private let functions: [String: MTLComputePipelineState]
     private let spatial: SpatialMetalKernels
     private let diffusion: DiffusionMetalKernels
+    private var modelKey: EditRecipe?
+    private var modelResources: MetalModelResources?
+    private var frameActive = false
+    private var waitingFrames: [CheckedContinuation<Void, Never>] = []
+
+    private func beginFrame() async throws {
+        if frameActive {
+            await withCheckedContinuation { waitingFrames.append($0) }
+        } else {
+            frameActive = true
+        }
+        do { try Task.checkCancellation() } catch { endFrame(); throw error }
+    }
+    private func endFrame() {
+        if waitingFrames.isEmpty { frameActive = false }
+        else { waitingFrames.removeFirst().resume() }
+    }
 
     init(sources: [String]) throws {
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue()
@@ -46,7 +63,7 @@ actor MetalFilmPipeline {
         diffusion = try .init(device: device, library: library)
     }
     private struct BufferFrame {
-        let image: MTLBuffer, companion: MTLBuffer?, wallSeconds: Double, gpuSeconds: Double?
+        let image: MTLBuffer, wallSeconds: Double, gpuSeconds: Double?
     }
     func releaseWorkingCaches() { diffusion.clear() }
 
@@ -54,6 +71,8 @@ actor MetalFilmPipeline {
         _ input: [SIMD4<Float>], width: Int, height: Int, pipeline: FilmPipeline,
         stochastic: Bool = true, seed: UInt64 = 0, autoExposureEV: Double? = nil
     ) async throws -> Frame {
+        try await beginFrame()
+        defer { endFrame() }
         let started = ProcessInfo.processInfo.systemUptime
         let frame = try await renderBuffer(
             input, width: width, height: height, pipeline: pipeline,
@@ -71,6 +90,8 @@ actor MetalFilmPipeline {
         _ input: [SIMD4<Float>], width: Int, height: Int, pipeline: FilmPipeline,
         seed: UInt64 = 0, autoExposureEV: Double, grainMean: Bool = false
     ) async throws -> CGImage {
+        try await beginFrame()
+        defer { endFrame() }
         let frame = try await renderBuffer(
             input, width: width, height: height, pipeline: pipeline,
             seed: seed, autoExposureEV: autoExposureEV, grainMean: grainMean)
@@ -81,26 +102,27 @@ actor MetalFilmPipeline {
         return try PhotoColorBridge.workingImage(data, width: width, height: height)
     }
 
-    /// Blur the stochastic density difference, then restore the unblurred density before printing.
-    /// Evaluating noise around a blurred highlight edge otherwise creates a dark fringe.
+    /// LUT grain uses density fluctuations without the carrier's print/scan colors.
+    /// Matching blurred expectations remove deterministic edge blur from the noise field.
     func processGrainPair(
         _ input: [SIMD4<Float>], width: Int, height: Int, pipeline: FilmPipeline,
         autoExposureEV: Double
     ) async throws -> (CGImage, CGImage) {
+        try await beginFrame()
+        defer { endFrame() }
         let mean = try await renderBuffer(
             input, width: width, height: height, pipeline: pipeline,
             autoExposureEV: autoExposureEV, grainMean: true, grainDensityOnly: true)
         let noisy = try await renderBuffer(
             input, width: width, height: height, pipeline: pipeline,
-            autoExposureEV: autoExposureEV, grainNoiseReference: mean.image)
-        guard let clean = noisy.companion else { throw Failure.invalidShape }
+            autoExposureEV: autoExposureEV, grainDensityOnly: true)
         func image(_ owned: MTLBuffer) throws -> CGImage {
             let data = Data(
                 bytesNoCopy: owned.contents(), count: width * height * 16,
                 deallocator: .custom { [owned] _, _ in withExtendedLifetime(owned) {} })
-            return try PhotoColorBridge.workingImage(data, width: width, height: height)
+            return try PhotoColorBridge.workingImage(data, width: width, height: height, encoded: false)
         }
-        return try (image(noisy.image), image(clean))
+        return try (image(noisy.image), image(mean.image))
     }
 
     /// Reuse the verified optical kernels in linear RGB, without the film/print color transform.
@@ -108,6 +130,8 @@ actor MetalFilmPipeline {
         async throws
         -> CGImage
     {
+        try await beginFrame()
+        defer { endFrame() }
         let frame = try await renderBuffer(
             input, width: width, height: height, pipeline: pipeline,
             autoExposureEV: 0, opticsOnly: true)
@@ -123,7 +147,7 @@ actor MetalFilmPipeline {
         stochastic: Bool = true,
         seed: UInt64 = 0, autoExposureEV: Double? = nil, opticsOnly: Bool = false,
         grainMean: Bool = false,
-        grainDensityOnly: Bool = false, grainNoiseReference: MTLBuffer? = nil
+        grainDensityOnly: Bool = false
     ) async throws -> BufferFrame {
         let started = ProcessInfo.processInfo.systemUptime
         let count = width * height
@@ -136,7 +160,14 @@ actor MetalFilmPipeline {
         guard pitch.isFinite, pitch > 0 else { throw Failure.invalidShape }
         let color = pipeline.color
         let recipe = pipeline.recipe
-        let model = try MetalModelResources(device: device, pipeline: color)
+        let model: MetalModelResources
+        if modelKey == color.recipe, let cached = modelResources {
+            model = cached
+        } else {
+            model = try MetalModelResources(device: device, pipeline: color)
+            modelKey = color.recipe
+            modelResources = model
+        }
         var uniforms = model.uniforms
         let autoEV: Double
         if let autoExposureEV {
@@ -243,7 +274,7 @@ actor MetalFilmPipeline {
             dispatch(e, "random_lognormal_image")
             return output
         }
-        func finish(_ result: MTLBuffer, invalid: MTLBuffer, companion: MTLBuffer? = nil)
+        func finish(_ result: MTLBuffer, invalid: MTLBuffer)
             async throws
             -> BufferFrame
         {
@@ -270,7 +301,7 @@ actor MetalFilmPipeline {
             try Task.checkCancellation()
             guard invalid.contents().load(as: UInt32.self) == 0 else { throw Failure.nonfinite }
             return BufferFrame(
-                image: result, companion: companion,
+                image: result,
                 wallSeconds: ProcessInfo.processInfo.systemUptime - started,
                 gpuSeconds: tail === originalCommand
                     ? max(0, tail.gpuEndTime - tail.gpuStartTime) : nil)
@@ -409,7 +440,7 @@ actor MetalFilmPipeline {
         pool.release(inhibition)
         let grain = pipeline.grain
         var cleanGrain: MTLBuffer?
-        if stochastic && grain.active && (recipe.monochromeGrain || grainNoiseReference != nil) {
+        if stochastic && grain.active && recipe.monochromeGrain {
             let clean = try pool.take()
             try mix(density, density, into: clean, aWeight: RGB(repeating: 1), bWeight: .zero)
             cleanGrain = clean
@@ -529,14 +560,6 @@ actor MetalFilmPipeline {
             dispatch(encoder, "finish_linear_image")
             return try await finish(density, invalid: invalid)
         }
-        if let mean = grainNoiseReference, let clean = cleanGrain {
-            try mix(
-                density, mean, into: density, aWeight: RGB(repeating: 1),
-                bWeight: RGB(repeating: -1))
-            try mix(
-                clean, density, into: density, aWeight: RGB(repeating: 1),
-                bWeight: RGB(repeating: 1))
-        }
         // Both branches share decoding, exposure, halation, development and couplers.
         // Only the print/scan tail repeats when monochrome grain is enabled.
         func finishScan(_ input: MTLBuffer) throws -> MTLBuffer {
@@ -600,11 +623,6 @@ actor MetalFilmPipeline {
         guard let initialize = command.makeBlitCommandEncoder() else { throw Failure.allocation }
         initialize.fill(buffer: invalid, range: 0..<4, value: 0)
         initialize.endEncoding()
-        if grainNoiseReference != nil, let clean = cleanGrain {
-            try node("encode_image_srgb", density, density, [invalid])
-            try node("encode_image_srgb", clean, clean, [invalid])
-            return try await finish(density, invalid: invalid, companion: clean)
-        }
         if let clean = cleanGrain {
             let e = try encoder(
                 "encode_monochrome_grain", [density, clean, uniformBuffer, invalid])
@@ -618,9 +636,7 @@ actor MetalFilmPipeline {
         return try await finish(density, invalid: invalid)
     }
 
-    /// App extension: retain the clean frame's chroma and add only the grain's linear luminance residual.
-    /// The grain expectation uses the same sublayers, particle bounds and blur as the noisy frame.
-    /// Their difference contains noise without transferring deterministic film edge blur.
+    /// The expectation uses the same sublayers, particle bounds and blur as the noisy density.
     private static let lutKernels = """
         kernel void finish_linear_image(device float4 *pixels [[buffer(0)]],
             device atomic_uint *invalid [[buffer(1)]], constant uint &count [[buffer(2)]],

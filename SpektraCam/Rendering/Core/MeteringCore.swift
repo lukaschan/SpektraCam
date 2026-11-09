@@ -1,4 +1,5 @@
 // Auto-exposure methods and preview sampling from spektrafilm 3bb2c2d. GPLv3.
+import Accelerate
 import Foundation
 
 nonisolated enum MeteringCore {
@@ -13,24 +14,57 @@ nonisolated enum MeteringCore {
             self.luminance = luminance
         }
         func smallPreview(maximum: Int = 256) throws -> Image {
+            guard maximum > 0 else { throw SpectralCore.Failure.invalidShape }
+            try Task.checkCancellation()
             guard max(width, height) > maximum else { return self }
             let scale = Double(maximum) / Double(max(width, height))
             let outWidth = max(1, Int((Double(width) * scale).rounded(.toNearestOrEven)))
             let outHeight = max(1, Int((Double(height) * scale).rounded(.toNearestOrEven)))
             let sigmaY = max(0, (Double(height) / Double(outHeight) - 1) / 2)
             let sigmaX = max(0, (Double(width) / Double(outWidth) - 1) / 2)
-            // skimage rescale(order: 0) applies Gaussian anti-aliasing for float images.
-            var filtered = gaussian(luminance, sigma: sigmaY, vertical: true)
-            filtered = gaussian(filtered, sigma: sigmaX, vertical: false)
-            var output = [Double]()
-            output.reserveCapacity(outWidth * outHeight)
-            for y in 0..<outHeight {
-                let sourceY = min(
-                    height - 1, Int(floor((Double(y) + 0.5) * Double(height) / Double(outHeight))))
-                for x in 0..<outWidth {
-                    let sourceX = min(
-                        width - 1, Int(floor((Double(x) + 0.5) * Double(width) / Double(outWidth))))
-                    output.append(filtered[sourceY * width + sourceX])
+            // Preserve skimage's Gaussian + order-0 sampling. Only sampled rows and
+            // columns contribute to the result; a full-resolution blurred image is unused.
+            let vertical = Self.gaussianKernel(sigmaY)
+            let horizontal = Self.gaussianKernel(sigmaX)
+            let radiusY = vertical.count / 2, radiusX = horizontal.count / 2
+            let stride = width + radiusX * 2
+            let columns = (0..<outWidth).map {
+                min(width - 1, Int(floor((Double($0) + 0.5) * Double(width) / Double(outWidth))))
+            }
+            var rows = [Double](repeating: 0, count: outHeight * stride)
+            try luminance.withUnsafeBufferPointer { source in
+                try rows.withUnsafeMutableBufferPointer { target in
+                    for y in 0..<outHeight {
+                        try Task.checkCancellation()
+                        let sourceY = min(height - 1,
+                            Int(floor((Double(y) + 0.5) * Double(height) / Double(outHeight))))
+                        let padded = target.baseAddress!.advanced(by: y * stride)
+                        let row = padded.advanced(by: radiusX)
+                        for tap in vertical.indices {
+                            let sy = Self.mirror(sourceY + tap - radiusY, height)
+                            var weight = vertical[tap]
+                            vDSP_vsmaD(source.baseAddress!.advanced(by: sy * width), 1,
+                                &weight, row, 1, row, 1, vDSP_Length(width))
+                        }
+                        for x in 0..<radiusX {
+                            padded[x] = row[Self.mirror(x - radiusX, width)]
+                            padded[radiusX + width + x] = row[Self.mirror(width + x, width)]
+                        }
+                    }
+                }
+            }
+            var output = [Double](repeating: 0, count: outWidth * outHeight)
+            try rows.withUnsafeBufferPointer { source in
+                try horizontal.withUnsafeBufferPointer { kernel in
+                    for y in 0..<outHeight {
+                        try Task.checkCancellation()
+                        for x in 0..<outWidth {
+                            var value = 0.0
+                            vDSP_dotprD(source.baseAddress!.advanced(by: y * stride + columns[x]), 1,
+                                kernel.baseAddress!, 1, &value, vDSP_Length(horizontal.count))
+                            output[y * outWidth + x] = value
+                        }
+                    }
                 }
             }
             return try Image(width: outWidth, height: outHeight, luminance: output)
@@ -112,31 +146,18 @@ nonisolated enum MeteringCore {
             let ev = -log2(measured / 0.184)
             return ev.isInfinite ? 0 : ev
         }
-        private func gaussian(_ source: [Double], sigma: Double, vertical: Bool) -> [Double] {
-            guard sigma > 1e-15 else { return source }
+        private static func gaussianKernel(_ sigma: Double) -> [Double] {
+            guard sigma > 1e-15 else { return [1] }
             let radius = Int(4 * sigma + 0.5)
-            var kernel = (-radius...radius).map { exp(-0.5 * Double($0 * $0) / (sigma * sigma)) }
+            let kernel = (-radius...radius).map { exp(-0.5 * Double($0 * $0) / (sigma * sigma)) }
             let sum = kernel.reduce(0, +)
-            kernel = kernel.map { $0 / sum }
-            func mirror(_ index: Int, _ size: Int) -> Int {
-                if size == 1 { return 0 }
-                let period = 2 * (size - 1)
-                let normalized = ((index % period) + period) % period
-                return normalized < size ? normalized : period - normalized
-            }
-            var output = source
-            for y in 0..<height {
-                for x in 0..<width {
-                    var value = 0.0
-                    for i in -radius...radius {
-                        let sy = vertical ? mirror(y + i, height) : y
-                        let sx = vertical ? x : mirror(x + i, width)
-                        value += source[sy * width + sx] * kernel[i + radius]
-                    }
-                    output[y * width + x] = value
-                }
-            }
-            return output
+            return kernel.map { $0 / sum }
+        }
+        private static func mirror(_ index: Int, _ size: Int) -> Int {
+            if size == 1 { return 0 }
+            let period = 2 * (size - 1)
+            let normalized = ((index % period) + period) % period
+            return normalized < size ? normalized : period - normalized
         }
     }
 }

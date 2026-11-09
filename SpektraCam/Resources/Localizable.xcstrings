@@ -1,6 +1,258 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%lld px": {},
+    "about.editor_preview": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑预览"
+          }
+        }
+      }
+    },
+    "about.library_preview": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图库预览"
+          }
+        }
+      }
+    },
+    "about.new_edit_defaults": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New edit defaults"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新编辑默认设置"
+          }
+        }
+      }
+    },
+    "batch.clear_prepared": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Prepared Files"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除已准备的文件"
+          }
+        }
+      }
+    },
+    "batch.memory_policy": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos export one at a time. If a photo needs more memory, the others continue. Choose a smaller size to retry failed photos; completed photos will not export again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "照片将逐张导出。如某张照片所需内存不足，其余照片仍会继续导出。请选择较小尺寸以重试失败的照片；已完成的照片不会重复导出。"
+          }
+        }
+      }
+    },
+    "batch.memory_stopped": {
+      "comment": "Batch export low-memory status. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export stopped because memory was low. Choose a smaller size to continue."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "因可用内存不足，导出已停止。请选择较小的尺寸以继续。"
+          }
+        }
+      }
+    },
+    "batch.pending": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pending"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待中"
+          }
+        }
+      }
+    },
+    "batch.prepare_share": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prepare for Sharing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备共享"
+          }
+        }
+      }
+    },
+    "batch.ready": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to share"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可共享"
+          }
+        }
+      }
+    },
+    "batch.retry_failed": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry Failed Photos"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试失败的照片"
+          }
+        }
+      }
+    },
+    "batch.shared": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已共享"
+          }
+        }
+      }
+    },
+    "batch.title": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batch Export"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批量导出"
+          }
+        }
+      }
+    },
+    "editor.preview_reduced": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview reduced to 720 px to fit available memory."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "因可用内存不足，预览已降至 720 像素。"
+          }
+        }
+      }
+    },
+    "export.memory_limit": {
+      "comment": "Preview and batch export interface text. New copy; human editorial review pending.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This image needs more memory than is currently available. Choose a smaller export size and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前可用内存不足。请选择较小的导出尺寸，然后重试。"
+          }
+        }
+      }
+    },
     "%lld³": {
       "comment": "Fixed brand, acronym or mathematical notation. Do not translate.",
       "extractionState": "manual",

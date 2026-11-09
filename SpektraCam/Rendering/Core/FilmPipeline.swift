@@ -9,6 +9,16 @@ nonisolated struct FilmPipeline: Sendable {
     let color: ColorPipeline
     let film: ModelLibrary.Profile
     let reference: ReferenceCorrectionCore
+    /// Tone is a per-frame input operation; it does not alter spectral material setup.
+    init(prepared: FilmPipeline, tone: EditRecipe.Tone) throws {
+        try RawAdjustments.validate(tone)
+        var recipe = prepared.recipe
+        recipe.tone = tone
+        self.recipe = recipe
+        color = prepared.color
+        film = prepared.film
+        reference = prepared.reference
+    }
     init(library: ModelLibrary, recipe: EditRecipe) throws {
         try RawAdjustments.validate(recipe.tone)
         guard recipe.numbers.values.allSatisfy(\.isFinite),
