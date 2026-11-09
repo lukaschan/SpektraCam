@@ -54,6 +54,20 @@ checks['library'] = (checks['processed-export'][0] + ['LibraryPhoto','LibraryFil
 checks['monochrome-grain'] = (checks['metal-film'][0], ['.'])
 checks['film-noise'] = (checks['metal-film'][0], ['.'])
 checks['film-benchmark'] = (checks['metal-film'][0], ['.'])
+checks['batch-export'] = (checks['library'][0] + ['BatchPhotoExporter','BatchExportModel','PhotoLibraryWriter'], ['.'])
+checks['sdr-pipeline'] = (checks['processed-export'][0] + ['BatchPhotoExporter'], ['.'])
+checks['render-cache'] = (checks['processed-export'][0], ['.'])
+for key, (files, arguments) in checks.items():
+ if 'PhotoSource' not in files and any(f in files for f in ['SourceImageRenderer','PhotoExporter','ImportedPhoto']):
+  files.append('PhotoSource')
+ if 'PreviewQuality' not in files and any(f in files for f in ['LibraryFiles','PhotoRenderer']):
+  files.append('PreviewQuality')
+ if 'LibraryImages' in files and 'ImageRequestPool' not in files:
+  files.append('ImageRequestPool')
+checks['image-requests'] = (['ImageRequestPool'], [])
+checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','EditorDefaults','PhotoHistogram','LUTLibrary'])), ['.'])
+checks['editor-benchmark'] = (checks['processed-export'][0], ['.'])
+checks['lut-grain'] = (checks['processed-export'][0], ['.'])
 parser=argparse.ArgumentParser();parser.add_argument('checks',nargs='*',choices=list(checks));parser.add_argument('--debug-benchmarks', action='store_true');parser.add_argument('--input', nargs='+', default=[]);parser.add_argument('--simulator', action='store_true');args=parser.parse_args()
 sdkName = 'iphonesimulator' if args.simulator else 'macosx'
 sdk=subprocess.check_output(['/usr/bin/xcrun','--sdk',sdkName,'--show-sdk-path'],env=env,text=True).strip()
@@ -71,4 +85,4 @@ for name in args.checks or [key for key in checks if not key.startswith('metal-'
  files,arguments=checks[name];binary=out/(name+'-checks'+('-simulator' if args.simulator else ''))
  subprocess.run(compiler+(['-O'] if name.endswith('-benchmark') and not args.debug_benchmarks else [])+[str(sources[f]) for f in files]+[str(root/'Scripts'/(name+'-checks.swift')),'-o',str(binary)],env=env,check=True)
  env['SPEKTRAFILM_BENCHMARK_CONFIGURATION']='debug' if args.debug_benchmarks else 'optimized'
- subprocess.run((simulator or [])+[str(binary)]+[str(root/a) for a in arguments]+(args.input if name in ['raw-input','processed-export','stress-export','bypass','tone-response','library','lut','preview'] else []),env=env,check=True)
+ subprocess.run((simulator or [])+[str(binary)]+[str(root/a) for a in arguments]+(args.input if name in ['raw-input','processed-export','stress-export','bypass','tone-response','library','lut','preview','sdr-pipeline','render-cache'] else []),env=env,check=True)

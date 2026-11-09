@@ -14,10 +14,11 @@ struct AdaptiveToggle: View {
         Group {
             if availableWidth >= 240 && !typeSize.isAccessibilitySize {
                 Toggle(title, isOn: $isOn).fixedSize(horizontal: false, vertical: true)
+                    .padding(.trailing, 8)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).fixedSize(horizontal: false, vertical: true)
-                    Toggle(title, isOn: $isOn).labelsHidden()
+                    Toggle(title, isOn: $isOn).labelsHidden().padding(.trailing, 8)
                 }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)

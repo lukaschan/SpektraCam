@@ -2,6 +2,19 @@ import Foundation
 
 @main struct RecipeChecks {
     static func main() throws {
+        var neutral = EditRecipe()
+        neutral.look.enabled = false
+        let savedNeutral = try JSONEncoder().encode(neutral)
+        let decodedNeutral = try JSONDecoder().decode(EditRecipe.self, from: savedNeutral)
+        precondition(decodedNeutral.look.enabled == false)
+        var legacy = try JSONSerialization.jsonObject(with: savedNeutral) as! [String: Any]
+        var look = legacy["look"] as! [String: Any]
+        look.removeValue(forKey: "enabled")
+        legacy["look"] = look
+        let legacyData = try JSONSerialization.data(withJSONObject: legacy)
+        let decodedLegacy = try JSONDecoder().decode(EditRecipe.self, from: legacyData)
+        precondition(decodedLegacy.look.enabled,
+            "An existing saved look must remain active")
         let all = ParameterDefinition.catalog
         precondition(Set(all.map(\.id)).count == all.count, "Duplicate parameter path")
         for field in all {

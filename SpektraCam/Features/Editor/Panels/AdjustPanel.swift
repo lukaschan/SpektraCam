@@ -35,7 +35,7 @@ struct AdjustPanel: View {
                     range: -5...5, step: 0.05, minimum: -10, maximum: 10, unit: "EV",
                     identifier: "tone.exposure",
                     onEditingChanged: { session.setInteraction(key: "tone.exposure", active: $0) })
-                field("camera.exposure_compensation_ev").disabled(session.recipe.look.mode == .lut)
+                field("camera.exposure_compensation_ev").disabled(!session.recipe.look.enabled || session.recipe.look.mode == .lut)
                 DisclosureGroup {
                     VStack(alignment: .leading, spacing: 16) {
                         field("camera.auto_exposure")
@@ -68,7 +68,7 @@ struct AdjustPanel: View {
                                     identifier: "source.exposure")
                                 field("enlarger.normalize_print_exposure").padding(.top, 8)
                             }
-                        }.disabled(session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
+                        }.disabled(!session.recipe.look.enabled || session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12)
                 } label: {
                     Text(
@@ -79,7 +79,7 @@ struct AdjustPanel: View {
                         .accessibilityIdentifier(
                             "adjust.exposureStages")
                 }
-                .disabled(session.recipe.look.mode == .lut)
+                .disabled(!session.recipe.look.enabled || session.recipe.look.mode == .lut)
                 Divider()
                 toneControl(
                     String(localized: "adjust.s_curve", defaultValue: "S-curve"), path: \.contrast,
@@ -174,7 +174,7 @@ struct AdjustPanel: View {
                         prominent: ["amount"],
                         session: session
                     ).padding(.top, 8)
-                }.disabled(session.recipe.look.mode == .lut)
+                }.disabled(!session.recipe.look.enabled || session.recipe.look.mode == .lut)
                 DisclosureGroup(String(localized: "adjust.details", defaultValue: "Details")) {
                     VStack(alignment: .leading, spacing: 12) {
                         ParameterFields(session: session, prefix: "scanner")
@@ -193,7 +193,7 @@ struct AdjustPanel: View {
                             names: ["lens_blur_um", "film_format_mm", "filter_uv", "filter_ir"])
                     }.padding(.top, 8)
                 }
-                .disabled(session.recipe.look.mode == .lut)
+                .disabled(!session.recipe.look.enabled || session.recipe.look.mode == .lut)
 
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -233,7 +233,7 @@ struct AdjustPanel: View {
                         prominent: ["gamma_factor"], session: session, printOnly: true
                     ).padding(.top, 12)
                 }
-            }.disabled(session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
+            }.disabled(!session.recipe.look.enabled || session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
             if session.recipe.bypassesPrint {
                 Text(
                     String(
@@ -242,7 +242,7 @@ struct AdjustPanel: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
-        }.disabled(session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
+        }.disabled(!session.recipe.look.enabled || session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
     }
     private func toneControl(
         _ title: String, path: WritableKeyPath<EditRecipe.Tone, Double>, range: ClosedRange<Double>,

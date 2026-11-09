@@ -51,65 +51,27 @@ nonisolated enum PhotoExporter {
             }
         }
     }
-    static func sourceDimensions(_ data: Data) throws -> CGSize {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+    static func sourceDimensions(_ data: Data, sourceType: String? = nil) throws -> CGSize {
+        guard let info = PhotoSource.describe(data, typeHint: sourceType) else {
             throw Failure.decode
         }
-        if let type = CGImageSourceGetType(source),
-            UTType(type as String)?.conforms(to: .rawImage) == true
-        {
-            guard let raw = CIRAWFilter(imageData: data, identifierHint: type as String) else {
-                throw Failure.decode
-            }
-            return raw.nativeSize
-        }
-        guard let p = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-            let width = p[kCGImagePropertyPixelWidth] as? Int,
-            let height = p[kCGImagePropertyPixelHeight] as? Int
-        else { throw Failure.decode }
-        return CGSize(width: width, height: height)
+        return CGSize(width: info.width, height: info.height)
     }
-    static func decodeSource(_ data: Data, maximum: Int? = nil) throws -> CGImage {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
-            throw Failure.decode
-        }
-        if let type = CGImageSourceGetType(source),
-            UTType(type as String)?.conforms(to: .rawImage) == true
-        {
-            guard let raw = CIRAWFilter(imageData: data, identifierHint: type as String) else {
-                throw Failure.decode
-            }
-            raw.scaleFactor = Float(
-                min(
-                    1, Double(maximum ?? Int.max) / max(raw.nativeSize.width, raw.nativeSize.height)
-                ))
-            guard let image = raw.outputImage,
-                let space = CGColorSpace(name: CGColorSpace.sRGB),
-                let result = CIContext().createCGImage(
-                    image, from: image.extent, format: .RGBA8, colorSpace: space)
-            else { throw Failure.decode }
-            return result
-        }
-        guard
-            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-            let width = properties[kCGImagePropertyPixelWidth] as? Int,
-            let height = properties[kCGImagePropertyPixelHeight] as? Int,
-            let upright = CGImageSourceCreateThumbnailAtIndex(
-                source, 0,
-                [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceShouldCacheImmediately: true,
-                    kCGImageSourceThumbnailMaxPixelSize: min(
-                        maximum ?? max(width, height), max(width, height)),
-                ] as CFDictionary)
+    static func decodeSource(_ data: Data, maximum: Int? = nil, sourceType: String? = nil) throws
+        -> CGImage
+    {
+        guard let info = PhotoSource.describe(data, typeHint: sourceType),
+            let image = PhotoSource.preview(
+                data, description: info,
+                maximum: maximum ?? max(info.width, info.height))
         else { throw Failure.decode }
-        return upright
+        return image
     }
     static func renderOriginal(
-        _ data: Data, crop: CropSelection, geometry: ImageGeometry, maximum: Int? = nil
+        _ data: Data, crop: CropSelection, geometry: ImageGeometry, maximum: Int? = nil,
+        sourceType: String? = nil
     ) throws -> CGImage {
-        let upright = try decodeSource(data, maximum: maximum)
+        let upright = try decodeSource(data, maximum: maximum, sourceType: sourceType)
         // Export has an explicit SDR sRGB contract; source bytes remain untouched.
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
             let context = CGContext(
@@ -128,20 +90,47 @@ nonisolated enum PhotoExporter {
     }
     static func write(
         _ image: CGImage, format: Format, quality: Double = 0.95,
-        directory: URL = FileManager.default.temporaryDirectory
+        directory: URL = FileManager.default.temporaryDirectory,
+        sourceData: Data? = nil, sourceType: String? = nil, sourceFilename: String? = nil
     ) throws -> URL {
+        let outputImage: CGImage
+        if image.bitsPerComponent == 8 && image.colorSpace?.name == CGColorSpace.sRGB {
+            outputImage = image
+        } else {
+            let input = PhotoSource.toSDR(CIImage(cgImage: image))
+            guard
+                let converted = CIContext(options: [.cacheIntermediates: false]).createCGImage(
+                    input, from: input.extent, format: .RGBA8,
+                    colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!)
+            else { throw Failure.render }
+            outputImage = converted
+        }
         let folder = directory.appending(path: "Spektrafilm-Exports", directoryHint: .isDirectory)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let url = folder.appending(path: "Spektrafilm-\(UUID().uuidString).\(format.suffix)")
+        // Keep the camera/source name; isolate exports in unique folders to avoid collisions.
+        let stem = sourceFilename.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent }
+        let url = folder.appendingPathComponent((stem?.isEmpty == false ? stem! : "Image") + "." + format.suffix)
         guard
             let destination = CGImageDestinationCreateWithURL(
                 url as CFURL, format.type.identifier as CFString, 1, nil)
         else { throw Failure.encode }
-        let options: [CFString: Any] =
+        var options: [CFString: Any] =
             format == .jpeg
             ? [kCGImageDestinationLossyCompressionQuality: min(max(quality, 0), 1)] : [:]
-        CGImageDestinationAddImage(destination, image, options as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { throw Failure.encode }
+        if let sourceData {
+            options.merge(PhotoSource.exportProperties(sourceData, typeHint: sourceType)) {
+                _, new in new
+            }
+        }
+        options[kCGImagePropertyOrientation] = 1
+        options[kCGImagePropertyPixelWidth] = outputImage.width
+        options[kCGImagePropertyPixelHeight] = outputImage.height
+        CGImageDestinationAddImage(destination, outputImage, options as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            try? FileManager.default.removeItem(at: url)
+            throw Failure.encode
+        }
         return url
     }
 }
@@ -149,26 +138,43 @@ nonisolated enum PhotoExporter {
 /// Export an untouched library item without applying the editor's default film look.
 actor OriginalPhotoExporter {
     private let source: URL
+    private let sourceFilename: String?
     private var size: PhotoExporter.Size?
     private var image: CGImage?
     private var output: URL?
-    init(source: URL) { self.source = source }
+    init(source: URL, sourceFilename: String? = nil) {
+        self.source = source
+        self.sourceFilename = sourceFilename
+    }
     func dimensions() throws -> CGSize {
-        try PhotoExporter.sourceDimensions(Data(contentsOf: source))
+        try PhotoExporter.sourceDimensions(
+            Data(contentsOf: source), sourceType: PhotoSource.typeHint(for: source))
     }
     func export(size: PhotoExporter.Size, format: PhotoExporter.Format, quality: Double) throws -> (
         URL, Int, Int
     ) {
         try Task.checkCancellation()
         if self.size != size || image == nil {
-            let data = try Data(contentsOf: source)
+            let data = try Data(contentsOf: source, options: .mappedIfSafe)
+            let dimensions = try PhotoExporter.sourceDimensions(
+                data, sourceType: PhotoSource.typeHint(for: source))
+            let scale = min(
+                1, Double(size.maximum ?? Int.max) / max(dimensions.width, dimensions.height))
+            try PhotoSource.checkDevelopmentMemory(
+                width: max(1, Int(ceil(dimensions.width * scale))),
+                height: max(1, Int(ceil(dimensions.height * scale))))
             image = try PhotoExporter.renderOriginal(
-                data, crop: CropSelection(), geometry: ImageGeometry(), maximum: size.maximum)
+                data, crop: CropSelection(), geometry: ImageGeometry(), maximum: size.maximum,
+                sourceType: PhotoSource.typeHint(for: source))
             self.size = size
         }
         try Task.checkCancellation()
         guard let image else { throw PhotoExporter.Failure.render }
-        let url = try PhotoExporter.write(image, format: format, quality: quality)
+        let url = try PhotoExporter.write(
+            image, format: format, quality: quality,
+            sourceData: Data(contentsOf: source, options: .mappedIfSafe),
+            sourceType: PhotoSource.typeHint(for: source), sourceFilename: sourceFilename)
+        self.image = nil
         if let output { try? FileManager.default.removeItem(at: output) }
         output = url
         return (url, image.width, image.height)

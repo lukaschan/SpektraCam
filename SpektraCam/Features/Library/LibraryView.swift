@@ -6,11 +6,11 @@ import UniformTypeIdentifiers
 struct LibraryView: View {
     let library: PhotoLibrary
     @Binding var path: [UUID]
+    var scrollToLatestRequest = 0
     @State private var filter = LibraryFilter.all
     @State private var selecting = false
     @State private var selection: Set<UUID> = []
     @State private var importSource: ImportSource?
-    @State private var picked: [PhotosPickerItem] = []
     @State private var working = false
     @State private var progress = ""
     @State private var failure: String?
@@ -18,12 +18,19 @@ struct LibraryView: View {
     @State private var confirmRevert = false
     @State private var showLUTs = false
     @State private var showInformation = false
+    @State private var importFilesAfterInfo = false
+    @State private var handledCameraRequest = 0
     @State private var scrollRevision = 0
+    @State private var batchRequest: BatchRequest?
+    private struct BatchRequest: Identifiable {
+        let id = UUID()
+        let items: [BatchExportItem]
+    }
     private enum ImportSource { case photos, files }
     private var visible: [LibraryPhoto] { library.photos.filter { filter.includes($0) } }
     private var sections: [(day: Date, photos: [LibraryPhoto])] {
         Dictionary(grouping: visible, by: { Calendar.current.startOfDay(for: $0.date) })
-            .map { (day: $0.key, photos: $0.value) }.sorted { $0.day < $1.day }
+            .map { (day: $0.key, photos: $0.value) }.sorted { $0.day > $1.day }
     }
     private func presented(_ source: ImportSource) -> Binding<Bool> {
         Binding(
@@ -39,6 +46,10 @@ struct LibraryView: View {
     var body: some View {
         NavigationStack(path: $path) {
             gallery
+                .overlay(alignment: .bottomTrailing) {
+                    CameraButton(prominent: true)
+                        .padding(.trailing, 26).padding(.bottom, 12)
+                }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     Text(
                         selecting
@@ -53,15 +64,21 @@ struct LibraryView: View {
                     .padding(.vertical, 6).frame(maxWidth: .infinity)
                     .accessibilityIdentifier("library.count")
                 }
-                .sheet(isPresented: $showInformation) { AppInformationView() }
+                .sheet(isPresented: $showInformation, onDismiss: {
+                    if importFilesAfterInfo {
+                        importFilesAfterInfo = false
+                        importSource = .files
+                    }
+                }) {
+                    AppInformationView(importFiles: { importFilesAfterInfo = true })
+                }
                 .sheet(isPresented: $showLUTs) { LUTLibraryView(library: library) }
+                .sheet(item: $batchRequest) { request in
+                    BatchExportPanel(items: request.items, library: library)
+                }
                 .navigationTitle(String(localized: "library.library", defaultValue: "Library"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        CameraButton()
-                    }
-                    ToolbarSpacer(.fixed, placement: .topBarLeading)
                     ToolbarItem(placement: .topBarLeading) {
                         Button(
                             String(
@@ -114,6 +131,29 @@ struct LibraryView: View {
                     ToolbarItem(placement: .bottomBar) {
                         if selecting {
                             Button(
+                                String(localized: "common.export", defaultValue: "Export"),
+                                systemImage: "square.and.arrow.up"
+                            ) {
+                                do {
+                                    try library.flushPending()
+                                    let items = try library.photos.filter {
+                                        selection.contains($0.id)
+                                    }.map {
+                                        BatchExportItem(
+                                            id: $0.id, name: $0.filename,
+                                            source: library.files.sourceURL($0),
+                                            recipe: try library.recipe($0.id),
+                                            width: $0.metadata.width, height: $0.metadata.height)
+                                    }
+                                    if !items.isEmpty { batchRequest = BatchRequest(items: items) }
+                                } catch { failure = error.localizedDescription }
+                            }.disabled(working || selection.isEmpty).accessibilityIdentifier(
+                                "library.export")
+                        }
+                    }
+                    ToolbarItem(placement: .bottomBar) {
+                        if selecting {
+                            Button(
                                 String(localized: "common.revert", defaultValue: "Revert"),
                                 systemImage: "arrow.uturn.backward"
                             ) { confirmRevert = true }
@@ -154,29 +194,15 @@ struct LibraryView: View {
                                             "This removes all edits from the selected app copies."))
                             }
                         } else {
-                            Menu {
-                                Button(
-                                    String(
-                                        localized: "library.from_photos",
-                                        defaultValue: "From Photos"),
-                                    systemImage: "photo.on.rectangle"
-                                ) {
-                                    picked = library.importedAssetIdentifiers.map {
-                                        PhotosPickerItem(itemIdentifier: $0)
-                                    }
-                                    importSource = .photos
-                                }
-                                Button(
-                                    String(
-                                        localized: "library.from_files", defaultValue: "From Files"),
-                                    systemImage: "folder"
-                                ) { importSource = .files }
+                            Button {
+                                importSource = .photos
                             } label: {
                                 Label(
                                     String(localized: "common.import", defaultValue: "Import"),
                                     systemImage: "plus")
                             }
                             .accessibilityIdentifier("library.import").disabled(working)
+                            .accessibilityHint(String(localized: "library.from_photos", defaultValue: "From Photos"))
                         }
                     }
                     ToolbarItem(placement: .bottomBar) { Spacer() }
@@ -231,10 +257,11 @@ struct LibraryView: View {
                 .navigationDestination(for: UUID.self) { id in
                     PhotoDetailView(library: library, id: id, filter: filter)
                 }
-                .photosPicker(
-                    isPresented: presented(.photos), selection: $picked,
-                    matching: .images, preferredItemEncoding: .current, photoLibrary: .shared()
-                )
+                .sheet(isPresented: presented(.photos)) {
+                    PhotoImportPicker(importedIdentifiers: library.importedAssetIdentifiers) { photos in
+                        Task { await importPhotos(photos) }
+                    }
+                }
                 .fileImporter(
                     isPresented: presented(.files), allowedContentTypes: [.image],
                     allowsMultipleSelection: true
@@ -244,9 +271,11 @@ struct LibraryView: View {
                     case .failure(let error): failure = error.localizedDescription
                     }
                 }
-                .onChange(of: picked) { _, photos in
-                    guard !photos.isEmpty else { return }
-                    Task { await importPhotos(photos) }
+                .onChange(of: scrollToLatestRequest) { _, _ in
+                    filter = .all
+                    selecting = false
+                    selection.removeAll()
+                    scrollRevision += 1
                 }
                 .onChange(of: filter) { _, _ in
                     selection.removeAll()
@@ -280,13 +309,14 @@ struct LibraryView: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
+                        Color.clear.frame(height: 0).id("library.latest")
                         LazyVGrid(
                             columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3),
                             spacing: 2
                         ) {
                             ForEach(sections, id: \.day) { section in
                                 Section {
-                                    ForEach(section.photos) { photo in
+                                    ForEach(section.photos.sorted { $0.date > $1.date }) { photo in
                                         Button {
                                             if selecting {
                                                 if selection.contains(photo.id) {
@@ -324,6 +354,7 @@ struct LibraryView: View {
                                             selection.contains(photo.id) ? .isSelected : []
                                         )
                                         .accessibilityIdentifier("library.photo.\(photo.id)")
+                                        .id(photo.id)
                                     }
                                 } header: {
                                     Text(dayTitle(section.day)).font(.headline).frame(
@@ -333,11 +364,17 @@ struct LibraryView: View {
                                 }
                             }
                         }
-                        Color.clear.frame(height: 2).id("latest")
                     }
-                    .defaultScrollAnchor(.bottom, for: .initialOffset)
+                    .defaultScrollAnchor(.top, for: .initialOffset)
                     .onChange(of: scrollRevision) { _, _ in
-                        proxy.scrollTo("latest", anchor: .bottom)
+                        proxy.scrollTo("library.latest", anchor: .top)
+                        handledCameraRequest = scrollToLatestRequest
+                    }
+                    .onAppear {
+                        if handledCameraRequest != scrollToLatestRequest {
+                            proxy.scrollTo("library.latest", anchor: .top)
+                            handledCameraRequest = scrollToLatestRequest
+                        }
                     }
                     .accessibilityIdentifier("library.grid")
                 }
@@ -357,9 +394,9 @@ struct LibraryView: View {
         }
         return date.formatted(.dateTime.month(.wide).day().year())
     }
-    private func importPhotos(_ incoming: [PhotosPickerItem]) async {
+    private func importPhotos(_ incoming: [PHPickerResult]) async {
         let known = Set(library.importedAssetIdentifiers)
-        let photos = incoming.filter { $0.itemIdentifier.map { !known.contains($0) } ?? true }
+        let photos = incoming.filter { $0.assetIdentifier.map { !known.contains($0) } ?? true }
         guard !working, !photos.isEmpty else { return }
         working = true
         selecting = false
@@ -370,14 +407,10 @@ struct LibraryView: View {
                 localized: "common.import_progress",
                 defaultValue: "Importing \(index + 1) of \(photos.count)…")
             do {
-                guard let file = try await photo.loadTransferable(type: LibraryImportFile.self)
-                else {
-                    throw LibraryFiles.Failure.image
-                }
-                try await library.importPhoto(file.url, assetIdentifier: photo.itemIdentifier)
+                let file = try await PhotoImportPicker.file(for: photo)
+                try await library.importPhoto(file.url, assetIdentifier: photo.assetIdentifier)
             } catch { errors += 1 }
         }
-        picked = []
         completeImport(errors)
     }
     private func importFiles(_ urls: [URL]) async {

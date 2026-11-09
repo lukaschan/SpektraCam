@@ -30,6 +30,11 @@ private func image(_ colors: [SIMD3<Float>]) -> CGImage {
         format: .RGBAf, colorSpace: space)
     return context.createCGImage(source, from: source.extent, format: .RGBAf, colorSpace: space)!
 }
+private func densityImage(_ values: [SIMD3<Float>]) throws -> CGImage {
+    let pixels = values.map { SIMD4<Float>($0.x, $0.y, $0.z, 1) }
+    return try PhotoColorBridge.workingImage(pixels.withUnsafeBytes { Data($0) },
+        width: values.count, height: 1, encoded: false)
+}
 @main struct Checks {
     @MainActor static func main() async throws {
         let identityData = Data(cubeText(title: "Identity # 1", transform: { $0 }).utf8)
@@ -86,19 +91,39 @@ private func image(_ colors: [SIMD3<Float>]) -> CGImage {
             .init(0.5, 0.2, 0.8), .init(0.2, 0.5, 0.8), .init(-0.1, 1.4, 2),
         ]
         let source = image(colors)
-        let bright = image(Array(repeating: SIMD3<Float>(repeating: 0.8), count: colors.count))
-        let dark = image(Array(repeating: SIMD3<Float>(repeating: 0.2), count: colors.count))
+        let deltas = colors.indices.map { i in SIMD3<Float>(Float(i) * 0.02 - 0.06, 0.04, -0.03) }
+        let bright = try densityImage(deltas)
+        let dark = try densityImage(Array(repeating: .zero, count: colors.count))
         let added = try PhotoColorBridge.decode(
             ToneRenderer.working(source, tone: .init(), residual: (bright, dark)))
-        precondition(
-            added[0].x > decode(colors[0].x) + 0.4, "Effect residual did not reach the native texture pass")
+        let mono = try PhotoColorBridge.decode(ToneRenderer.working(source, tone: .init(),
+            residual: (bright, dark), monochromeResidual: true))
+        for i in colors.indices {
+            let monochrome = deltas[i].x * 0.2126 + deltas[i].y * 0.7152 + deltas[i].z * 0.0722
+            for ch in 0..<3 {
+                let base = decode(colors[i][ch])
+                precondition(abs(added[i][ch] - base * pow(10, deltas[i][ch])) < 1e-5,
+                    "Metal density-to-log-exposure adapter disagrees with CPU math")
+                precondition(abs(mono[i][ch] - base * pow(10, monochrome)) < 1e-5,
+                    "B&W grain changed the target's RGB ratios")
+            }
+        }
+        let black = image([.zero, .init(0, 0.2, 0)])
+        let fluctuation = try densityImage([.init(0.5, -0.5, 0.3), .init(-0.3, 0.2, 0.4)])
+        let zero = try densityImage([.zero, .zero])
+        let blackResult = try PhotoColorBridge.decode(ToneRenderer.working(black, tone: .init(), residual: (fluctuation, zero)))
+        precondition(blackResult[0].x == 0 && blackResult[0].y == 0 && blackResult[0].z == 0
+            && blackResult[1].x == 0 && blackResult[1].z == 0 && blackResult[1].y > 0,
+            "Grain introduced colored light into a black LUT channel")
+        print("PASS: density grain matches CPU exposure math, preserves black channels and B&W RGB ratios")
         let unchanged = try PhotoColorBridge.decode(
             ToneRenderer.working(source, tone: .init(), luts: [.init(cube: identity, mix: 1)]))
         for (a, b) in zip(unchanged, colors) {
             precondition(
-                abs(a.x - decode(b.x)) < 0.0001 && abs(a.y - decode(b.y)) < 0.0001
-                    && abs(a.z - decode(b.z)) < 0.0001,
-                "Identity clipped a channel or used the wrong cube order")
+                abs(a.x - decode(min(max(b.x, 0), 1))) < 0.0001
+                    && abs(a.y - decode(min(max(b.y, 0), 1))) < 0.0001
+                    && abs(a.z - decode(min(max(b.z, 0), 1))) < 0.0001,
+                "Identity clipped a channel or used the wrong cube order: actual \(a), encoded input \(b)")
         }
         let tetra = try CubeLUT(
             data: Data(cubeText(title: "Tetra", transform: { v in .init(repeating: v.x * v.y * v.z) }).utf8),
@@ -132,8 +157,8 @@ private func image(_ colors: [SIMD3<Float>]) -> CGImage {
         let domainResult = try PhotoColorBridge.decode(
             ToneRenderer.working(source, tone: .init(), luts: [.init(cube: mixedDomain, mix: 1)]))
         precondition(
-            zip(domainResult, unchanged).allSatisfy {
-                abs($0.x - $1.x) < 0.0001 && abs($0.y - $1.y) < 0.0001 && abs($0.z - $1.z) < 0.0001
+            zip(domainResult, colors).allSatisfy {
+                abs($0.x - decode($1.x)) < 0.0001 && abs($0.y - decode($1.y)) < 0.0001 && abs($0.z - decode($1.z)) < 0.0001
             })
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(
             "SpektraCam-LUT-" + UUID().uuidString)
@@ -194,7 +219,7 @@ private func image(_ colors: [SIMD3<Float>]) -> CGImage {
             print("PASS: supplied LUTs, separate and two-slot mixed renders:", files.map(\.lastPathComponent))
         }
         print(
-            "PASS: 3D parser validation, red-fastest order, six tetrahedra, two sequential linear mixes, HDR/domain extension, durable import, duplicate linking and protected deletion"
+            "PASS: 3D parser validation, red-fastest order, six tetrahedra, two sequential linear mixes, declared-domain boundary sampling, durable import, duplicate linking and protected deletion"
         )
     }
 }

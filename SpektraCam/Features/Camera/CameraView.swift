@@ -50,6 +50,10 @@ struct CameraView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 12) {
+                    if model.state == .ready {
+                        CameraExposureControl(value: Binding(get: { model.exposureBias }, set: model.setExposureBias),
+                            range: model.exposureRange).disabled(model.busy).padding(.horizontal, 24)
+                    }
                     if let failure = model.saveFailure {
                         VStack(spacing: 8) {
                             Text(failure).font(.footnote)

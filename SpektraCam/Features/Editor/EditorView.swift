@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 
@@ -11,10 +12,12 @@ struct EditorView: View {
     @State private var closeFailure: String?
     @Environment(\.dismiss) private var dismiss
     @State private var activeTool: EditorTool? = .develop
-    @State private var panelExpanded = true
+    @State private var panelExpanded = false
     @State private var inspectorFrame = CGRect.zero
     @State private var adjustSection = AdjustPanel.Section.exposure
     @State private var effectsSection = EffectsPanel.Section.grain
+    @ScaledMetric(relativeTo: .footnote) private var collapsedLiftGainHeight: CGFloat = 176
+    @ScaledMetric(relativeTo: .footnote) private var collapsedColorHeight: CGFloat = 208
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showExport = false
     @State private var showOriginal = false
@@ -58,9 +61,11 @@ struct EditorView: View {
                     String(localized: "editor.close_editor", defaultValue: "Close Editor"),
                     systemImage: "xmark", action: finish
                 )
-                .labelStyle(.iconOnly)
+                .photoActionStyle()
+                .accessibilityLabel(String(localized: "editor.close_editor", defaultValue: "Close Editor"))
                 .accessibilityIdentifier("editor.back")
             }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .topBarTrailing) {
                 Menu(
                     String(localized: "editor.history", defaultValue: "History"),
@@ -84,11 +89,14 @@ struct EditorView: View {
                     ) { showResetConfirmation = true }
                     .disabled(!session.hasEdits)
                 }
+                .labelStyle(.iconOnly)
+                .accessibilityLabel(String(localized: "editor.history", defaultValue: "History"))
                 .accessibilityIdentifier("editor.history")
             }
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             if activeTool != .crop {
                 ToolbarItem(placement: .topBarTrailing) { CameraButton() }
+                    .sharedBackgroundVisibility(.hidden)
             }
             if activeTool == .crop {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -137,11 +145,22 @@ struct EditorView: View {
         } message: {
             Text(closeFailure ?? "")
         }
-        .onAppear {
-            session.recipeDidChange?(session.recipe, true)
+        .task {
+            guard !Task.isCancelled else { return }
+            await library.images.beginEditing(owner: session.id)
+            guard !Task.isCancelled else {
+                await library.images.endEditing(owner: session.id)
+                return
+            }
             session.resumeRendering()
         }
-        .onDisappear { session.cancelRendering() }
+        .onDisappear {
+            session.cancelRendering()
+            Task { await library.images.endEditing(owner: session.id) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            session.cancelRendering()
+        }
         .onChange(of: activeTool) { _, _ in
             showOriginal = false
             panelExpanded = false
@@ -154,13 +173,12 @@ struct EditorView: View {
                 String(localized: "editor.reset_all_edits_17b6fe", defaultValue: "Reset All Edits"),
                 role: .destructive
             ) {
-                session.update(key: "reset") { recipe in
-                    recipe = EditRecipe()
-                    recipe.temperature = session.photo.rawTemperature
-                }
+                session.resetAll()
             }
         }
-        .sheet(isPresented: $showExport) { ExportPanel(session: session) }
+        .sheet(isPresented: $showExport, onDismiss: { session.resumeAfterExport() }) {
+            ExportPanel(session: session)
+        }
         .alert(
             String(
                 localized: "editor.couldn_t_render_preview", defaultValue: "Couldn’t render preview"
@@ -227,10 +245,13 @@ struct EditorView: View {
                                 showOriginal.toggle()
                                 if panelExpanded { setExpanded(false) }
                             }
-                            .labelStyle(.iconOnly)
                             .tint(showOriginal ? Color.accentColor : Color.primary)
                             .accessibilityAddTraits(showOriginal ? .isSelected : [])
-                            .buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
+                            .photoActionStyle()
+                            .accessibilityLabel(
+                                showOriginal
+                                    ? String(localized: "editor.show_edited", defaultValue: "Show Edited")
+                                    : String(localized: "editor.show_original", defaultValue: "Show Original"))
                             .accessibilityIdentifier("editor.compare")
                         }
                     }.padding(.horizontal, 12).padding(.top, 4)
@@ -294,6 +315,7 @@ struct EditorView: View {
         } else if activeTool == .develop {
             if session.recipe.look.mode == .spektrafilm {
                 DevelopPanel(session: session).padding(.horizontal).padding(.vertical, 12)
+                    .disabled(!session.recipe.look.enabled)
             } else {
                 LUTPanel(session: session, library: library)
             }
@@ -304,7 +326,9 @@ struct EditorView: View {
                     switch activeTool {
                     case .develop: EmptyView()
                     case .adjust: AdjustPanel(session: session, section: adjustSection)
-                    case .effects: EffectsPanel(session: session, section: effectsSection)
+                    case .effects:
+                        EffectsPanel(session: session, section: effectsSection)
+                            .disabled(!session.recipe.look.enabled)
                     case .crop: EmptyView()
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding()
@@ -324,8 +348,8 @@ struct EditorView: View {
         if activeTool == .adjust {
             switch adjustSection {
             case .exposure: return 180
-            case .liftGain: return 140
-            case .color: return 180
+            case .liftGain: return collapsedLiftGainHeight
+            case .color: return collapsedColorHeight
             }
         }
         return 180
@@ -344,9 +368,12 @@ struct EditorView: View {
                             selection: Binding(
                                 get: { session.recipe.look.mode },
                                 set: { mode in
-                                    session.update(key: "look.mode") { $0.look.mode = mode }
+                                    session.update(key: "look.mode") {
+                                        $0.look.mode = mode
+                                        $0.look.enabled = true
+                                    }
                                 }),
-                            prefix: "develop.mode.")
+                            prefix: "develop.mode.", isSelectionActive: session.recipe.look.enabled)
                     } else if activeTool == .adjust {
                         PanelTabs(
                             options: AdjustPanel.Section.allCases.map { ($0, $0.title) },
@@ -438,19 +465,20 @@ where Selection.RawValue == String {
     let options: [(Selection, String)]
     @Binding var selection: Selection
     let prefix: String
+    var isSelectionActive = true
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 10) {
                 ForEach(options, id: \.0) { option in
                     Group {
-                        if selection == option.0 {
-                            tab(option).buttonStyle(.glassProminent)
+                        if isSelectionActive && selection == option.0 {
+                            tab(option).buttonStyle(.glassProminent).foregroundStyle(.white)
                         } else {
                             tab(option).buttonStyle(.glass)
                         }
                     }
                     .accessibilityIdentifier(prefix + option.0.rawValue)
-                    .accessibilityAddTraits(selection == option.0 ? .isSelected : [])
+                    .accessibilityAddTraits(isSelectionActive && selection == option.0 ? .isSelected : [])
                 }
             }.padding(.vertical, 4)
         }.scrollIndicators(.hidden).frame(height: 44)
@@ -458,6 +486,7 @@ where Selection.RawValue == String {
     }
     private func tab(_ option: (Selection, String)) -> some View {
         Button(option.1) { selection = option.0 }
+            .tint(isSelectionActive ? Color.accentColor : Color.secondary)
             .font(.subheadline.weight(.semibold)).lineLimit(1).fixedSize()
             .frame(minHeight: 38)
             .accessibilityShowsLargeContentViewer { Text(option.1) }

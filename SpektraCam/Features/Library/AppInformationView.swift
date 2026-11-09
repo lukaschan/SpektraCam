@@ -2,6 +2,12 @@ import SwiftUI
 import UIKit
 
 struct AppInformationView: View {
+    var importFiles: (() -> Void)? = nil
+    @AppStorage(PreviewQuality.libraryKey) private var libraryMaximum = PreviewQuality.defaultMaximum
+    @AppStorage(PreviewQuality.editorKey) private var editorMaximum = PreviewQuality.defaultMaximum
+    @AppStorage(EditorDefaults.halationKey) private var defaultHalation = true
+    @AppStorage(EditorDefaults.grainKey) private var defaultGrain = true
+    @AppStorage(EditorDefaults.monochromeGrainKey) private var defaultMonochromeGrain = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     private var languageName: String {
@@ -36,6 +42,19 @@ struct AppInformationView: View {
                             defaultValue: "SpektraCam · Project"),
                         destination: URL(string: "https://github.com/runzeni/SpektraCam")!)
                 }
+                if let importFiles {
+                    Section(String(localized: "common.import", defaultValue: "Import")) {
+                        Button {
+                            dismiss()
+                            importFiles()
+                        } label: {
+                            Label(
+                                String(localized: "library.from_files", defaultValue: "From Files"),
+                                systemImage: "folder")
+                        }
+                        .accessibilityIdentifier("about.importFiles")
+                    }
+                }
                 Section(String(localized: "about.settings", defaultValue: "Settings")) {
                     Button {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -51,9 +70,18 @@ struct AppInformationView: View {
                         String(
                             localized: "about.language_settings_hint",
                             defaultValue: "Change the app language in iPhone Settings."))
-                    LabeledContent(
-                        String(localized: "about.preview", defaultValue: "Preview"),
-                        value: "1080 px")
+                    Picker(
+                        String(localized: "about.library_preview", defaultValue: "Library preview"),
+                        selection: $libraryMaximum
+                    ) {
+                        ForEach(PreviewQuality.choices, id: \.self) { Text("\($0) px").tag($0) }
+                    }.accessibilityIdentifier("about.libraryPreview")
+                    Picker(
+                        String(localized: "about.editor_preview", defaultValue: "Editor preview"),
+                        selection: $editorMaximum
+                    ) {
+                        ForEach(PreviewQuality.choices, id: \.self) { Text("\($0) px").tag($0) }
+                    }.accessibilityIdentifier("about.editorPreview")
                     Text(
                         String(
                             localized: "about.export_uses_the_original_preview_quality_does",
@@ -65,6 +93,14 @@ struct AppInformationView: View {
                     LabeledContent(
                         String(localized: "about.app_icon", defaultValue: "App icon"),
                         value: "SpektraCam")
+                }
+                Section(String(localized: "about.new_edit_defaults", defaultValue: "New edit defaults")) {
+                    Toggle(String(localized: "effects.halation", defaultValue: "Halation"), isOn: $defaultHalation)
+                        .accessibilityIdentifier("about.defaultHalation")
+                    Toggle(String(localized: "effects.grain", defaultValue: "Grain"), isOn: $defaultGrain)
+                        .accessibilityIdentifier("about.defaultGrain")
+                    Toggle(String(localized: "effects.b_w_grain", defaultValue: "B&W Grain"), isOn: $defaultMonochromeGrain)
+                        .accessibilityIdentifier("about.defaultMonochromeGrain")
                 }
             }
             .navigationTitle(String(localized: "about.about", defaultValue: "About"))

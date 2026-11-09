@@ -362,8 +362,8 @@ nonisolated private final class GradeKernel: @unchecked Sendable {
                 float3 code=float3(rawEncode(rgb.r),rawEncode(rgb.g),rawEncode(rgb.b));
                 float3 bounded=clamp(code,low.xyz,high.xyz);
                 float3 mapped=tetra(cube,(bounded-low.xyz)/(high.xyz-low.xyz),uint(high.w));
-                // Retain out-of-domain detail instead of clipping to the LUT boundary.
-                mapped+=code-bounded;
+                // A photo LUT defines only its declared domain. Input beyond it samples
+                // the boundary; adding an arbitrary residual changes the authored transform.
                 float3 linear=float3(rawDecode(mapped.r),rawDecode(mapped.g),rawDecode(mapped.b));
                 return mix(rgb,linear,low.w);
             }
@@ -378,9 +378,16 @@ nonisolated private final class GradeKernel: @unchecked Sendable {
                 float3 rgb=applyRaw(source.read(id).rgb,p,p[6].x);
                 rgb=look(rgb,first,p[2],p[3]); rgb=look(rgb,second,p[4],p[5]);
                 if(p[1].w!=0) {
-                    float3 noise=dirty.read(id).rgb-clean.read(id).rgb;
-                    if(p[1].w>1.5f)noise=float3(dot(noise,float3(0.2126f,0.7152f,0.0722f)));
-                    rgb+=noise;
+                    // App RGB adapter: negative-film density noise becomes log exposure.
+                    // The physical film path retains its full print/scan calculation.
+                    float3 density=dirty.read(id).rgb-clean.read(id).rgb;
+                    if(!all(isfinite(density)))atomic_store_explicit(invalid,1u,memory_order_relaxed);
+                    if(p[1].w>1.5f)density=float3(dot(density,float3(0.2126f,0.7152f,0.0722f)));
+                    float3 magnitude=abs(rgb);
+                    // Limit only the representable float exponent. Preserve zero and sign:
+                    // grain cannot create colored light in a black LUT output.
+                    float3 exponent=clamp(log2(max(magnitude,float3(0x1p-126f)))+density*3.32192809489f,float3(-126),float3(125));
+                    rgb=select(sign(rgb)*exp2(exponent),float3(0),magnitude==float3(0));
                 }
                 if(p[1].z!=0) rgb=float3(dot(rgb,float3(0.2126f,0.7152f,0.0722f)));
                 if(!all(isfinite(rgb))) atomic_store_explicit(invalid,1u,memory_order_relaxed);

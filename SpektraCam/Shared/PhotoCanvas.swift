@@ -15,6 +15,7 @@ struct ZoomablePhoto: UIViewRepresentable {
     var topAligned = false
     var topInset: CGFloat = 0
     var zoomedTopInset: CGFloat = 0
+    var fitCenterY: CGFloat? = nil
     var label = String(localized: "photo_canvas.edited_photo", defaultValue: "Edited photo")
     var onTap: ((CGPoint) -> Void)?
     func makeUIView(context: Context) -> PhotoScrollView {
@@ -26,6 +27,7 @@ struct ZoomablePhoto: UIViewRepresentable {
         view.topAligned = topAligned
         view.topInset = topInset
         view.zoomedTopInset = zoomedTopInset
+        view.fitCenterY = fitCenterY
         view.photoView.accessibilityTraits = .image
         view.photoView.accessibilityCustomActions = [
             UIAccessibilityCustomAction(
@@ -64,6 +66,7 @@ struct ZoomablePhoto: UIViewRepresentable {
         view.topAligned = topAligned
         view.topInset = topInset
         view.zoomedTopInset = zoomedTopInset
+        view.fitCenterY = fitCenterY
         view.photoView.accessibilityLabel = label
         view.setPhoto(image)
         view.setNeedsLayout()
@@ -107,6 +110,7 @@ final class PhotoScrollView: UIScrollView {
     var topAligned = false
     var topInset: CGFloat = 0
     var zoomedTopInset: CGFloat = 0
+    var fitCenterY: CGFloat? = nil
     private var imageSize = CGSize.zero
     private var lastBounds = CGSize.zero
     private var pendingViewport: (zoom: CGFloat, center: CGPoint)?
@@ -120,6 +124,7 @@ final class PhotoScrollView: UIScrollView {
     }
     func setPhoto(_ image: UIImage) {
         guard photoView.image !== image else { return }
+        photoView.preferredImageDynamicRange = .standard
         photoView.image = image
         if image.size != imageSize {
             // Rendered/cropped and original images can have different pixel sizes. Keep the
@@ -127,7 +132,10 @@ final class PhotoScrollView: UIScrollView {
             if imageSize != .zero { pendingViewport = viewport() }
             replacingImage = true
             imageSize = image.size
-            zoomScale = 1
+            // Remove the old image transform before assigning new pixel dimensions.
+            minimumZoomScale = min(minimumZoomScale, 1)
+            maximumZoomScale = max(maximumZoomScale, 1)
+            setZoomScale(1, animated: false)
             photoView.frame = CGRect(origin: .zero, size: image.size)
             contentSize = image.size
             lastBounds = .zero
@@ -181,10 +189,16 @@ final class PhotoScrollView: UIScrollView {
     func centerPhoto() {
         guard !replacingImage else { return }
         let horizontal = max(0, (bounds.width - contentSize.width) / 2)
-        let reserve = zoomScale > minimumZoomScale * 1.05 ? zoomedTopInset : topInset
-        let vertical = topAligned ? 0 : max(0, (bounds.height - reserve - contentSize.height) / 2)
+        let zoomed = zoomScale > minimumZoomScale * 1.05
+        let reserve = zoomed ? zoomedTopInset : topInset
+        let space = max(0, bounds.height - reserve - contentSize.height)
+        let center = !zoomed ? fitCenterY : nil
+        let vertical = topAligned ? 0 : center.map {
+            min(max($0 - contentSize.height / 2 - reserve, 0), space)
+        } ?? space / 2
+        let bottom = center != nil && !topAligned ? space - vertical : vertical
         let insets = UIEdgeInsets(
-            top: reserve + vertical, left: horizontal, bottom: vertical, right: horizontal)
+            top: reserve + vertical, left: horizontal, bottom: bottom, right: horizontal)
         if contentInset != insets { contentInset = insets }
         photoView.accessibilityValue = String(
             format: String(
@@ -199,12 +213,16 @@ struct PhotoViewport: View {
     var topInset: CGFloat = PhotoInfoPanel.collapsedHeight + 12
     var edited = true
     var topAligned = true
+    var usePortraitReference = false
     var onTap: ((CGPoint) -> Void)?
     var body: some View {
         GeometryReader { proxy in
             ZoomablePhoto(
                 image: image, topAligned: topAligned, topInset: topInset,
                 zoomedTopInset: topInset > 0 ? 4 : 0,
+                fitCenterY: usePortraitReference
+                    ? topInset + min(proxy.size.width * 4 / 3, max(1, proxy.size.height - topInset)) / 2
+                    : nil,
                 label: edited
                     ? String(localized: "photo_canvas.edited_photo", defaultValue: "Edited photo")
                     : String(localized: "photo_canvas.photo", defaultValue: "Photo"), onTap: onTap

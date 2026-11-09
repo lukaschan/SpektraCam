@@ -10,13 +10,16 @@ import UniformTypeIdentifiers
 nonisolated final class LibraryImportFile: Transferable, Sendable {
     let url: URL
     private let temporaryDirectory: URL
-    init(received: ReceivedTransferredFile) throws {
+    convenience init(received: ReceivedTransferredFile) throws {
+        try self.init(copying: received.file)
+    }
+    init(copying file: URL) throws {
         temporaryDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(
             UUID().uuidString)
         try FileManager.default.createDirectory(
             at: temporaryDirectory, withIntermediateDirectories: true)
-        url = temporaryDirectory.appendingPathComponent(received.file.lastPathComponent)
-        do { try FileManager.default.copyItem(at: received.file, to: url) } catch {
+        url = temporaryDirectory.appendingPathComponent(file.lastPathComponent)
+        do { try FileManager.default.copyItem(at: file, to: url) } catch {
             try? FileManager.default.removeItem(at: temporaryDirectory)
             throw error
         }
@@ -29,6 +32,9 @@ nonisolated final class LibraryImportFile: Transferable, Sendable {
 }
 
 actor LibraryFiles {
+    // One neutral source, shared by viewer/editor. Original bytes use Data's copy-on-write
+    // storage; edited JPEG previews are never used as a processing source.
+    private var preparedPhoto: (id: UUID, maximum: Int, photo: ImportedPhoto)?
     enum Failure: LocalizedError {
         case image, missing
         var errorDescription: String? {
@@ -88,30 +94,27 @@ actor LibraryFiles {
         root.appendingPathComponent("Originals").appendingPathComponent(photo.id.uuidString)
             .appendingPathComponent("original." + photo.fileExtension)
     }
-    private func cacheURL(_ photo: LibraryPhoto, thumbnail: Bool) -> URL {
+    private func cacheURL(
+        _ photo: LibraryPhoto, thumbnail: Bool, maximum: Int = PreviewQuality.libraryMaximum
+    ) -> URL {
         // Render changes must rebuild saved previews even when the edit recipe is unchanged.
-        let revision = photo.hasEdits ? "v8-" : ""
+        let revision = "v11-"
         return cache.appendingPathComponent(photo.id.uuidString)
             .appendingPathComponent(
-                revision + photo.renderKey + (thumbnail ? "-thumb.jpg" : "-preview.jpg"))
+                revision + photo.renderKey + (thumbnail ? "-thumb.jpg" : "-preview-\(maximum).jpg"))
     }
     func importPhoto(from url: URL, now: Date = Date()) throws -> LibraryPhoto {
         try Task.checkCancellation()
         guard
-            let source = CGImageSourceCreateWithURL(
-                url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
-            let type = CGImageSourceGetType(source),
-            let thumbnail = Self.thumbnail(source, maximum: ImportedPhoto.thumbnailMaximumPixelSize)
+            let imported = ImportedPhoto.decode(
+                try Data(contentsOf: url, options: .mappedIfSafe),
+                maximum: ImportedPhoto.thumbnailMaximumPixelSize,
+                typeHint: PhotoSource.typeHint(for: url)),
+            let type = imported.sourceType
         else { throw Failure.image }
-        let properties =
-            CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
-        var metadata = PhotoMetadata(properties: properties, type: type, image: thumbnail)
-        let identifier = type as String
-        let uti = UTType(identifier)
-        if uti?.conforms(to: .rawImage) == true, let size = CIRAWFilter(imageURL: url)?.nativeSize {
-            metadata.width = Int(size.width)
-            metadata.height = Int(size.height)
-        }
+        let metadata = imported.metadata
+        let thumbnail = imported.preview
+        let uti = UTType(type)
         let ext = uti?.preferredFilenameExtension ?? "image"
         let hash = try Self.digest(url)
         let photo = LibraryPhoto(
@@ -134,32 +137,49 @@ actor LibraryFiles {
         try? Self.writeJPEG(thumbnail, to: cacheURL(photo, thumbnail: true))
         return photo
     }
-    func cachedImage(_ photo: LibraryPhoto, thumbnail: Bool) -> CGImage? {
+    func cachedImage(
+        _ photo: LibraryPhoto, thumbnail: Bool, maximum: Int = PreviewQuality.libraryMaximum
+    ) -> CGImage? {
         guard
             let source = CGImageSourceCreateWithURL(
-                cacheURL(photo, thumbnail: thumbnail) as CFURL, nil)
+                cacheURL(photo, thumbnail: thumbnail, maximum: maximum) as CFURL, nil)
         else { return nil }
         return CGImageSourceCreateImageAtIndex(
             source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
     }
-    func originalImage(_ photo: LibraryPhoto, thumbnail: Bool) throws -> CGImage {
-        guard
-            let source = CGImageSourceCreateWithURL(
-                sourceURL(photo) as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
-            let image = Self.thumbnail(
-                source,
-                maximum: thumbnail
-                    ? ImportedPhoto.thumbnailMaximumPixelSize
-                    : ImportedPhoto.previewMaximumPixelSize)
-        else { throw Failure.image }
-        try? Self.writeJPEG(image, to: cacheURL(photo, thumbnail: thumbnail))
+    func originalImage(
+        _ photo: LibraryPhoto, thumbnail: Bool, maximum: Int = PreviewQuality.libraryMaximum
+    ) throws -> CGImage {
+        let image = try decodedPhoto(
+            photo,
+            maximum: thumbnail
+                ? ImportedPhoto.thumbnailMaximumPixelSize : maximum
+        ).preview
+        try? Self.writeJPEG(image, to: cacheURL(photo, thumbnail: thumbnail, maximum: maximum))
         return image
     }
-    func decodedPhoto(_ photo: LibraryPhoto, maximum: Int = 1080) throws -> ImportedPhoto {
-        let data = try Data(contentsOf: sourceURL(photo))
-        guard let result = ImportedPhoto.decode(data, maximum: maximum) else { throw Failure.image }
+    func decodedPhoto(
+        _ photo: LibraryPhoto, maximum: Int = PreviewQuality.editorMaximum,
+        neutralPreview: CGImage? = nil
+    ) throws
+        -> ImportedPhoto
+    {
+        try Task.checkCancellation()
+        if let preparedPhoto, preparedPhoto.id == photo.id, preparedPhoto.maximum >= maximum,
+            let cached = preparedPhoto.photo.resizedPreview(maximum: maximum)
+        { return cached }
+        let data = try Data(contentsOf: sourceURL(photo), options: .mappedIfSafe)
+        guard
+            let result = ImportedPhoto.decode(
+                data, maximum: maximum,
+                typeHint: PhotoSource.typeHint(for: sourceURL(photo)),
+                neutralPreview: photo.hasEdits ? nil : neutralPreview)
+        else { throw Failure.image }
+        try Task.checkCancellation()
+        if maximum >= 720 { preparedPhoto = (photo.id, maximum, result) }
         return result
     }
+    func discardPreparedPhoto() { preparedPhoto = nil }
     func lensName(_ photo: LibraryPhoto) -> String? {
         guard
             let source = CGImageSourceCreateWithURL(
@@ -201,16 +221,20 @@ actor LibraryFiles {
         try Self.writeJPEG(small, to: cacheURL(photo, thumbnail: true))
         return small
     }
-    func storePreview(_ image: CGImage, photo: LibraryPhoto) throws {
-        try Self.writeJPEG(image, to: cacheURL(photo, thumbnail: false))
+    func storePreview(
+        _ image: CGImage, photo: LibraryPhoto, maximum: Int = PreviewQuality.libraryMaximum
+    ) throws {
+        try Self.writeJPEG(image, to: cacheURL(photo, thumbnail: false, maximum: maximum))
         guard
             let source = CGImageSourceCreateWithURL(
-                cacheURL(photo, thumbnail: false) as CFURL, nil),
+                cacheURL(photo, thumbnail: false, maximum: maximum) as CFURL, nil),
             let small = Self.thumbnail(source, maximum: ImportedPhoto.thumbnailMaximumPixelSize)
         else { throw Failure.image }
         try Self.writeJPEG(small, to: cacheURL(photo, thumbnail: true))
         // Retain one cached recipe per photo. The original can rebuild older frames.
-        let keep = Set([cacheURL(photo, thumbnail: true), cacheURL(photo, thumbnail: false)])
+        let keep = Set([
+            cacheURL(photo, thumbnail: true), cacheURL(photo, thumbnail: false, maximum: maximum),
+        ])
         if let entries = try? FileManager.default.contentsOfDirectory(
             at: cache.appendingPathComponent(photo.id.uuidString), includingPropertiesForKeys: nil)
         {
@@ -220,6 +244,7 @@ actor LibraryFiles {
         }
     }
     func removeFiles(_ photo: LibraryPhoto) throws {
+        if preparedPhoto?.id == photo.id { preparedPhoto = nil }
         let folder = sourceURL(photo).deletingLastPathComponent()
         if FileManager.default.fileExists(atPath: folder.path) {
             try FileManager.default.removeItem(at: folder)
@@ -227,6 +252,7 @@ actor LibraryFiles {
         try? FileManager.default.removeItem(at: cache.appendingPathComponent(photo.id.uuidString))
     }
     func stageRemoval(_ photo: LibraryPhoto) throws -> URL {
+        if preparedPhoto?.id == photo.id { preparedPhoto = nil }
         let trash = root.appendingPathComponent("Trash", isDirectory: true)
         try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
         let target = trash.appendingPathComponent(photo.id.uuidString)
