@@ -52,6 +52,7 @@ actor MetalFilmPipeline {
             "encode_image_srgb", "mix_images", "image_maximum", "boost_image", "grain_layers_image",
             "random_lognormal_image", "finish_grain_image", "apply_glare_image",
             "encode_monochrome_grain",
+            "film_edge_gate", "film_edge_transmission", "film_edge_density",
         ] {
             guard let function = library.makeFunction(name: name) else { throw Failure.unavailable }
             functions[name] = try device.makeComputePipelineState(function: function)
@@ -69,14 +70,15 @@ actor MetalFilmPipeline {
 
     func process(
         _ input: [SIMD4<Float>], width: Int, height: Int, pipeline: FilmPipeline,
-        stochastic: Bool = true, seed: UInt64 = 0, autoExposureEV: Double? = nil
+        stochastic: Bool = true, seed: UInt64 = 0, autoExposureEV: Double? = nil,
+        edge: FilmEdgeGeometry? = nil
     ) async throws -> Frame {
         try await beginFrame()
         defer { endFrame() }
         let started = ProcessInfo.processInfo.systemUptime
         let frame = try await renderBuffer(
             input, width: width, height: height, pipeline: pipeline,
-            stochastic: stochastic, seed: seed, autoExposureEV: autoExposureEV)
+            stochastic: stochastic, seed: seed, autoExposureEV: autoExposureEV, edge: edge)
         let pixels = Array(
             UnsafeBufferPointer(
                 start: frame.image.contents().assumingMemoryBound(to: SIMD4<Float>.self),
@@ -88,13 +90,14 @@ actor MetalFilmPipeline {
 
     func processImage(
         _ input: [SIMD4<Float>], width: Int, height: Int, pipeline: FilmPipeline,
-        seed: UInt64 = 0, autoExposureEV: Double, grainMean: Bool = false
+        seed: UInt64 = 0, autoExposureEV: Double, grainMean: Bool = false,
+        edge: FilmEdgeGeometry? = nil
     ) async throws -> CGImage {
         try await beginFrame()
         defer { endFrame() }
         let frame = try await renderBuffer(
             input, width: width, height: height, pipeline: pipeline,
-            seed: seed, autoExposureEV: autoExposureEV, grainMean: grainMean)
+            seed: seed, autoExposureEV: autoExposureEV, grainMean: grainMean, edge: edge)
         let owned = frame.image
         let data = Data(
             bytesNoCopy: owned.contents(), count: width * height * 16,
@@ -147,7 +150,7 @@ actor MetalFilmPipeline {
         stochastic: Bool = true,
         seed: UInt64 = 0, autoExposureEV: Double? = nil, opticsOnly: Bool = false,
         grainMean: Bool = false,
-        grainDensityOnly: Bool = false
+        grainDensityOnly: Bool = false, edge: FilmEdgeGeometry? = nil
     ) async throws -> BufferFrame {
         let started = ProcessInfo.processInfo.systemUptime
         let count = width * height
@@ -155,11 +158,15 @@ actor MetalFilmPipeline {
             throw Failure.invalidShape
         }
         try Task.checkCancellation()
-        let pitch =
-            pipeline.recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
+        if let edge, edge.width != width || edge.height != height { throw Failure.invalidShape }
+        let pitch = edge?.pixelPitchMicrometers
+            ?? pipeline.recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
         guard pitch.isFinite, pitch > 0 else { throw Failure.invalidShape }
         let color = pipeline.color
         let recipe = pipeline.recipe
+        guard edge == nil || autoExposureEV != nil || !recipe.flag("camera.auto_exposure") else {
+            throw Failure.invalidShape
+        }
         let model: MetalModelResources
         if modelKey == color.recipe, let cached = modelResources {
             model = cached
@@ -229,6 +236,18 @@ actor MetalFilmPipeline {
             e.setBytes(&shape, length: 16, index: 10)
             e.setBytes(&flags, length: 16, index: 11)
             for (i, b) in extras.enumerated() { e.setBuffer(b, offset: 0, index: 12 + i) }
+            dispatch(e, name)
+        }
+        let edgeNeutral = color.exposure.raw(RGB(repeating: 0.184))
+        let edgeValues = edge.map { $0.uniforms(light: $0.leakLight(neutral: edgeNeutral), fogLight: $0.fogLight(neutral: edgeNeutral)) } ?? []
+        func edgeNode(_ name: String, _ image: MTLBuffer, clear: RGB = .zero,
+                      mode: FilmEdgeGeometry.Transmission = []) throws {
+            guard edge != nil else { return }
+            let e = try encoder(name, [image])
+            edgeValues.withUnsafeBytes { e.setBytes($0.baseAddress!, length: $0.count, index: 1) }
+            var value = vector(clear)
+            value.w = Float(mode.rawValue)
+            e.setBytes(&value, length: 16, index: 2)
             dispatch(e, name)
         }
         func mix(
@@ -351,6 +370,8 @@ actor MetalFilmPipeline {
             pool.release(raw)
             raw = next
         }
+        // The camera gate follows lens optics; halation can then expose intact rebate.
+        try edgeNode("film_edge_gate", raw)
         let halo = pipeline.halation
         func positive(_ v: RGB) -> Bool { v.x > 0 || v.y > 0 || v.z > 0 }
         func bounded(_ v: RGB) -> RGB { RGB(max(v.x, 1e-6), max(v.y, 1e-6), max(v.z, 1e-6)) }
@@ -564,9 +585,16 @@ actor MetalFilmPipeline {
         // Only the print/scan tail repeats when monochrome grain is enabled.
         func finishScan(_ input: MTLBuffer) throws -> MTLBuffer {
             var density = input
+            if edge?.hasEmulsionScratches == true { try edgeNode("film_edge_density", density) }
             if !recipe.bypassesPrint {
                 let paper = try pool.take()
                 try node("paper_exposure_image", density, paper)
+                if let enlarger = color.enlarger {
+                    let cinema = FilmStock.prints.first { $0.id == recipe.printID }?.support == "film"
+                    try edgeNode("film_edge_transmission", paper,
+                                 clear: enlarger.clearExposure * reference.printingScale,
+                                 mode: cinema ? [.damage] : [.damage, .carrier, .reflection])
+                }
                 pool.release(density)
                 density = paper
                 try diffuse(density, "enlarger.diffusion_filter")
@@ -599,6 +627,15 @@ actor MetalFilmPipeline {
                     pool.release(field)
                 }
             }
+            let destinationFilm = !recipe.bypassesPrint
+                && FilmStock.prints.first { $0.id == recipe.printID }?.support == "film"
+            if recipe.bypassesPrint || destinationFilm {
+                let scan = color.scanBasis
+                let clear = reference.correct(zip(scan.illuminant, scan.cmfs).reduce(RGB.zero) { $0 + $1.0 * $1.1 } / scan.normalization)
+                // Destination holes are openings, distinct from the printed source-hole image.
+                try edgeNode("film_edge_transmission", density, clear: clear,
+                             mode: destinationFilm ? [.carrier, .destination] : [.damage, .carrier])
+            }
             try node("compress_image_gamut", density, density)
             let scanBlur = recipe.number("scanner.lens_blur")
             if scanBlur > 0 {
@@ -614,6 +651,11 @@ actor MetalFilmPipeline {
                     density, blurred, into: density, aWeight: RGB(repeating: 1 + amount),
                     bWeight: RGB(repeating: -amount))
                 pool.release(blurred)
+            }
+            if !recipe.bypassesPrint && !destinationFilm {
+                // Clear source openings define the finished negative-print black endpoint.
+                // Apply in linear light, after scan optics; intact rebate color is retained.
+                try edgeNode("film_edge_transmission", density, mode: [.endpoint, .carrier])
             }
             return density
         }

@@ -28,10 +28,18 @@ enum EditorTool: String, CaseIterable, Identifiable {
     }
 }
 
-/// The system groups adjacent toolbar items. A fixed spacer separates Export.
+/// Photo tools stay in one group; the trailing action opens Darkroom or exports its print.
 struct EditorToolbar: ToolbarContent {
     @Binding var activeTool: EditorTool?
+    var darkroomActive = false
+    let openDarkroom: () -> Void
     let export: () -> Void
+    private var actionTitle: String {
+        darkroomActive
+            ? String(localized: "common.export", defaultValue: "Export")
+            : String(localized: "darkroom.title", defaultValue: "Darkroom")
+    }
+    private var actionSymbol: String { darkroomActive ? "square.and.arrow.up" : "lightbulb" }
     var body: some ToolbarContent {
         ToolbarItem(placement: .bottomBar) {
             ControlGroup {
@@ -51,16 +59,13 @@ struct EditorToolbar: ToolbarContent {
         }
         ToolbarSpacer(.fixed, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) {
-            Button(action: export) {
-                toolLabel(
-                    String(localized: "common.export", defaultValue: "Export"),
-                    symbol: "square.and.arrow.up", selected: false)
+            Button(action: darkroomActive ? export : openDarkroom) {
+                toolLabel(actionTitle, symbol: actionSymbol, selected: false)
             }
-            .accessibilityIdentifier("editor.export")
+            .accessibilityLabel(actionTitle)
+            .accessibilityIdentifier(darkroomActive ? "darkroom.export" : "editor.export")
             .accessibilityShowsLargeContentViewer {
-                Label(
-                    String(localized: "common.export", defaultValue: "Export"),
-                    systemImage: "square.and.arrow.up")
+                Label(actionTitle, systemImage: actionSymbol)
             }
         }
     }
@@ -68,7 +73,8 @@ struct EditorToolbar: ToolbarContent {
         VStack(spacing: 3) {
             Image(systemName: symbol).font(.system(size: 18, weight: .medium)).frame(
                 width: 24, height: 22)
-            Text(title).font(.system(size: 11, weight: .medium)).lineLimit(1).frame(height: 12)
+            Text(title).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                .minimumScaleFactor(0.8).frame(height: 12)
         }
         .foregroundStyle(selected ? Color.accentColor : Color.primary)
         .dynamicTypeSize(...DynamicTypeSize.large)

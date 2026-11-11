@@ -351,6 +351,8 @@ final class EditorInteractionTests: XCTestCase {
         XCTAssertTrue((area.value as? String ?? "").contains("100%"))
         XCTAssertFalse((area.value as? String ?? "").contains("百分之"))
         app.buttons["editor.export"].tap()
+        XCTAssertTrue(app.navigationBars["暗房"].waitForExistence(timeout: 5))
+        app.buttons["darkroom.export"].tap()
         XCTAssertTrue(app.buttons["export.save"].waitForExistence(timeout: 45))
         XCTAssertTrue(app.buttons["export.save"].label.contains("照片"))
         XCTAssertEqual(app.buttons["export.share"].label, "共享")
@@ -1259,6 +1261,8 @@ final class EditorInteractionTests: XCTestCase {
     @MainActor func testExportOptionsAndCancellation() {
         let app = openPhoto()
         app.buttons["editor.export"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 5))
+        app.buttons["darkroom.export"].tap()
         XCTAssertTrue(app.buttons["S"].waitForExistence(timeout: 5))
         app.buttons["S"].tap()
         app.buttons["PNG"].tap()
@@ -1290,6 +1294,250 @@ final class EditorInteractionTests: XCTestCase {
         image.name = "Native export options"
         image.lifetime = .keepAlways
         add(image)
+    }
+
+    @MainActor func testDarkroomLayoutHistoryAndReopening() {
+        let app = openPhoto(activateLook: false, expanded: false)
+        app.buttons["editor.export"].tap()
+        let scale = app.sliders["darkroom.scale"]
+        XCTAssertTrue(scale.waitForExistence(timeout: 5))
+        let fitScale = app.buttons["darkroom.scale.value"].value as? String
+        XCTAssertFalse(app.buttons["export.save"].exists, "Darkroom entry started the export sheet")
+        XCTAssertTrue(app.buttons["darkroom.filmEdge"].isEnabled)
+        app.buttons["8 × 10"].tap()
+        drag(scale, to: 0.3)
+        let chosenScale = app.buttons["darkroom.scale.value"].value as? String
+        XCTAssertNotEqual(chosenScale, fitScale)
+        app.buttons["editor.history"].tap()
+        app.buttons["Undo"].tap()
+        XCTAssertEqual(app.buttons["darkroom.scale.value"].value as? String, fitScale)
+        app.buttons["editor.history"].tap()
+        app.buttons["Redo"].tap()
+        XCTAssertEqual(app.buttons["darkroom.scale.value"].value as? String, chosenScale)
+        let preview = XCTAttachment(screenshot: app.screenshot())
+        preview.name = "Darkroom fixed paper with image scale"
+        preview.lifetime = .keepAlways
+        add(preview)
+        app.buttons["darkroom.expand"].tap()
+        XCTAssertTrue(app.buttons["darkroom.rotatePaper"].waitForExistence(timeout: 5))
+        app.buttons["darkroom.rotatePaper"].tap()
+        let expanded = XCTAttachment(screenshot: app.screenshot())
+        expanded.name = "Expanded Darkroom controls"
+        expanded.lifetime = .keepAlways
+        add(expanded)
+        app.buttons["editor.tool.develop"].tap()
+        XCTAssertTrue(app.buttons["develop.mode.spektrafilm"].waitForExistence(timeout: 5))
+        app.buttons["editor.export"].tap()
+        XCTAssertEqual(app.buttons["darkroom.scale.value"].value as? String, chosenScale)
+        app.buttons["darkroom.back"].tap()
+        app.buttons["editor.back"].tap()
+        XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 15))
+        app.buttons["photo.develop"].tap()
+        XCTAssertTrue(app.buttons["editor.export"].waitForExistence(timeout: 15))
+        app.buttons["editor.export"].tap()
+        XCTAssertEqual(app.buttons["darkroom.scale.value"].value as? String, chosenScale)
+    }
+
+    @MainActor func testDarkroomPortraitPaperFollowsCrop() {
+        let app = openPhoto(activateLook: false, expanded: false)
+        app.buttons["editor.export"].tap()
+        app.buttons["darkroom.filmEdge"].tap()
+        XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 10))
+        app.buttons["crop.portrait"].tap()
+        app.buttons["crop.done"].tap()
+        let preview = app.descendants(matching: .any)["darkroom.preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        XCTAssertTrue((preview.value as? String ?? "").contains("Portrait"))
+        app.buttons["darkroom.expand"].tap()
+        app.buttons["4 × 6"].tap()
+        XCTAssertTrue((preview.value as? String ?? "").contains("Portrait"), "Default paper ignored the portrait crop")
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Default paper follows portrait crop before and after rendering"
+        capture.lifetime = .keepAlways
+        add(capture)
+        app.buttons["darkroom.edge.adjustCrop"].tap()
+        XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 5))
+        app.buttons["crop.landscape"].tap()
+        app.buttons["crop.done"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
+        XCTAssertTrue((preview.value as? String ?? "").contains("Landscape"), "Automatic paper kept a stale portrait frame")
+    }
+
+    @MainActor func testFilmEdgeSelectionExportAndRestart() {
+        let app = openPhoto(expanded: false)
+        app.buttons["editor.export"].tap()
+        app.buttons["darkroom.filmEdge"].tap()
+        XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["crop.ratio.Free"].exists)
+        XCTAssertFalse(app.buttons["crop.moreRatios"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["crop.filmGate"].exists)
+        let crop = app.descendants(matching: .any)["crop.area"]
+        XCTAssertEqual(crop.frame.width / crop.frame.height, 1.5, accuracy: 0.02)
+        app.buttons["crop.portrait"].tap()
+        XCTAssertEqual(crop.frame.width / crop.frame.height, 2.0 / 3, accuracy: 0.02)
+        app.buttons["crop.landscape"].tap()
+        let beforeMove = crop.frame.minY
+        crop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1,
+            thenDragTo: crop.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.58)))
+        XCTAssertNotEqual(crop.frame.minY, beforeMove)
+        XCTAssertEqual(crop.frame.width / crop.frame.height, 1.5, accuracy: 0.02)
+        let gate = XCTAttachment(screenshot: app.screenshot())
+        gate.name = "Existing Crop tool locked to the 36 by 24 mm gate"
+        gate.lifetime = .keepAlways
+        add(gate)
+        app.buttons["crop.done"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
+        app.buttons["darkroom.expand"].tap()
+        let mode = app.segmentedControls["darkroom.edge.mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 10))
+        XCTAssertTrue(mode.buttons["Auto"].isSelected)
+        mode.buttons["Manual"].tap()
+        let type = app.buttons["darkroom.edge.type"]
+        XCTAssertTrue(type.waitForExistence(timeout: 5))
+        type.tap()
+        app.buttons["Slide scan"].tap()
+        XCTAssertTrue(type.label.contains("Slide scan"))
+        mode.buttons["Auto"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["darkroom.edge.resolved"].exists)
+        mode.buttons["Manual"].tap()
+        XCTAssertTrue(type.label.contains("Slide scan"), "Auto erased the previous manual choice")
+        app.buttons["darkroom.edge.adjustCrop"].tap()
+        XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 5))
+        app.buttons["crop.done"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
+        if app.buttons["darkroom.expand"].value as? String == "Collapsed" { app.buttons["darkroom.expand"].tap() }
+        app.segmentedControls["darkroom.edge.format"].buttons["120"].tap()
+        XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 5))
+        XCTAssertEqual(crop.frame.width / crop.frame.height, 1, accuracy: 0.02)
+        XCTAssertFalse(app.buttons["crop.portrait"].exists)
+        app.buttons["crop.done"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
+        app.segmentedControls["darkroom.edge.format"].buttons["35 mm"].tap()
+        XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 5))
+        app.buttons["crop.done"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
+        if app.buttons["darkroom.expand"].value as? String == "Collapsed" { app.buttons["darkroom.expand"].tap() }
+        let pending = app.progressIndicators["darkroom.edge.rendering"]
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: pending)
+        waitForExpectations(timeout: 45)
+        XCTAssertFalse(app.descendants(matching: .any)["darkroom.edge.failure"].exists)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Film edge manual slide scan and narrow 35 mm rebate"
+        capture.lifetime = .keepAlways
+        add(capture)
+        app.buttons["darkroom.export"].tap()
+        XCTAssertTrue(app.buttons["export.save"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.buttons["export.save"].isEnabled)
+        let exported = XCTAttachment(screenshot: app.screenshot())
+        exported.name = "Film edge prepared export"
+        exported.lifetime = .keepAlways
+        add(exported)
+        app.buttons["Done"].tap()
+        app.buttons["darkroom.back"].tap()
+        app.buttons["editor.back"].tap()
+        XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 15))
+        app.terminate()
+        app.launchArguments = ["--ui-test-library"]
+        app.launch()
+        XCTAssertTrue(libraryPhotos(app).firstMatch.waitForExistence(timeout: 15))
+        libraryPhotos(app).firstMatch.tap()
+        app.buttons["photo.develop"].tap()
+        XCTAssertTrue(app.buttons["editor.export"].waitForExistence(timeout: 15))
+        app.buttons["editor.export"].tap()
+        XCTAssertTrue(app.segmentedControls["darkroom.edge.mode"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.segmentedControls["darkroom.edge.mode"].buttons["Manual"].isSelected)
+        XCTAssertTrue(app.buttons["darkroom.edge.type"].label.contains("Slide scan"))
+        XCTAssertTrue(app.segmentedControls["darkroom.edge.format"].buttons["35 mm"].isSelected)
+    }
+
+    @MainActor func testDarkroomChineseLargeText() {
+        let app = importPhoto()
+        app.terminate()
+        app.launchArguments = ["--ui-test-library", "-AppleLanguages", "(zh-Hans)",
+            "-AppleLocale", "zh_CN", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
+        app.launch()
+        XCTAssertTrue(libraryPhotos(app).firstMatch.waitForExistence(timeout: 15))
+        libraryPhotos(app).firstMatch.tap()
+        app.buttons["photo.develop"].tap()
+        XCTAssertTrue(app.buttons["editor.export"].waitForExistence(timeout: 15))
+        app.buttons["editor.export"].tap()
+        XCTAssertTrue(app.navigationBars["暗房"].waitForExistence(timeout: 5))
+        app.buttons["8 × 10"].tap()
+        app.buttons["darkroom.expand"].tap()
+        let scale = app.sliders["darkroom.scale"]
+        XCTAssertTrue(scale.waitForExistence(timeout: 5))
+        XCTAssertTrue(scale.isHittable)
+        XCTAssertLessThanOrEqual(scale.frame.maxX, app.frame.width - 12)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Darkroom Chinese accessibility text"
+        capture.lifetime = .keepAlways
+        add(capture)
+        app.buttons["darkroom.filmEdge"].tap()
+        XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 10))
+        app.buttons["crop.done"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
+        app.buttons["darkroom.expand"].tap()
+        let mode = app.segmentedControls["darkroom.edge.mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        mode.buttons["手动"].tap()
+        XCTAssertTrue(app.buttons["darkroom.edge.type"].isHittable)
+        XCTAssertTrue(app.segmentedControls["darkroom.edge.format"].isHittable)
+        let edgeCapture = XCTAttachment(screenshot: app.screenshot())
+        edgeCapture.name = "Darkroom film edge Chinese accessibility text"
+        edgeCapture.lifetime = .keepAlways
+        add(edgeCapture)
+    }
+
+    @MainActor func testWorkspaceToolbarAndSharedPills() {
+        let app = openPhoto(expanded: false)
+        let camera = app.buttons["camera.open"]
+        let cameraFrame = camera.frame
+        let selectedPillHeight = app.buttons["develop.mode.spektrafilm"].frame.height
+        let otherPillHeight = app.buttons["develop.mode.lut"].frame.height
+        func checkToolbar(close: String) {
+            let history = app.buttons["editor.history"]
+            XCTAssertTrue(camera.isHittable)
+            XCTAssertTrue(history.isHittable)
+            XCTAssertGreaterThan(camera.frame.midX, app.frame.width * 0.8)
+            XCTAssertEqual(camera.frame.midX, cameraFrame.midX, accuracy: 1)
+            XCTAssertGreaterThan(history.frame.minX, app.buttons[close].frame.maxX)
+            XCTAssertLessThan(history.frame.maxX, app.frame.width / 2)
+        }
+        checkToolbar(close: "editor.back")
+        let develop = XCTAttachment(screenshot: app.screenshot())
+        develop.name = "Shared toolbar and Develop pills"
+        develop.lifetime = .keepAlways
+        add(develop)
+        app.buttons["editor.export"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 5))
+        checkToolbar(close: "darkroom.back")
+        XCTAssertEqual(app.buttons["darkroom.cleanPrint"].frame.height, selectedPillHeight, accuracy: 1)
+        XCTAssertEqual(app.buttons["darkroom.filmEdge"].frame.height, otherPillHeight, accuracy: 1)
+        XCTAssertGreaterThan(app.buttons["darkroom.export"].frame.minY, app.frame.height * 0.8)
+        let darkroom = XCTAttachment(screenshot: app.screenshot())
+        darkroom.name = "Darkroom shared pills camera and bottom Export"
+        darkroom.lifetime = .keepAlways
+        add(darkroom)
+        camera.tap()
+        XCTAssertTrue(app.buttons["camera.close"].waitForExistence(timeout: 10))
+        app.buttons["camera.close"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
+        checkToolbar(close: "darkroom.back")
+        app.buttons["darkroom.export"].tap()
+        XCTAssertTrue(app.buttons["export.save"].waitForExistence(timeout: 30))
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
+        app.buttons["editor.tool.crop"].tap()
+        XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 5))
+        checkToolbar(close: "editor.back")
+        let crop = XCTAttachment(screenshot: app.screenshot())
+        crop.name = "Crop keeps camera at the trailing corner"
+        crop.lifetime = .keepAlways
+        add(crop)
+        app.buttons["crop.done"].tap()
+        app.buttons["editor.back"].tap()
+        XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 15))
+        XCTAssertEqual(camera.frame.midX, cameraFrame.midX, accuracy: 1)
     }
 
 }

@@ -11,7 +11,14 @@ enum GeometryRenderer {
 
     nonisolated static func render(_ source: CGImage, geometry: ImageGeometry) -> CGImage? {
         if geometry.isIdentity { return source }
-        var image = CIImage(cgImage: source)
+        let image = transformed(CIImage(cgImage: source), geometry: geometry)
+        let colorSpace = source.colorSpace?.model == .rgb ? source.colorSpace! : CGColorSpace(name: CGColorSpace.sRGB)!
+        return context.createCGImage(image, from: image.extent, format: .RGBA8, colorSpace: colorSpace)
+    }
+
+    /// The same geometry in the linear input path; no intermediate 8-bit bitmap.
+    nonisolated static func transformed(_ source: CIImage, geometry: ImageGeometry) -> CIImage {
+        var image = source
         if geometry.quarterTurns != 0 {
             // Integer matrices avoid a floating-point extra pixel at 90 degrees.
             let rotation: CGAffineTransform
@@ -44,12 +51,7 @@ enum GeometryRenderer {
             let bounds = image.extent
             image = normalize(image.transformed(by: transform).cropped(to: bounds))
         }
-        let colorSpace =
-            source.colorSpace?.model == .rgb
-            ? source.colorSpace! : CGColorSpace(name: CGColorSpace.sRGB)!
-        return context.createCGImage(
-            image, from: image.extent,
-            format: .RGBA8, colorSpace: colorSpace)
+        return image
     }
 
     nonisolated private static func normalize(_ image: CIImage) -> CIImage {

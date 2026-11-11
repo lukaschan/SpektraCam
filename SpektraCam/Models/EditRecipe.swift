@@ -2,7 +2,7 @@ import Foundation
 
 /// Stable upstream parameter paths keep UI names separate from the physical model.
 nonisolated struct EditRecipe: Codable, Equatable, Sendable {
-    static let currentVersion = 4
+    static let currentVersion = 5
     struct Source: Codable, Equatable, Sendable {
         var exposureEV = 0.0
         var warmth = 0.0
@@ -89,6 +89,9 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
     var scanFilm = false
     var crop = CropSelection()
     var geometry = ImageGeometry()
+    var printLayout: PrintLayout?
+    var filmEdgeSelection: FilmEdgeSelection?
+    var filmEdgeLayout: FilmEdgeLayout?
     var temperature: Double?
     var numbers: [String: Double] = [:]
     var flags: [String: Bool] = [:]
@@ -99,7 +102,7 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
         case source, tone, look, monochromeGrain, mix, version, upstreamRevision, filmID, printID,
             scanFilm,
             crop,
-            geometry, temperature,
+            geometry, printLayout, filmEdgeSelection, filmEdgeLayout, temperature,
             numbers,
             flags, choices
     }
@@ -124,6 +127,9 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
         crop = try values.decodeIfPresent(CropSelection.self, forKey: .crop) ?? CropSelection()
         geometry =
             try values.decodeIfPresent(ImageGeometry.self, forKey: .geometry) ?? ImageGeometry()
+        printLayout = try values.decodeIfPresent(PrintLayout.self, forKey: .printLayout)
+        filmEdgeSelection = try values.decodeIfPresent(FilmEdgeSelection.self, forKey: .filmEdgeSelection)
+        filmEdgeLayout = try values.decodeIfPresent(FilmEdgeLayout.self, forKey: .filmEdgeLayout)
         temperature = try values.decodeIfPresent(Double.self, forKey: .temperature)
         numbers = try values.decodeIfPresent([String: Double].self, forKey: .numbers) ?? [:]
         flags = try values.decodeIfPresent([String: Bool].self, forKey: .flags) ?? [:]
@@ -167,6 +173,9 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
         var copy = self
         copy.crop = CropSelection()
         copy.geometry = ImageGeometry()
+        copy.printLayout = nil
+        copy.filmEdgeSelection = nil
+        copy.filmEdgeLayout = nil
         return copy
     }
     var inputMode: LookMode { look.enabled ? look.mode : .lut }
@@ -177,6 +186,9 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
         return copy
     }
     var bypassesPrint: Bool { look.mode == .spektrafilm && scanFilm }
+    var resolvedFilmEdgeType: FilmEdgeType {
+        (filmEdgeSelection ?? FilmEdgeSelection()).resolvedType(for: self)
+    }
 }
 
 nonisolated struct ParameterDefinition: Identifiable, Sendable {

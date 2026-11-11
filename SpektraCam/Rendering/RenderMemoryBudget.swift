@@ -26,7 +26,8 @@ nonisolated enum RenderMemoryBudget {
                     "This size exceeds the rendering limits. Choose a smaller size and try again.")
         }
     }
-    static func check(width: Int, height: Int, recipe: EditRecipe, allowOvercommit: Bool = false)
+    static func check(width: Int, height: Int, recipe: EditRecipe, allowOvercommit: Bool = false,
+                      pixelPitchMicrometers: Double? = nil)
         throws
     {
         guard width > 0, height > 0, width <= 65536, height <= 65536,
@@ -39,6 +40,8 @@ nonisolated enum RenderMemoryBudget {
         var estimate = recipe.look.enabled
             ? pixels * (recipe.look.mode == .lut ? 192 : 176) + 96 * 1024 * 1024
             : pixels * 80 + 32 * 1024 * 1024
+        // The support graph plus an optional retained center/paper bitmap. No mask bitmap.
+        if recipe.filmEdgeLayout != nil { estimate += pixels * 64 }
         if recipe.look.enabled && recipe.look.mode == .spektrafilm && recipe.mix < 1 { estimate += pixels * 32 }
         if recipe.look.enabled && recipe.monochromeGrain && recipe.flag("film_render.grain.active") {
             estimate += pixels * 32
@@ -46,7 +49,7 @@ nonisolated enum RenderMemoryBudget {
         if max(width, height) <= 2048 && !recipe.tone.outputStage.isIdentity {
             estimate += pixels * 48
         }
-        let pitch = recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
+        let pitch = pixelPitchMicrometers ?? recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
         for prefix in ["camera.diffusion_filter", "enlarger.diffusion_filter"] {
             guard recipe.look.enabled else { continue }
             if prefix.hasPrefix("enlarger") && recipe.bypassesPrint { continue }

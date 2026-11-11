@@ -68,6 +68,17 @@ checks['image-requests'] = (['ImageRequestPool'], [])
 checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','EditorDefaults','PhotoHistogram','LUTLibrary'])), ['.'])
 checks['editor-benchmark'] = (checks['processed-export'][0], ['.'])
 checks['lut-grain'] = (checks['processed-export'][0], ['.'])
+checks['film-edge'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer', 'BatchPhotoExporter'])), ['.'])
+checks['darkroom-orientation'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer'])), ['.'])
+checks['darkroom'] = (list(dict.fromkeys(checks['export'][0] + checks['recipe'][0] + ['PrintCompositor'])), [])
+for files, arguments in checks.values():
+ if 'EditRecipe' in files:
+  for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout']:
+   if dependency not in files: files.append(dependency)
+ if 'SourceImageRenderer' in files and 'GeometryRenderer' not in files: files.append('GeometryRenderer')
+ if 'PhotoRenderer' in files:
+  for dependency in ['PrintCompositor', 'FilmEdgeRenderer']:
+   if dependency not in files: files.append(dependency)
 parser=argparse.ArgumentParser();parser.add_argument('checks',nargs='*',choices=list(checks));parser.add_argument('--debug-benchmarks', action='store_true');parser.add_argument('--input', nargs='+', default=[]);parser.add_argument('--simulator', action='store_true');args=parser.parse_args()
 sdkName = 'iphonesimulator' if args.simulator else 'macosx'
 sdk=subprocess.check_output(['/usr/bin/xcrun','--sdk',sdkName,'--show-sdk-path'],env=env,text=True).strip()

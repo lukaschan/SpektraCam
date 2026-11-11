@@ -99,13 +99,8 @@ actor LibraryImages {
             lutDirectory: files.root.appendingPathComponent("LUTs"), previewMaximum: maximum,
             resources: resources, sourceType: original.sourceType,
             description: original.sourceDescription)
-        let film = try await renderer.render(recipe)
+        let cropped = try await renderer.renderPresentation(recipe, maximum: maximum)
         try Task.checkCancellation()
-        guard let geometry = GeometryRenderer.render(film, geometry: recipe.geometry),
-            let cropped = geometry.cropping(
-                to: recipe.crop.pixelRect(
-                    in: CGSize(width: geometry.width, height: geometry.height)))
-        else { throw LibraryFiles.Failure.image }
         if thumbnail { return try await files.storeThumbnail(cropped, photo: photo) }
         try await files.storePreview(cropped, photo: photo, maximum: requestedMaximum)
         return cropped

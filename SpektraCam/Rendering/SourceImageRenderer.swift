@@ -70,7 +70,8 @@ nonisolated enum SourceImageRenderer {
     static func prepare(
         data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int,
         renderedSource: CIImage? = nil, sourceType: String? = nil, intent: Intent? = nil,
-        description: PhotoSource.Description? = nil, decoder: Decoder? = nil
+        description: PhotoSource.Description? = nil, decoder: Decoder? = nil,
+        framing: EditRecipe? = nil, targetSize: CGSize? = nil
     ) throws -> Input {
         try Task.checkCancellation()
         return try autoreleasepool {
@@ -79,12 +80,13 @@ nonisolated enum SourceImageRenderer {
                 renderedSource: renderedSource, sourceType: sourceType,
                 intent: intent
                     ?? (recipe.inputMode == .spektrafilm ? .sceneLinear : .developedPhoto),
-                description: description, decoder: decoder)
+                description: description, decoder: decoder, framing: framing, targetSize: targetSize)
         }
     }
     private static func preparePixels(
         data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int, renderedSource: CIImage?,
-        sourceType: String?, intent: Intent, description known: PhotoSource.Description?, decoder: Decoder?
+        sourceType: String?, intent: Intent, description known: PhotoSource.Description?, decoder: Decoder?,
+        framing: EditRecipe?, targetSize: CGSize?
     ) throws
         -> Input
     {
@@ -159,6 +161,18 @@ nonisolated enum SourceImageRenderer {
         if recipe.source.saturation != 1 {
             image = image.applyingFilter(
                 "CIColorControls", parameters: [kCIInputSaturationKey: recipe.source.saturation])
+        }
+        if let framing {
+            image = GeometryRenderer.transformed(image, geometry: framing.geometry)
+            let crop = framing.crop.pixelRect(in: image.extent.size)
+            // CropSelection uses top-left coordinates; Core Image uses bottom-left coordinates.
+            image = image.cropped(to: CGRect(x: crop.minX, y: image.extent.height - crop.maxY,
+                                             width: crop.width, height: crop.height))
+            image = image.transformed(by: CGAffineTransform(translationX: -image.extent.minX, y: -image.extent.minY))
+        }
+        if let targetSize {
+            image = image.transformed(by: CGAffineTransform(scaleX: targetSize.width / image.extent.width,
+                                                            y: targetSize.height / image.extent.height))
         }
         image = image.composited(over: CIImage(color: CIColor.black).cropped(to: image.extent))
         image = image.transformed(
