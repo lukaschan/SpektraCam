@@ -305,7 +305,8 @@ kernel void boost_image(device const float4 *input [[buffer(0)]],device float4 *
     float x0=min(max(p.z,0.0f),m);
     if(m>0&&x0<m) {
         float scale=p.x/exp_minus_one_minus_x(p.y*(1-x0/m))*m;
-        for(uint c=0;c<3;++c)if(value[c]>x0)value[c]+=scale*exp_minus_one_minus_x(p.y*(value[c]-x0)/m);
+        // p.w: the maximum is an estimate from a coarser image; never extrapolate the curve past it.
+        for(uint c=0;c<3;++c)if(value[c]>x0)value[c]+=scale*exp_minus_one_minus_x(p.y*((p.w!=0?min(value[c],m):value[c])-x0)/m);
     }
     output[i]=float4(value,0);
 }

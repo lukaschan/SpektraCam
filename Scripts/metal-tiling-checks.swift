@@ -175,6 +175,55 @@ import Foundation
                 if maximum >= tolerance { print("FAIL \(name): tiled render differs by \(maximum)"); failed = true }
             }
         }
+        // Zoomed preview: a region rendered from a low-resolution capture of the whole frame
+        // must match the same area of the whole-frame render.
+        for (name, recipe, _, _, tiling) in cases where !name.contains("grain") && name != "slide scan" {
+            if let only = CommandLine.arguments.dropFirst(2).first(where: { !$0.hasPrefix("--") }), !name.contains(only) { continue }
+            let model = try FilmPipeline(library: library, recipe: recipe)
+            let factor = tiling.resolvedFactor(width: width, height: height)
+            let pw = (width + factor - 1) / factor, ph = (height + factor - 1) / factor
+            var proxy = [SIMD4<Float>](repeating: .zero, count: pw * ph)
+            for y in 0..<ph { for x in 0..<pw {
+                var sum = SIMD4<Float>.zero; var n: Float = 0
+                for yy in (y * factor)..<min((y + 1) * factor, height) { for xx in (x * factor)..<min((x + 1) * factor, width) {
+                    sum += input[yy * width + xx]; n += 1
+                } }
+                proxy[y * pw + x] = sum / n
+            } }
+            let whole = try await gpu.process(
+                input, width: width, height: height, pipeline: model, stochastic: false, seed: 7, autoExposureEV: 0)
+            var still = recipe
+            still.flags["film_render.grain.active"] = false
+            still.flags["print_render.glare.active"] = false
+            let quiet = try FilmPipeline(library: library, recipe: still)
+            let started = Date()
+            guard let halo = try await gpu.prepareRegion(
+                width: width, height: height, factor: factor, pipeline: quiet, seed: 7,
+                autoExposureEV: 0, tiling: tiling, proxy: proxy) else { preconditionFailure("no halo") }
+            let prepared = Date()
+            let region = (x: 520, y: 300, w: 400, h: 360)
+            let x0 = max(0, region.x - halo), y0 = max(0, region.y - halo)
+            let x1 = min(width, region.x + region.w + halo), y1 = min(height, region.y + region.h + halo)
+            let source = try PixelStore(width: x1 - x0, height: y1 - y0, format: .float)
+            input.withUnsafeBytes { bytes in
+                for row in 0..<(y1 - y0) {
+                    memcpy(source.base.advanced(by: row * source.rowBytes), bytes.baseAddress!.advanced(by: ((y0 + row) * width + x0) * 16), source.rowBytes)
+                }
+            }
+            let key = MetalFilmPipeline.RegionKey(recipe: quiet.recipe, width: width, height: height, factor: factor, autoExposureEV: 0, seed: 7)
+            let result = try await gpu.processRegion(source, origin: (x0, y0), region: region, key: key, pipeline: quiet)
+            let values = result.base.assumingMemoryBound(to: SIMD4<Float>.self)
+            var maximum = 0.0, total = 0.0
+            for y in 0..<region.h { for x in 0..<region.w {
+                let a = whole.pixels[(region.y + y) * width + region.x + x], b = values[y * region.w + x]
+                for c in 0..<3 { let e = abs(Double(a[c]) - Double(b[c])); precondition(e.isFinite); maximum = max(maximum, e); total += e }
+            } }
+            print(String(format: "region %@: halo %d, max %.5f (%.2f/255), mean %.6f; prepare %.2fs render %.2fs",
+                         name, halo, maximum, maximum * 255, total / Double(3 * region.w * region.h),
+                         prepared.timeIntervalSince(started), Date().timeIntervalSince(prepared)))
+            // Highlight boost is anchored to the proxy's brightest value, as a preview of that size is.
+            if maximum >= 0.02 && !name.contains("boost") { print("FAIL region \(name)"); failed = true }
+        }
         precondition(!failed, "tiled film graph differs from the whole-frame graph")
         print("PASS: tiled film graph matches the whole-frame graph")
     }

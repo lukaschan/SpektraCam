@@ -9,6 +9,9 @@ import UniformTypeIdentifiers
 nonisolated enum SourceImageRenderer {
     enum Intent: Hashable { case sceneLinear, developedPhoto }
     /// Preview-size pixels live in `pixels`. A full-size export keeps them in `store` instead.
+    /// A part of the prepared image, in its pixels from the top left. `.measure` decodes
+    /// nothing and reports the size the whole image would have.
+    enum Region: Sendable { case measure, rect(x: Int, y: Int, width: Int, height: Int) }
     struct Input: Sendable {
         let pixels: [SIMD4<Float>], width: Int, height: Int
         var store: PixelStore? = nil
@@ -75,7 +78,8 @@ nonisolated enum SourceImageRenderer {
         data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int,
         renderedSource: CIImage? = nil, sourceType: String? = nil, intent: Intent? = nil,
         description: PhotoSource.Description? = nil, decoder: Decoder? = nil,
-        framing: EditRecipe? = nil, targetSize: CGSize? = nil, allowsStore: Bool = false
+        framing: EditRecipe? = nil, targetSize: CGSize? = nil, allowsStore: Bool = false,
+        region: Region? = nil
     ) throws -> Input {
         try Task.checkCancellation()
         return try autoreleasepool {
@@ -85,13 +89,13 @@ nonisolated enum SourceImageRenderer {
                 intent: intent
                     ?? (recipe.inputMode == .spektrafilm ? .sceneLinear : .developedPhoto),
                 description: description, decoder: decoder, framing: framing, targetSize: targetSize,
-                allowsStore: allowsStore)
+                allowsStore: allowsStore, region: region)
         }
     }
     private static func preparePixels(
         data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int, renderedSource: CIImage?,
         sourceType: String?, intent: Intent, description known: PhotoSource.Description?, decoder: Decoder?,
-        framing: EditRecipe?, targetSize: CGSize?, allowsStore: Bool
+        framing: EditRecipe?, targetSize: CGSize?, allowsStore: Bool, region: Region?
     ) throws
         -> Input
     {
@@ -185,6 +189,22 @@ nonisolated enum SourceImageRenderer {
         let width = Int(image.extent.width.rounded())
         let height = Int(image.extent.height.rounded())
         guard width > 0, height > 0 else { throw Failure.decode }
+        if let region {
+            guard case .rect(let x, let y, let w, let h) = region else {
+                return .init(pixels: [], width: width, height: height)
+            }
+            guard x >= 0, y >= 0, w > 0, h > 0, x + w <= width, y + h <= height else {
+                throw Failure.decode
+            }
+            // Core Image evaluates only this rectangle of the scaled source.
+            let part = image.cropped(
+                to: CGRect(x: x, y: height - y - h, width: w, height: h)
+            ).transformed(by: CGAffineTransform(translationX: -CGFloat(x), y: -CGFloat(height - y - h)))
+            let store = try PixelStore.render(
+                part, width: w, height: h, context: decoder?.context ?? context, colorSpace: linear)
+            guard store.isValid() else { throw Failure.decode }
+            return .init(pixels: [], width: w, height: h, store: store)
+        }
         if allowsStore && PixelStore.isLarge(width: width, height: height) {
             // Full-size sources decode straight into file-backed storage.
             let store = try PixelStore.render(

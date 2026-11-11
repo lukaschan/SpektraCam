@@ -26,6 +26,52 @@ nonisolated enum RenderMemoryBudget {
                     "This size exceeds the rendering limits. Choose a smaller size and try again.")
         }
     }
+    /// A whole-frame diffusion transform pads to a power of two around the full kernel radius.
+    /// Past this size the frame is rendered in tiles, where the transform stays tile-sized.
+    static let wholeFrameTransformLimit: UInt64 = 512 * 1024 * 1024
+    static func rendersInTiles(width: Int, height: Int, transformBytes: UInt64) -> Bool {
+        PixelStore.isLarge(width: width, height: height) || transformBytes > wholeFrameTransformLimit
+    }
+    /// Whether this frame takes the tiled path. The renderer and the admission check agree on it.
+    static func rendersInTiles(
+        width: Int, height: Int, recipe: EditRecipe, pixelPitchMicrometers: Double? = nil
+    ) -> Bool {
+        guard width > 0, height > 0 else { return false }
+        let transforms = (try? diffusionTransformBytes(
+            width: width, height: height, recipe: recipe,
+            pixelPitchMicrometers: pixelPitchMicrometers)) ?? 0
+        return rendersInTiles(width: width, height: height, transformBytes: transforms)
+    }
+    /// Working memory of the whole-frame diffusion transforms this recipe would run.
+    static func diffusionTransformBytes(
+        width: Int, height: Int, recipe: EditRecipe, pixelPitchMicrometers: Double?
+    ) throws -> UInt64 {
+        var total: UInt64 = 0
+        let pitch = pixelPitchMicrometers
+            ?? recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
+        for prefix in ["camera.diffusion_filter", "enlarger.diffusion_filter"] {
+            guard recipe.look.enabled else { continue }
+            if prefix.hasPrefix("enlarger") && recipe.bypassesPrint { continue }
+            guard recipe.flag(prefix + ".active"), recipe.number(prefix + ".strength") > 0 else {
+                continue
+            }
+            var p = DiffusionCore.Parameters()
+            p.family = recipe.choice(prefix + ".filter_family")
+            p.spatialScale = recipe.number(prefix + ".spatial_scale")
+            p.size = .init(
+                recipe.number(prefix + ".core_size"), recipe.number(prefix + ".halo_size"),
+                recipe.number(prefix + ".bloom_size"))
+            let radius = try DiffusionCore.radius(
+                width: width, height: height, pixelSize: pitch, parameters: p)
+            func power(_ value: Int) -> UInt64 {
+                var n: UInt64 = 1
+                while n < value { n *= 2 }
+                return n
+            }
+            total += power(width + 2 * radius) * power(height + 2 * radius) * 128
+        }
+        return total
+    }
     static func check(width: Int, height: Int, recipe: EditRecipe, allowOvercommit: Bool = false,
                       pixelPitchMicrometers: Double? = nil)
         throws
@@ -49,11 +95,14 @@ nonisolated enum RenderMemoryBudget {
         if max(width, height) <= 2048 && !recipe.tone.outputStage.isIdentity {
             estimate += pixels * 48
         }
-        if PixelStore.isLarge(width: width, height: height) {
-            // Tiled export: the graph's memory follows the tile, pixels live in file-backed
+        let transforms = try diffusionTransformBytes(
+            width: width, height: height, recipe: recipe, pixelPitchMicrometers: pixelPitchMicrometers)
+        if rendersInTiles(width: width, height: height, transformBytes: transforms) {
+            // Tiled render: the graph's memory follows the tile, pixels live in file-backed
             // storage, and only 8-bit results scale with the image.
             let allowance = ImageMemoryAllowance.available
-            let edge = UInt64(MetalFilmPipeline.Tiling.fitting(available: allowance).tileEdge)
+            let edge = UInt64(
+                min(MetalFilmPipeline.Tiling.fitting(available: allowance).tileEdge, max(width, height)))
             let graph: UInt64 = recipe.look.enabled ? edge * edge * 16 * 14 : 0
             // A film edge that composites a separately graded centre also holds its gate mask.
             let perPixel: UInt64 = recipe.filmEdgeLayout == nil ? 12 : 18
@@ -63,28 +112,7 @@ nonisolated enum RenderMemoryBudget {
             }
             return
         }
-        let pitch = pixelPitchMicrometers ?? recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
-        for prefix in ["camera.diffusion_filter", "enlarger.diffusion_filter"] {
-            guard recipe.look.enabled else { continue }
-            if prefix.hasPrefix("enlarger") && recipe.bypassesPrint { continue }
-            guard recipe.flag(prefix + ".active"), recipe.number(prefix + ".strength") > 0 else {
-                continue
-            }
-            var p = DiffusionCore.Parameters()
-            p.family = recipe.choice(prefix + ".filter_family")
-            p.spatialScale = recipe.number(prefix + ".spatial_scale")
-            p.size = .init(
-                recipe.number(prefix + ".core_size"), recipe.number(prefix + ".halo_size"),
-                recipe.number(prefix + ".bloom_size"))
-            let radius = try DiffusionCore.radius(
-                width: width, height: height, pixelSize: pitch, parameters: p)
-            func power(_ value: Int) -> UInt64 {
-                var n: UInt64 = 1
-                while n < value { n *= 2 }
-                return n
-            }
-            estimate += power(width + 2 * radius) * power(height + 2 * radius) * 128
-        }
+        estimate += transforms
         let processAllowance = ImageMemoryAllowance.available
         // Metal's recommended working set is a performance advisory, not an allocation limit.
         // The process headroom and single-buffer limit above are the admission limits.

@@ -106,6 +106,22 @@ import Foundation
             }
             count += 1
         }
+        // A zoomed region is rendered from its source rectangle and then turned on its own.
+        for turns in 0..<4 { for flipH in [false, true] { for flipV in [false, true] {
+            let geometry = ImageGeometry(quarterTurns: turns, flippedHorizontally: flipH, flippedVertically: flipV)
+            let full = GeometryRenderer.render(cg, geometry: geometry)!
+            let ow = full.width, oh = full.height
+            let shown = CGRect(x: 30, y: 20, width: 50, height: 40)
+            let unit = CGRect(x: shown.minX / Double(ow), y: shown.minY / Double(oh), width: shown.width / Double(ow), height: shown.height / Double(oh))
+            let source = geometry.sourceRect(forOriented: unit)
+            let rect = CGRect(x: (source.minX * Double(w)).rounded(), y: (source.minY * Double(h)).rounded(),
+                              width: (source.width * Double(w)).rounded(), height: (source.height * Double(h)).rounded())
+            let part = GeometryRenderer.render(cg.cropping(to: rect)!, geometry: geometry.orientationOnly)!
+            precondition(pixels(part) == pixels(full.cropping(to: shown)!), "Region mapping differs for \(turns) \(flipH) \(flipV)")
+            let back = geometry.orientedRect(forSource: source)
+            precondition(abs(back.minX - unit.minX) < 1e-9 && abs(back.minY - unit.minY) < 1e-9 && abs(back.width - unit.width) < 1e-9)
+            count += 1
+        } } }
         precondition(pixels(cg) == baseline)
         precondition(CropSelection().aspect == .original)
         print(

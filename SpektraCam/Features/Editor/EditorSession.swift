@@ -267,6 +267,24 @@ import SwiftUI
         }
         if processingChanged || geometryChanged { renderGeometry() }
     }
+    var detailProvider: PhotoScrollView.DetailProvider {
+        { [weak self] visible, longEdge in
+            await self?.detail(visible: visible, longEdge: longEdge)
+        }
+    }
+    /// Sharp render of the part of the displayed photo in view, for a zoomed canvas. Nil while
+    /// an edit is in progress or when the displayed frame is not the current recipe.
+    func detail(visible: CGRect, longEdge: Int) async -> PhotoRenderer.Detail? {
+        let snapshot = recipe
+        guard interactionKey == nil, !waitingToRefine, hasFilmPreview, !isRendering,
+            renderedFilmRecipe == snapshot.processingRecipe,
+            renderedGeometry == snapshot.geometry, renderedCrop == snapshot.crop.normalizedRect
+        else { return nil }
+        let result = try? await filmRenderer.renderDetail(
+            snapshot, visible: visible, longEdge: longEdge)
+        guard recipe == snapshot else { return nil }
+        return result
+    }
     /// One render in flight and one latest desired state. Completed frames remain visible
     /// during a drag; a continuous stream of slider events never postpones rendering.
     func renderGeometry() {

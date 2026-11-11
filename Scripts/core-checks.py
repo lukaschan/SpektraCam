@@ -45,6 +45,7 @@ checks['exposure'] = (checks['color-pipeline'][0], ['.'])
 checks['preview'] = (checks['metal-film'][0] + ['SourceImageRenderer','ToneRenderer','CubeLUT','PhotoExporter','GeometryRenderer','RenderMemoryBudget','FilmRenderResources','PhotoRenderer'], ['.'])
 checks['processed-export'] = (checks['preview'][0] + ['PhotoMetadata','ImportedPhoto'], ['.'])
 checks['bypass'] = checks['processed-export']
+checks['detail'] = (checks['processed-export'][0], ['.'])
 checks['stress-export'] = checks['processed-export']
 checks['contrast'] = checks['preview']
 checks['tone-response'] = checks['processed-export']

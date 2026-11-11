@@ -12,6 +12,52 @@ nonisolated struct ImageGeometry: Codable, Equatable, Sendable {
 
     var isIdentity: Bool { self == ImageGeometry() }
 
+    /// The quarter turns and mirrors alone, as applied to an image that is already framed.
+    var orientationOnly: ImageGeometry {
+        ImageGeometry(
+            quarterTurns: quarterTurns, flippedHorizontally: flippedHorizontally,
+            flippedVertically: flippedVertically)
+    }
+    /// Where a point of the source lands after the quarter turns and mirrors. Unit
+    /// coordinates with the origin at the top left; straightening is not represented.
+    private func oriented(_ p: CGPoint) -> CGPoint {
+        var q: CGPoint
+        switch ((quarterTurns % 4) + 4) % 4 {
+        case 1: q = CGPoint(x: p.y, y: 1 - p.x)
+        case 2: q = CGPoint(x: 1 - p.x, y: 1 - p.y)
+        case 3: q = CGPoint(x: 1 - p.y, y: p.x)
+        default: q = p
+        }
+        if flippedHorizontally { q.x = 1 - q.x }
+        if flippedVertically { q.y = 1 - q.y }
+        return q
+    }
+    private func unoriented(_ p: CGPoint) -> CGPoint {
+        var q = p
+        if flippedHorizontally { q.x = 1 - q.x }
+        if flippedVertically { q.y = 1 - q.y }
+        switch ((quarterTurns % 4) + 4) % 4 {
+        case 1: return CGPoint(x: 1 - q.y, y: q.x)
+        case 2: return CGPoint(x: 1 - q.x, y: 1 - q.y)
+        case 3: return CGPoint(x: q.y, y: 1 - q.x)
+        default: return q
+        }
+    }
+    private static func bounds(_ a: CGPoint, _ b: CGPoint) -> CGRect {
+        CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+    }
+    /// The part of the source shown by a unit rectangle of the turned and mirrored image.
+    func sourceRect(forOriented rect: CGRect) -> CGRect {
+        Self.bounds(
+            unoriented(CGPoint(x: rect.minX, y: rect.minY)),
+            unoriented(CGPoint(x: rect.maxX, y: rect.maxY)))
+    }
+    func orientedRect(forSource rect: CGRect) -> CGRect {
+        Self.bounds(
+            oriented(CGPoint(x: rect.minX, y: rect.minY)),
+            oriented(CGPoint(x: rect.maxX, y: rect.maxY)))
+    }
+
     mutating func rotateLeft() {
         quarterTurns = (quarterTurns + 1) % 4
         swap(&flippedHorizontally, &flippedVertically)

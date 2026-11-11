@@ -232,7 +232,8 @@ struct EditorView: View {
                         if panelExpanded && point.y < inspectorFrame.minY - 44 {
                             setExpanded(false)
                         }
-                    }
+                    },
+                    detail: showOriginal ? nil : session.detailProvider
                 )
                 .overlay(alignment: .top) {
                     VStack(spacing: 8) {

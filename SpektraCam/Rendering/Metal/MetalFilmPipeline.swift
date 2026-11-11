@@ -67,7 +67,10 @@ actor MetalFilmPipeline {
     private struct BufferFrame {
         let image: MTLBuffer, wallSeconds: Double, gpuSeconds: Double?
     }
-    func releaseWorkingCaches() { diffusion.clear() }
+    func releaseWorkingCaches() {
+        diffusion.clear()
+        regionCache = nil
+    }
 
     func process(
         _ input: [SIMD4<Float>], width: Int, height: Int, pipeline: FilmPipeline,
@@ -383,6 +386,13 @@ actor MetalFilmPipeline {
         let maximum: MTLBuffer
         var maximumReady = false
         var groups: [Int: Group] = [:]
+        /// Capture: the whole image is rendered once at proxy resolution, and every stage
+        /// records the proxy that a later region render at full resolution will sample.
+        var capture = false
+        /// The boost anchor came from the proxy, so finer pixels may exceed it.
+        var estimatedMaximum = false
+        var captured: [(Group, Deferred)] = []
+        var proxyPool: FilmFrameBuffers?
         var workspace: DiffusionMetalKernels.Workspace?
         var nearKernels: [Int: DiffusionMetalKernels.PSF] = [:]
         init(width: Int, height: Int, tiling: Tiling, maximum: MTLBuffer) {
@@ -458,16 +468,40 @@ actor MetalFilmPipeline {
         let maximum = try allocate(4)
         maximum.contents().storeBytes(of: 0, as: UInt32.self)
         let run = Run(width: width, height: height, tiling: tiling, maximum: maximum)
+        let proxyPool = FilmFrameBuffers(
+            device: device, length: run.paddedWidth * run.paddedHeight * 16)
+        defer { diffusion.clear() }
+        return try await renderTiles(
+            run: run, setup: setup, pipeline: pipeline, stochastic: stochastic, seed: seed,
+            opticsOnly: opticsOnly, grainMean: grainMean, grainDensityOnly: grainDensityOnly,
+            edge: edge, format: format, region: (0, 0, width, height), proxyPool: proxyPool
+        ) { _, _, _, _ in (source, 0, 0) }
+    }
+
+    /// Tile passes over `region` of the run's image. `fetch` supplies source pixels covering
+    /// the requested rectangle (the region plus this pass's halo) as a store and its origin.
+    /// A run whose proxies are already prepared finishes in one pass.
+    private func renderTiles(
+        run: Run, setup: Setup, pipeline: FilmPipeline, stochastic: Bool, seed: UInt64,
+        opticsOnly: Bool, grainMean: Bool, grainDensityOnly: Bool, edge: FilmEdgeGeometry?,
+        format: PixelStore.Format, region: (x: Int, y: Int, w: Int, h: Int),
+        proxyPool: FilmFrameBuffers?,
+        fetch: (Int, Int, Int, Int) throws -> (store: PixelStore, x: Int, y: Int)
+    ) async throws -> PixelStore {
+        let width = run.imageWidth, height = run.imageHeight
+        let tiling = run.tiling
+        guard region.w > 0, region.h > 0, region.x >= 0, region.y >= 0,
+            region.x + region.w <= width, region.y + region.h <= height
+        else { throw Failure.invalidShape }
         let edgeLength = min(tiling.tileEdge, max(width, height))
-        let length = edgeLength * edgeLength * 16
-        let pool = FilmFrameBuffers(device: device, length: length)
-        let scratch = try spatial.scratch(length: length)
-        let proxyCount = run.paddedWidth * run.paddedHeight
-        let proxyPool = FilmFrameBuffers(device: device, length: proxyCount * 16)
+        // The probe's window is tiny; working buffers are sized once the halo is known.
+        var length = 64 * 64 * 16
+        var pool = FilmFrameBuffers(device: device, length: length)
+        var scratch = try spatial.scratch(length: length)
         let invalid = try allocate(4)
         invalid.contents().storeBytes(of: 0, as: UInt32.self)
-        let destination = try PixelStore(width: width, height: height, format: format)
-        defer { diffusion.clear() }
+        let destination = try PixelStore(width: region.w, height: region.h, format: format)
+        var source: (store: PixelStore, x: Int, y: Int)?
 
         /// Encode and run one window. `payload` is the part of the image this tile owns.
         func runTile(
@@ -482,7 +516,14 @@ actor MetalFilmPipeline {
             do {
                 try autoreleasepool {
                     let input = try pool.take()
-                    source.read(x: x, y: y, width: w, height: h, into: input.contents())
+                    if payload != nil, let source {
+                        source.store.read(
+                            x: x - source.x, y: y - source.y, width: w, height: h,
+                            into: input.contents())
+                    } else {
+                        // The probe only walks the graph; its pixels are never used.
+                        memset(input.contents(), 0, w * h * 16)
+                    }
                     do {
                         result = try encodeGraph(
                             source: input, width: w, height: h, pipeline: pipeline, setup: setup,
@@ -495,29 +536,11 @@ actor MetalFilmPipeline {
                             let target = run.groups[pending.id]?.input
                         else { return }
                         // The proxy pixel is the mean of the stage's own full-resolution input.
-                        guard let e = command.makeComputeCommandEncoder(),
-                            let function = functions["tile_downsample"]
-                        else { throw Failure.allocation }
-                        e.setComputePipelineState(function)
-                        e.setBuffer(stage, offset: 0, index: 0)
-                        e.setBuffer(target, offset: 0, index: 1)
-                        let f = run.factor
-                        var a = SIMD4<UInt32>(
-                            UInt32(w), UInt32(run.paddedWidth), UInt32(run.paddedHeight), UInt32(f))
-                        var b = SIMD4<UInt32>(
-                            UInt32(payload.x - x), UInt32(payload.y - y), UInt32(payload.w),
-                            UInt32(payload.h))
-                        var c = SIMD4<UInt32>(
-                            UInt32(payload.x), UInt32(payload.y), UInt32(width), UInt32(height))
-                        e.setBytes(&a, length: 16, index: 2)
-                        e.setBytes(&b, length: 16, index: 3)
-                        e.setBytes(&c, length: 16, index: 4)
-                        e.dispatchThreads(
-                            MTLSize(
-                                width: (payload.w + f - 1) / f, height: (payload.h + f - 1) / f,
-                                depth: 1),
-                            threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
-                        e.endEncoding()
+                        try encodeDownsample(
+                            command, stage: stage, stageWidth: w, into: target, run: run,
+                            factor: run.factor,
+                            payload: (payload.x - x, payload.y - y, payload.w, payload.h),
+                            origin: (payload.x, payload.y))
                     }
                 }
             } catch {
@@ -528,7 +551,8 @@ actor MetalFilmPipeline {
             try await submit(command)
             if let result, let payload {
                 destination.write(
-                    x: payload.x, y: payload.y, width: payload.w, height: payload.h,
+                    x: payload.x - region.x, y: payload.y - region.y, width: payload.w,
+                    height: payload.h,
                     from: UnsafeRawPointer(result.contents()).advanced(
                         by: ((payload.y - y) * w + payload.x - x) * 16),
                     sourceRowBytes: w * 16)
@@ -549,20 +573,43 @@ actor MetalFilmPipeline {
             }
             let step = (window - 2 * halo) / run.factor * run.factor
             guard step >= run.factor, step > 0 else { throw Failure.allocation }
-            if let pending = probe.pending, case .maximum = pending.work {
-            } else if let pending = probe.pending {
-                run.groups[pending.id] = try Group(input: proxyPool.take())
+            let needed =
+                min(edgeLength, min(step, region.w) + 2 * halo)
+                * min(edgeLength, min(step, region.h) + 2 * halo) * 16
+            if needed > length {
+                length = needed
+                pool = FilmFrameBuffers(device: device, length: length)
+                scratch = try spatial.scratch(length: length)
             }
-            for py in stride(from: 0, to: height, by: step) {
-                for px in stride(from: 0, to: width, by: step) {
-                    let pw = min(step, width - px), ph = min(step, height - py)
+            if let pending = probe.pending {
+                // A prepared run has every proxy; only a whole-image render can build one.
+                guard let proxyPool, region.w == width, region.h == height else {
+                    throw Failure.invalidShape
+                }
+                if case .maximum = pending.work {
+                } else {
+                    run.groups[pending.id] = try Group(input: proxyPool.take())
+                }
+            }
+            let x0 = max(0, region.x - halo), y0 = max(0, region.y - halo)
+            let x1 = min(width, region.x + region.w + halo)
+            let y1 = min(height, region.y + region.h + halo)
+            if source == nil || source!.x > x0 || source!.y > y0
+                || source!.x + source!.store.width < x1 || source!.y + source!.store.height < y1
+            {
+                source = try fetch(x0, y0, x1 - x0, y1 - y0)
+            }
+            for py in stride(from: region.y, to: region.y + region.h, by: step) {
+                for px in stride(from: region.x, to: region.x + region.w, by: step) {
+                    let pw = min(step, region.x + region.w - px)
+                    let ph = min(step, region.y + region.h - py)
                     let x0 = max(0, px - halo), y0 = max(0, py - halo)
                     let x1 = min(width, px + pw + halo), y1 = min(height, py + ph + halo)
                     _ = try await runTile(
                         x: x0, y: y0, w: x1 - x0, h: y1 - y0, payload: (px, py, pw, ph))
                 }
             }
-            guard let pending = probe.pending else { break }
+            guard let pending = probe.pending, let proxyPool else { break }
             switch pending.work {
             case .maximum:
                 run.maximumReady = true
@@ -577,6 +624,143 @@ actor MetalFilmPipeline {
         try Task.checkCancellation()
         guard invalid.contents().load(as: UInt32.self) == 0 else { throw Failure.nonfinite }
         return destination
+    }
+
+    // MARK: Region rendering for the zoomed preview
+
+    /// Identity of a prepared run: one edit at one zoom level.
+    struct RegionKey: Equatable, Sendable {
+        let recipe: EditRecipe, width: Int, height: Int, factor: Int, autoExposureEV: Double
+        let seed: UInt64
+    }
+    private var regionCache: (key: RegionKey, run: Run, halo: Int)?
+
+    /// Prepare region rendering of a `width` x `height` image for one edit. Returns the halo, in
+    /// pixels, that source rectangles must include, or nil when `proxy` (the whole image at
+    /// 1/`factor` scale, rows of ceil(width / factor)) is required and was not supplied.
+    func prepareRegion(
+        width: Int, height: Int, factor: Int, pipeline: FilmPipeline, seed: UInt64 = 0,
+        autoExposureEV: Double, tiling: Tiling = Tiling(), proxy: [SIMD4<Float>]?
+    ) async throws -> Int? {
+        let key = RegionKey(
+            recipe: pipeline.recipe, width: width, height: height, factor: factor,
+            autoExposureEV: autoExposureEV, seed: seed)
+        if let cached = regionCache, cached.key == key { return cached.halo }
+        guard let proxy else { return nil }
+        try await beginFrame()
+        defer { endFrame() }
+        regionCache = nil
+        var tiling = tiling
+        tiling.factor = factor
+        let maximum = try allocate(4)
+        maximum.contents().storeBytes(of: 0, as: UInt32.self)
+        let run = Run(width: width, height: height, tiling: tiling, maximum: maximum)
+        guard run.factor == factor, proxy.count == run.proxyWidth * run.proxyHeight else {
+            throw Failure.invalidShape
+        }
+        let coarse = try makeSetup(
+            pipeline: pipeline, width: run.proxyWidth, height: run.proxyHeight,
+            autoExposureEV: autoExposureEV, edge: nil)
+        let proxyPool = FilmFrameBuffers(
+            device: device, length: run.paddedWidth * run.paddedHeight * 16)
+        run.capture = true
+        run.proxyPool = proxyPool
+        run.estimatedMaximum = true
+        let source = try buffer(proxy)
+        let pool = FilmFrameBuffers(device: device, length: source.length)
+        let scratch = try spatial.scratch(length: source.length)
+        let invalid = try allocate(4)
+        invalid.contents().storeBytes(of: 0, as: UInt32.self)
+        guard let raw = queue.makeCommandBuffer() else { throw Failure.allocation }
+        let command = MPSCommandBuffer(commandBuffer: raw)
+        do {
+            _ = try encodeGraph(
+                source: source, width: run.proxyWidth, height: run.proxyHeight,
+                pipeline: pipeline, setup: coarse, stochastic: true, seed: seed,
+                opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: nil,
+                command: command, pool: pool, scratch: scratch, invalid: invalid,
+                tile: Tile(x: 0, y: 0, run: run, probe: false, state: TileState()))
+        } catch {
+            let status = command.rootCommandBuffer.status
+            if status == .notEnqueued || status == .enqueued { command.commit() }
+            diffusion.clear()
+            throw error
+        }
+        try await submit(command)
+        diffusion.clear()
+        run.capture = false
+        for (group, work) in run.captured {
+            switch work {
+            case .maximum: break
+            case .blur(let plans):
+                try await resolveBlur(group, plans: plans, run: run, pool: proxyPool)
+            case .diffusion(let parameters, let far):
+                try await resolveDiffusion(
+                    group, parameters: parameters, far: far, run: run,
+                    pitch: coarse.pitch / Double(factor), pool: proxyPool)
+            }
+        }
+        run.captured = []
+        run.maximumReady = true
+        // A one-pixel request reveals the halo the graph needs around any region.
+        let detail = try makeSetup(
+            pipeline: pipeline, width: width, height: height, autoExposureEV: autoExposureEV,
+            edge: nil)
+        var halo = 0
+        _ = try await renderTiles(
+            run: run, setup: detail, pipeline: pipeline, stochastic: true, seed: seed,
+            opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: nil,
+            format: .float, region: (0, 0, 1, 1), proxyPool: nil
+        ) { _, _, w, h in
+            halo = max(w, h) - 1
+            return (try PixelStore(width: w, height: h, format: .float), 0, 0)
+        }
+        regionCache = (key, run, halo)
+        return halo
+    }
+    /// Render `region` of a prepared image. `source` holds scene-linear pixels whose top-left
+    /// corner is at `origin`, covering the region plus the prepared halo (clipped to the image).
+    func processRegion(
+        _ source: PixelStore, origin: (x: Int, y: Int), region: (x: Int, y: Int, w: Int, h: Int),
+        key: RegionKey, pipeline: FilmPipeline
+    ) async throws -> PixelStore {
+        try await beginFrame()
+        defer { endFrame() }
+        guard let cached = regionCache, cached.key == key else { throw Failure.invalidShape }
+        let setup = try makeSetup(
+            pipeline: pipeline, width: key.width, height: key.height,
+            autoExposureEV: key.autoExposureEV, edge: nil)
+        return try await renderTiles(
+            run: cached.run, setup: setup, pipeline: pipeline, stochastic: true, seed: key.seed,
+            opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: nil,
+            format: .float, region: region, proxyPool: nil
+        ) { _, _, _, _ in (source, origin.x, origin.y) }
+    }
+
+    /// Area-mean `stage` into a padded proxy buffer; see `tile_downsample`.
+    private func encodeDownsample(
+        _ command: MPSCommandBuffer, stage: MTLBuffer, stageWidth: Int, into target: MTLBuffer,
+        run: Run, factor f: Int, payload: (x: Int, y: Int, w: Int, h: Int),
+        origin: (x: Int, y: Int)
+    ) throws {
+        guard let e = command.makeComputeCommandEncoder(),
+            let function = functions["tile_downsample"]
+        else { throw Failure.allocation }
+        e.setComputePipelineState(function)
+        e.setBuffer(stage, offset: 0, index: 0)
+        e.setBuffer(target, offset: 0, index: 1)
+        var a = SIMD4<UInt32>(
+            UInt32(stageWidth), UInt32(run.paddedWidth), UInt32(run.paddedHeight), UInt32(f))
+        var b = SIMD4<UInt32>(
+            UInt32(payload.x), UInt32(payload.y), UInt32(payload.w), UInt32(payload.h))
+        var c = SIMD4<UInt32>(UInt32(origin.x), UInt32(origin.y), 0, 0)
+        e.setBytes(&a, length: 16, index: 2)
+        e.setBytes(&b, length: 16, index: 3)
+        e.setBytes(&c, length: 16, index: 4)
+        e.dispatchThreads(
+            MTLSize(width: (payload.w + f - 1) / f, height: (payload.h + f - 1) / f, depth: 1),
+            threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
+        e.endEncoding()
     }
 
     /// Filter the proxy with the wide Gaussians of one blur stage.
@@ -713,9 +897,10 @@ actor MetalFilmPipeline {
         shape.x = UInt32(count)
         var flags = model.flags
         // Random streams and edge geometry are addressed in full-image coordinates.
+        let capturing = tile?.run.capture == true
         var streamTile = SIMD4<UInt32>(
-            UInt32(width), UInt32(tile?.run.imageWidth ?? width), UInt32(tile?.x ?? 0),
-            UInt32(tile?.y ?? 0))
+            UInt32(width), UInt32(capturing ? width : tile?.run.imageWidth ?? width),
+            UInt32(tile?.x ?? 0), UInt32(tile?.y ?? 0))
         var edgeTile = SIMD4<UInt32>(
             UInt32(width), UInt32(height), UInt32(tile?.x ?? 0), UInt32(tile?.y ?? 0))
         func vector(_ v: RGB) -> SIMD4<Float> { .init(Float(v.x), Float(v.y), Float(v.z), 0) }
@@ -794,10 +979,11 @@ actor MetalFilmPipeline {
         }
         /// Split one stage's blurs between the tile and the proxy. `site` identifies the stage
         /// across tiles and passes. Throws `Barrier` until the stage's proxy is ready.
-        func planned(
-            _ site: Int, _ input: MTLBuffer, _ specs: [BlurSpec], _ tile: Tile, glow: Bool
-        ) throws -> ([[Component]], Group?) {
-            let run = tile.run
+        /// Decide, per Gaussian and channel, what stays in the tile. `scale` converts the
+        /// spec's sigma to full-resolution pixels (it is the proxy factor while capturing).
+        func split(_ specs: [BlurSpec], _ run: Run, glow: Bool, scale: Double = 1)
+            -> (plans: [[Component]], needsProxy: Bool, radius: Int)
+        {
             let limit = run.sigmaLimit(glow: glow)
             var needsProxy = false
             var radius = 0
@@ -806,7 +992,7 @@ actor MetalFilmPipeline {
                     spec.exponential
                     ? [(0.1633, 0.5360), (0.6496, 1.5236), (0.1870, 2.7684)] : [(1.0, 1.0)]
                 return fit.map { entry in
-                    let sigma = spec.scale * entry.1
+                    let sigma = spec.scale * entry.1 * scale
                     var inTile = RGB(repeating: 1)
                     for c in 0..<3 {
                         if sigma[c] > limit {
@@ -819,6 +1005,13 @@ actor MetalFilmPipeline {
                     return Component(weight: entry.0, sigma: sigma, inTile: inTile)
                 }
             }
+            return (plans, needsProxy, radius)
+        }
+        func planned(
+            _ site: Int, _ input: MTLBuffer, _ specs: [BlurSpec], _ tile: Tile, glow: Bool
+        ) throws -> ([[Component]], Group?) {
+            let run = tile.run
+            let (plans, needsProxy, radius) = split(specs, run, glow: glow)
             tile.state.halo += radius
             let group = run.groups[site]
             if needsProxy && group?.ready != true {
@@ -826,6 +1019,22 @@ actor MetalFilmPipeline {
                 throw Barrier()
             }
             return (plans, group)
+        }
+        /// Capture: keep this stage's input as the proxy its wide Gaussians will filter.
+        func record(_ site: Int, _ input: MTLBuffer, _ work: Deferred, _ run: Run) throws {
+            guard let proxyPool = run.proxyPool else { throw Failure.invalidShape }
+            let group = try Group(input: proxyPool.take())
+            try encodeDownsample(
+                command, stage: input, stageWidth: width, into: group.input!, run: run, factor: 1,
+                payload: (0, 0, width, height), origin: (0, 0))
+            run.groups[site] = group
+            run.captured.append((group, work))
+        }
+        func captureBlur(_ site: Int, _ input: MTLBuffer, _ specs: [BlurSpec], _ run: Run, glow: Bool)
+            throws
+        {
+            let (plans, needsProxy, _) = split(specs, run, glow: glow, scale: Double(run.factor))
+            if needsProxy { try record(site, input, .blur(plans), run) }
         }
         func tiled(
             _ input: MTLBuffer, _ spec: BlurSpec, _ components: [Component], _ proxy: MTLBuffer?
@@ -856,6 +1065,10 @@ actor MetalFilmPipeline {
             throws -> [MTLBuffer]
         {
             guard let tile else { return try specs.map { try whole(input, $0) } }
+            if tile.run.capture {
+                try captureBlur(site, input, specs, tile.run, glow: glow)
+                return try specs.map { try whole(input, $0) }
+            }
             let (plans, group) = try planned(site, input, specs, tile, glow: glow)
             return try plans.enumerated().map { k, components in
                 try tiled(input, specs[k], components, group?.results[k])
@@ -867,7 +1080,11 @@ actor MetalFilmPipeline {
         {
             var plans: [[Component]]?
             var group: Group?
-            if let tile { (plans, group) = try planned(site, input, specs, tile, glow: true) }
+            if let tile, tile.run.capture {
+                try captureBlur(site, input, specs, tile.run, glow: true)
+            } else if let tile {
+                (plans, group) = try planned(site, input, specs, tile, glow: true)
+            }
             let accumulated = try pool.take()
             for k in specs.indices {
                 let image = try plans.map { try tiled(input, specs[k], $0[k], group?.results[k]) }
@@ -900,15 +1117,24 @@ actor MetalFilmPipeline {
                 return
             }
             let run = tile.run
-            let components = try DiffusionCore.components(pixelSize: pitch, parameters: p)
+            // While capturing, this buffer is the proxy; the plan is the full-resolution one.
+            let fine = capturing ? pitch / Double(run.factor) : pitch
+            let components = try DiffusionCore.components(pixelSize: fine, parameters: p)
             let reference = try DiffusionCore.radius(
-                width: run.imageWidth, height: run.imageHeight, pixelSize: pitch, parameters: p)
+                width: run.imageWidth, height: run.imageHeight, pixelSize: fine, parameters: p)
             // Exponential components up to two proxy pixels wide keep their cusp inside the tile.
             var near = components
             var far = [(Double, RGB)]()
             if reference > 16 * run.factor {
                 near = components.filter { $0.0 <= 2 * Double(run.factor) }
                 far = components.filter { $0.0 > 2 * Double(run.factor) }
+            }
+            if capturing {
+                if !far.isEmpty { try record(site, image, .diffusion(p, far), run) }
+                try diffusion.encode(
+                    input: image, output: image, width: width, height: height, pixelSize: pitch,
+                    parameters: p, command: command)
+                return
             }
             let radius =
                 near.isEmpty
@@ -1012,7 +1238,9 @@ actor MetalFilmPipeline {
             if let tile {
                 // The boost curve is anchored to the brightest value of the whole image.
                 maximum = tile.run.maximum
-                if !tile.run.maximumReady {
+                if capturing {
+                    try reduce(into: maximum)
+                } else if !tile.run.maximumReady {
                     if !tile.probe { try reduce(into: maximum) }
                     tile.state.pending = (-1, nil, .maximum)
                     throw Barrier()
@@ -1028,7 +1256,8 @@ actor MetalFilmPipeline {
             var p = SIMD4<Float>(
                 Float(pow(2, boost) - 1),
                 Float(pow(28, 1 - recipe.number("film_render.halation.boost_range"))),
-                Float(0.184 * pow(2, recipe.number("film_render.halation.protect_ev"))), 0)
+                Float(0.184 * pow(2, recipe.number("film_render.halation.protect_ev"))),
+                tile?.run.estimatedMaximum == true ? 1 : 0)
             e.setBytes(&p, length: 16, index: 3)
             e.setBytes(&n, length: 4, index: 4)
             dispatch(e, "boost_image")
