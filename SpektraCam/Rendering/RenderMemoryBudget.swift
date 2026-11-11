@@ -49,6 +49,20 @@ nonisolated enum RenderMemoryBudget {
         if max(width, height) <= 2048 && !recipe.tone.outputStage.isIdentity {
             estimate += pixels * 48
         }
+        if PixelStore.isLarge(width: width, height: height) {
+            // Tiled export: the graph's memory follows the tile, pixels live in file-backed
+            // storage, and only 8-bit results scale with the image.
+            let allowance = ImageMemoryAllowance.available
+            let edge = UInt64(MetalFilmPipeline.Tiling.fitting(available: allowance).tileEdge)
+            let graph: UInt64 = recipe.look.enabled ? edge * edge * 16 * 14 : 0
+            // A film edge that composites a separately graded centre also holds its gate mask.
+            let perPixel: UInt64 = recipe.filmEdgeLayout == nil ? 12 : 18
+            let tiled = graph + pixels * perPixel + 160 * 1024 * 1024
+            guard allowOvercommit || tiled < allowance else {
+                throw Failure(estimated: tiled, available: allowance)
+            }
+            return
+        }
         let pitch = pixelPitchMicrometers ?? recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
         for prefix in ["camera.diffusion_filter", "enlarger.diffusion_filter"] {
             guard recipe.look.enabled else { continue }

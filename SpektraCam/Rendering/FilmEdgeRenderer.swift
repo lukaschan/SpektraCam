@@ -39,25 +39,51 @@ nonisolated enum FilmEdgeRenderer {
     /// Extend the scene at the boundary for lens convolution, then gate it in exposure space.
     /// It does not claim to recover the original scene outside an imported photograph.
     /// The scene is sampled in film coordinates, so a tilted strip carries its picture with it.
-    static func padded(_ input: SourceImageRenderer.Input, geometry: FilmEdgeGeometry) throws -> [SIMD4<Float>] {
-        var pixels = Array(repeating: SIMD4<Float>.zero, count: geometry.width * geometry.height)
-        let mm = geometry.millimetersPerPixel
-        let cx = Double(geometry.width) / 2, cy = Double(geometry.height) / 2
-        for y in 0..<geometry.height {
-            if y % 32 == 0 { try Task.checkCancellation() }
-            for x in 0..<geometry.width {
-                let (fx, fy) = geometry.film(Double(x) + 0.5, Double(y) + 0.5)
-                let px = cx + fx / mm, py = cy + fy / mm
-                let sx = min(max((px - geometry.gate.minX) / geometry.gate.width * Double(input.width) - 0.5, 0), Double(input.width - 1))
-                let sy = min(max((py - geometry.gate.minY) / geometry.gate.height * Double(input.height) - 0.5, 0), Double(input.height - 1))
-                let x0 = Int(sx), x1 = min(x0 + 1, input.width - 1), fx0 = Float(sx - Double(x0))
-                let y0 = Int(sy), y1 = min(y0 + 1, input.height - 1), fy0 = Float(sy - Double(y0))
-                let a = input.pixels[y0 * input.width + x0] * (1 - fx0) + input.pixels[y0 * input.width + x1] * fx0
-                let b = input.pixels[y1 * input.width + x0] * (1 - fx0) + input.pixels[y1 * input.width + x1] * fx0
-                pixels[y * geometry.width + x] = a * (1 - fy0) + b * fy0
+    /// A full-size canvas is written to file-backed storage and rendered in tiles.
+    static func padded(_ input: SourceImageRenderer.Input, geometry: FilmEdgeGeometry) throws
+        -> SourceImageRenderer.Input
+    {
+        let width = geometry.width, height = geometry.height
+        let store = PixelStore.isLarge(width: width, height: height)
+            ? try PixelStore(width: width, height: height, format: .float) : nil
+        var pixels = Array(repeating: SIMD4<Float>.zero, count: store == nil ? width * height : 0)
+        func fill(_ source: UnsafePointer<SIMD4<Float>>, _ target: UnsafeMutablePointer<SIMD4<Float>>) throws {
+            let mm = geometry.millimetersPerPixel
+            let cx = Double(width) / 2, cy = Double(height) / 2
+            let bands = max(1, min(height / 32, ProcessInfo.processInfo.activeProcessorCount * 4))
+            nonisolated(unsafe) let source = source, target = target
+            DispatchQueue.concurrentPerform(iterations: bands) { band in
+                for y in (band * height / bands)..<((band + 1) * height / bands) {
+                    for x in 0..<width {
+                        let (fx, fy) = geometry.film(Double(x) + 0.5, Double(y) + 0.5)
+                        let px = cx + fx / mm, py = cy + fy / mm
+                        let sx = min(max((px - geometry.gate.minX) / geometry.gate.width * Double(input.width) - 0.5, 0), Double(input.width - 1))
+                        let sy = min(max((py - geometry.gate.minY) / geometry.gate.height * Double(input.height) - 0.5, 0), Double(input.height - 1))
+                        let x0 = Int(sx), x1 = min(x0 + 1, input.width - 1), fx0 = Float(sx - Double(x0))
+                        let y0 = Int(sy), y1 = min(y0 + 1, input.height - 1), fy0 = Float(sy - Double(y0))
+                        let a = source[y0 * input.width + x0] * (1 - fx0) + source[y0 * input.width + x1] * fx0
+                        let b = source[y1 * input.width + x0] * (1 - fx0) + source[y1 * input.width + x1] * fx0
+                        target[y * width + x] = a * (1 - fy0) + b * fy0
+                    }
+                }
+            }
+            try Task.checkCancellation()
+        }
+        func read(_ body: (UnsafePointer<SIMD4<Float>>) throws -> Void) throws {
+            if let source = input.store {
+                try body(UnsafePointer(source.base.assumingMemoryBound(to: SIMD4<Float>.self)))
+            } else {
+                try input.pixels.withUnsafeBufferPointer { try body($0.baseAddress!) }
             }
         }
-        return pixels
+        if let store {
+            try read { try fill($0, store.base.assumingMemoryBound(to: SIMD4<Float>.self)) }
+        } else {
+            try pixels.withUnsafeMutableBufferPointer { target in
+                try read { try fill($0, target.baseAddress!) }
+            }
+        }
+        return .init(pixels: pixels, width: width, height: height, store: store)
     }
 
     /// Creative cross-family / LUT / partial-Mix choices keep the developed center untouched.
@@ -70,7 +96,7 @@ nonisolated enum FilmEdgeRenderer {
         let gate = CGRect(x: rect.minX, y: Double(geometry.height) - rect.maxY, width: rect.width, height: rect.height)
         let angle = geometry.distress.tilt * .pi / 180
         let mid = CGPoint(x: Double(geometry.width) / 2, y: Double(geometry.height) / 2)
-        let photograph = CIImage(cgImage: center)
+        let photograph = PixelStore.ciImage(center)
             .transformed(by: CGAffineTransform(scaleX: gate.width / Double(center.width), y: gate.height / Double(center.height)))
             .transformed(by: CGAffineTransform(translationX: gate.minX, y: gate.minY))
             .transformed(by: CGAffineTransform(translationX: -mid.x, y: -mid.y)
@@ -79,9 +105,22 @@ nonisolated enum FilmEdgeRenderer {
         let canvas = CGRect(x: 0, y: 0, width: geometry.width, height: geometry.height)
         let mask = try gateCoverageMap(geometry)
         let result = photograph.applyingFilter("CIBlendWithMask", parameters: [
-            kCIInputBackgroundImageKey: CIImage(cgImage: edge), kCIInputMaskImageKey: try gateMask(mask, geometry)])
+            kCIInputBackgroundImageKey: PixelStore.ciImage(edge), kCIInputMaskImageKey: try gateMask(mask, geometry)])
             .cropped(to: canvas)
         let d = geometry.distress
+        if PixelStore.isLarge(width: geometry.width, height: geometry.height) {
+            // Composite into file-backed storage and lay the damage over it in place.
+            let store = try PixelStore.render(
+                result, width: geometry.width, height: geometry.height, context: context,
+                colorSpace: linear)
+            if d.dust > 0 || d.scratches > 0 {
+                var view = UnsafeMutableBufferPointer(
+                    start: store.base.assumingMemoryBound(to: SIMD4<Float>.self),
+                    count: geometry.width * geometry.height)
+                try applyCenterDamage(&view, mask: mask, geometry: geometry, paperPrint: paperPrint)
+            }
+            return try store.image(colorSpace: linear)
+        }
         guard d.dust > 0 || d.scratches > 0 else {
             guard let image = context.createCGImage(result, from: canvas, format: .RGBAf, colorSpace: linear, deferred: false)
             else { throw PhotoExporter.Failure.render }
@@ -92,7 +131,9 @@ nonisolated enum FilmEdgeRenderer {
         pixels.withUnsafeMutableBytes {
             context.render(result, toBitmap: $0.baseAddress!, rowBytes: w * 16, bounds: canvas, format: .RGBAf, colorSpace: linear)
         }
-        try applyCenterDamage(&pixels, mask: mask, geometry: geometry, paperPrint: paperPrint)
+        try pixels.withUnsafeMutableBufferPointer {
+            try applyCenterDamage(&$0, mask: mask, geometry: geometry, paperPrint: paperPrint)
+        }
         let data = pixels.withUnsafeBytes { Data($0) }
         let damaged = CIImage(bitmapData: data, bytesPerRow: w * 16, size: CGSize(width: w, height: h), format: .RGBAf, colorSpace: linear)
         guard let image = context.createCGImage(damaged, from: canvas, format: .RGBAf, colorSpace: linear, deferred: false)
@@ -105,14 +146,14 @@ nonisolated enum FilmEdgeRenderer {
     /// cut dye prints its complement (a shallow yellow-layer cut prints yellow, deeper red, then
     /// black). Transmission scan: dust and scatter darken; cut dye lets its complementary light
     /// through (shallow blue, deeper cyan, then the scanner's white).
-    static func applyCenterDamage(_ pixels: inout [SIMD4<Float>], mask: [Float], geometry: FilmEdgeGeometry,
-                                  paperPrint: Bool) throws {
+    static func applyCenterDamage(_ pixels: inout UnsafeMutableBufferPointer<SIMD4<Float>>, mask: [Float],
+                                  geometry: FilmEdgeGeometry, paperPrint: Bool) throws {
         let w = geometry.width, h = geometry.height
         let paperWhite = SIMD3<Float>(repeating: 0.8), scanLight = SIMD3<Float>(repeating: 0.77)
         let sw = FilmEdgeGeometry.scatterWeights, weights = SIMD3<Float>(Float(sw.x), Float(sw.y), Float(sw.z))
         let bands = max(1, min(h, ProcessInfo.processInfo.activeProcessorCount * 4))
-        try pixels.withUnsafeMutableBufferPointer { buffer in
-            nonisolated(unsafe) let out = buffer.baseAddress!
+        do {
+            nonisolated(unsafe) let out = pixels.baseAddress!
             DispatchQueue.concurrentPerform(iterations: bands) { band in
                 for y in (band * h / bands)..<((band + 1) * h / bands) {
                     for x in 0..<w {

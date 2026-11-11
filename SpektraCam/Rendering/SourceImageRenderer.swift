@@ -8,7 +8,11 @@ import UniformTypeIdentifiers
 /// unchanged baseline source so it cannot cancel the user's source exposure adjustment.
 nonisolated enum SourceImageRenderer {
     enum Intent: Hashable { case sceneLinear, developedPhoto }
-    struct Input: Sendable { let pixels: [SIMD4<Float>], width: Int, height: Int }
+    /// Preview-size pixels live in `pixels`. A full-size export keeps them in `store` instead.
+    struct Input: Sendable {
+        let pixels: [SIMD4<Float>], width: Int, height: Int
+        var store: PixelStore? = nil
+    }
     enum Failure: LocalizedError {
         case decode, raw
         var errorDescription: String? {
@@ -71,7 +75,7 @@ nonisolated enum SourceImageRenderer {
         data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int,
         renderedSource: CIImage? = nil, sourceType: String? = nil, intent: Intent? = nil,
         description: PhotoSource.Description? = nil, decoder: Decoder? = nil,
-        framing: EditRecipe? = nil, targetSize: CGSize? = nil
+        framing: EditRecipe? = nil, targetSize: CGSize? = nil, allowsStore: Bool = false
     ) throws -> Input {
         try Task.checkCancellation()
         return try autoreleasepool {
@@ -80,13 +84,14 @@ nonisolated enum SourceImageRenderer {
                 renderedSource: renderedSource, sourceType: sourceType,
                 intent: intent
                     ?? (recipe.inputMode == .spektrafilm ? .sceneLinear : .developedPhoto),
-                description: description, decoder: decoder, framing: framing, targetSize: targetSize)
+                description: description, decoder: decoder, framing: framing, targetSize: targetSize,
+                allowsStore: allowsStore)
         }
     }
     private static func preparePixels(
         data: Data?, fallback: CGImage, recipe: EditRecipe, maximum: Int, renderedSource: CIImage?,
         sourceType: String?, intent: Intent, description known: PhotoSource.Description?, decoder: Decoder?,
-        framing: EditRecipe?, targetSize: CGSize?
+        framing: EditRecipe?, targetSize: CGSize?, allowsStore: Bool
     ) throws
         -> Input
     {
@@ -180,6 +185,14 @@ nonisolated enum SourceImageRenderer {
         let width = Int(image.extent.width.rounded())
         let height = Int(image.extent.height.rounded())
         guard width > 0, height > 0 else { throw Failure.decode }
+        if allowsStore && PixelStore.isLarge(width: width, height: height) {
+            // Full-size sources decode straight into file-backed storage.
+            let store = try PixelStore.render(
+                image, width: width, height: height, context: decoder?.context ?? context,
+                colorSpace: linear)
+            guard store.isValid() else { throw Failure.decode }
+            return .init(pixels: [], width: width, height: height, store: store)
+        }
         var pixels = Array(repeating: SIMD4<Float>.zero, count: width * height)
         pixels.withUnsafeMutableBytes { bytes in
             (decoder?.context ?? context).render(
@@ -196,6 +209,7 @@ nonisolated enum SourceImageRenderer {
 
     /// Materialize the unadjusted floating-point proxy once; exposure changes reuse its headroom.
     static func image(_ input: Input) -> CIImage {
+        if let store = input.store { return store.ciImage() }
         let data = input.pixels.withUnsafeBytes { Data($0) }
         return CIImage(
             bitmapData: data, bytesPerRow: input.width * 16,
@@ -204,6 +218,7 @@ nonisolated enum SourceImageRenderer {
     }
 
     static func workingImage(_ input: Input) throws -> CGImage {
+        if let store = input.store { return try store.image(colorSpace: linear) }
         let source = image(input)
         guard
             let frame = context.createCGImage(
@@ -218,14 +233,19 @@ nonisolated enum SourceImageRenderer {
     }
     static func blend(film: CGImage, sourceImage: CGImage, amount: Double) throws -> CGImage {
         if amount >= 1 { return film }
-        let original = CIImage(cgImage: sourceImage)
+        let original = PixelStore.ciImage(sourceImage)
 
         let output = original.applyingFilter(
             "CIDissolveTransition",
             parameters: [
-                kCIInputTargetImageKey: CIImage(cgImage: film),
+                kCIInputTargetImageKey: PixelStore.ciImage(film),
                 kCIInputTimeKey: min(max(amount, 0), 1),
             ])
+        if PixelStore.isLarge(width: film.width, height: film.height) {
+            return try PixelStore.render(
+                output, width: film.width, height: film.height, context: context, colorSpace: linear
+            ).image(colorSpace: linear)
+        }
         guard
             let image = context.createCGImage(
                 output, from: original.extent, format: .RGBAf,

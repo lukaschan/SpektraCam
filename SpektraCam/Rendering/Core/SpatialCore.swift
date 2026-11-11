@@ -122,6 +122,43 @@ nonisolated enum SpatialCore {
         }
     }
     /// B, B1, B2, B3 for the reference Young–van Vliet recursive filter.
+    /// Standard deviation the filter actually applies for a nominal `sigma`. The recursive
+    /// approximation is wider than nominal and its ratio changes with scale, so a blur moved to
+    /// another resolution must match this width, not the nominal value.
+    static func effectiveDeviation(_ sigma: Double) -> Double {
+        if sigma <= 0 { return 0 }
+        if sigma < 3 {
+            let radius = Int(3 * sigma + 0.5)
+            var total = 0.0, moment = 0.0
+            for k in -radius...radius {
+                let weight = exp(-0.5 * pow(Double(k) / sigma, 2))
+                total += weight
+                moment += weight * Double(k * k)
+            }
+            return sqrt(moment / total)
+        }
+        let b = iirCoefficients(sigma)
+        let mean = (b.y + 2 * b.z + 3 * b.w) / b.x
+        // Forward and backward passes each add the causal response's variance.
+        return sqrt(2 * ((b.y + 4 * b.z + 9 * b.w) / b.x + mean * mean))
+    }
+    /// Nominal sigma whose applied width is closest to `deviation`.
+    static func sigma(forEffectiveDeviation deviation: Double) -> Double {
+        func solve(_ low: Double, _ high: Double) -> Double {
+            var low = low, high = high
+            for _ in 0..<60 {
+                let middle = 0.5 * (low + high)
+                if effectiveDeviation(middle) < deviation { low = middle } else { high = middle }
+            }
+            return 0.5 * (low + high)
+        }
+        // The short exact kernel ends just below sigma 3 and the recursive filter starts wider.
+        let shortest = 3.0, widestExact = 2.999
+        let recursive = effectiveDeviation(shortest), exact = effectiveDeviation(widestExact)
+        if deviation >= recursive { return solve(shortest, max(4 * deviation, 6)) }
+        if deviation <= exact { return solve(1e-3, widestExact) }
+        return deviation - exact < recursive - deviation ? widestExact : shortest
+    }
     static func iirCoefficients(_ sigma: Double) -> SIMD4<Double> {
         let q = sigma >= 2.5 ? 0.98711 * sigma - 0.96330 : 3.97156 - 4.14554 * sqrt(1 - 0.26891 * sigma)
         let q2 = q * q

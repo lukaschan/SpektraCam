@@ -45,10 +45,9 @@ inline float fe_worn(FeHole h,constant float4 *e,float4 k){
     }
     return h.distance+rough-tear;
 }
-inline float edge_support(uint i, constant float4 *e, bool destination=false) {
+inline float edge_support(float2 origin, constant float4 *e, bool destination=false) {
     if(e[2].x==0)return 1;
     float4 k=destination?e[11]:e[10];float wear=destination?0:e[12].x;
-    uint width=uint(e[0].x);float2 origin=float2(i%width,i/width);
     // Most pixels are far from the two perforation bands.
     float across=fe_strip(fe_film(origin+0.5f,e),e).y;
     if(abs(abs(across)-e[2].y)>k.w+e[0].z*1.5f+0.2f)return 1;
@@ -201,18 +200,20 @@ inline float4 edge_scratches(float2 px,constant float4 *e){
     return result;
 }
 kernel void film_edge_gate(device float4 *image [[buffer(0)]],constant float4 *e [[buffer(1)]],
-                           constant float4 &unused [[buffer(2)]],uint i [[thread_position_in_grid]]) {
-    if(i>=uint(e[0].x)*uint(e[0].y))return;
-    uint width=uint(e[0].x);float2 p=float2(i%width,i/width)+0.5f;
+                           constant float4 &unused [[buffer(2)]],constant uint4 &tile [[buffer(3)]],
+                           uint i [[thread_position_in_grid]]) {
+    if(i>=tile.x*tile.y)return;
+    float2 p=float2(tile.z+i%tile.x,tile.w+i/tile.x)+0.5f;
     float3 ex=edge_exposure(p,e);
     image[i].xyz=(image[i].xyz+e[9].xyz*ex.x)*edge_gate(p,e)+e[9].xyz*ex.y+e[13].xyz*ex.z;
 }
 // clear.w: 1 source damage, 2 carrier + tape, 4 paper black endpoint, 8 destination KS holes, 16 carrier reflection.
 kernel void film_edge_transmission(device float4 *image [[buffer(0)]],constant float4 *e [[buffer(1)]],
-                                   constant float4 &clear [[buffer(2)]],uint i [[thread_position_in_grid]]) {
-    if(i>=uint(e[0].x)*uint(e[0].y))return;
-    uint width=uint(e[0].x),mode=uint(clear.w);float2 p=float2(i%width,i/width)+0.5f;
-    float support=edge_support(i,e,(mode&8u)!=0),carrier=(mode&2u)!=0?edge_carrier(p,e):1;
+                                   constant float4 &clear [[buffer(2)]],constant uint4 &tile [[buffer(3)]],
+                                   uint i [[thread_position_in_grid]]) {
+    if(i>=tile.x*tile.y)return;
+    uint mode=uint(clear.w);float2 p=float2(tile.z+i%tile.x,tile.w+i/tile.x)+0.5f;
+    float support=edge_support(p-0.5f,e,(mode&8u)!=0),carrier=(mode&2u)!=0?edge_carrier(p,e):1;
     float3 tape=(mode&2u)!=0?edge_tape(p,e):float3(1);
     if((mode&4u)!=0){
         float taped=clamp(1-(tape.x+tape.y+tape.z)/3/0.85f,0.0f,1.0f);
@@ -229,9 +230,10 @@ kernel void film_edge_transmission(device float4 *image [[buffer(0)]],constant f
 }
 // Emulsion scratches thin the developed dye stack before printing or scanning.
 kernel void film_edge_density(device float4 *image [[buffer(0)]],constant float4 *e [[buffer(1)]],
-                              constant float4 &unused [[buffer(2)]],uint i [[thread_position_in_grid]]) {
-    if(i>=uint(e[0].x)*uint(e[0].y))return;
-    uint width=uint(e[0].x);float2 p=float2(i%width,i/width)+0.5f;
+                              constant float4 &unused [[buffer(2)]],constant uint4 &tile [[buffer(3)]],
+                              uint i [[thread_position_in_grid]]) {
+    if(i>=tile.x*tile.y)return;
+    float2 p=float2(tile.z+i%tile.x,tile.w+i/tile.x)+0.5f;
     image[i].xyz*=1-edge_scratches(p,e).xyz;
 }
 #define FILM_MODEL_ARGS \
@@ -311,7 +313,7 @@ kernel void grain_layers_image(device const float4 *density [[buffer(0)]],device
                                device float4 *second [[buffer(2)]],device float4 *third [[buffer(3)]],
                                device const float4 *curves [[buffer(4)]],constant float4 *p [[buffer(5)]],
                                constant uint4& shape [[buffer(6)]],constant uint2& seed [[buffer(7)]],
-                               constant uint2& offset [[buffer(8)]],uint i [[thread_position_in_grid]]) {
+                               constant uint4& tile [[buffer(8)]],uint i [[thread_position_in_grid]]) {
     if(i>=shape.x)return;
     bool layers=shape.z!=0,positive=(shape.w&1)!=0;
     float3 split[3];
@@ -320,7 +322,7 @@ kernel void grain_layers_image(device const float4 *density [[buffer(0)]],device
         float3 layer=lookup_curve(float3(value),curves+ch*shape.y,shape.y);
         split[0][ch]=layer.x;split[1][ch]=layer.y;split[2][ch]=layer.z;
     }
-    uint n=layers?3:1;ulong pixel=(ulong(offset.y)<<32)+ulong(offset.x)+ulong(i);
+    uint n=layers?3:1;ulong pixel=ulong(tile.w+i/tile.x)*ulong(tile.y)+ulong(tile.z+i%tile.x);
     for(uint layer=0;layer<n;++layer) {
         float3 value=layers?split[layer]+p[6+layer].xyz:density[i].xyz+p[6].xyz,result;
         for(uint ch=0;ch<3;++ch) {
@@ -334,10 +336,11 @@ kernel void grain_layers_image(device const float4 *density [[buffer(0)]],device
 }
 kernel void random_lognormal_image(device float4 *output [[buffer(0)]],constant float2& p [[buffer(1)]],
                                    constant uint4& shape [[buffer(2)]],constant uint2& seed [[buffer(3)]],
-                                   constant uint& independent [[buffer(4)]],uint i [[thread_position_in_grid]]) {
+                                   constant uint& independent [[buffer(4)]],constant uint4& tile [[buffer(5)]],
+                                   uint i [[thread_position_in_grid]]) {
     if(i>=shape.x)return;
     float variance=log(1+(p.y/p.x)*(p.y/p.x)),sigma=sqrt(variance),mu=log(p.x)-variance*0.5f;
-    float3 value;ulong pixel=(ulong(shape.w)<<32)+ulong(shape.z)+ulong(i);
+    float3 value;ulong pixel=ulong(tile.w+i/tile.x)*ulong(tile.y)+ulong(tile.z+i%tile.x);
     for(uint ch=0;ch<(independent!=0?3:1);++ch) {
         GrainStream random={pixel,shape.y+ch,seed,0,4,uint4(0)};
         float normal=sigma<1e-6f?0:sqrt(-2*log(grain_uniform(random)))*cos(2*M_PI_F*grain_uniform(random));
@@ -356,4 +359,45 @@ kernel void finish_grain_image(device const float4 *first [[buffer(0)]],device c
 kernel void apply_glare_image(device float4 *xyz [[buffer(0)]],device const float4 *glare [[buffer(1)]],
                               constant float4& white [[buffer(2)]],constant uint& count [[buffer(3)]],uint i [[thread_position_in_grid]]) {
     if(i<count)xyz[i].xyz+=white.xyz*(glare[i].x/100.0f);
+}
+// Tiled export. A low-resolution proxy of the whole frame carries the wide kernels;
+// each proxy pixel is the area mean of a factor x factor block of the full image.
+// The proxy has one extra column and row before the image. They hold the means of the image's
+// own first column and row, so a recursive filter starts from the same constant extension
+// as it does on the full frame instead of from a block mean.
+// a: (tile width, padded proxy width, padded proxy height, factor); b: payload origin in the
+// tile and its size; c: (image x, image y) of the payload origin.
+kernel void tile_downsample(device const float4 *tile [[buffer(0)]],device float4 *proxy [[buffer(1)]],
+                            constant uint4 &a [[buffer(2)]],constant uint4 &b [[buffer(3)]],
+                            constant uint4 &c [[buffer(4)]],uint2 id [[thread_position_in_grid]]) {
+    uint f=a.w,lx=c.x/f+id.x+1,ly=c.y/f+id.y+1;
+    if(id.x*f>=b.z||id.y*f>=b.w||lx>=a.y||ly>=a.z)return;
+    uint x0=id.x*f,x1=min(x0+f,b.z),y0=id.y*f,y1=min(y0+f,b.w);
+    float3 sum=0,left=0,top=0;
+    for(uint y=y0;y<y1;++y)for(uint x=x0;x<x1;++x)sum+=tile[(b.y+y)*a.x+b.x+x].xyz;
+    proxy[ly*a.y+lx]=float4(sum/float((x1-x0)*(y1-y0)),0);
+    if(lx==1){for(uint y=y0;y<y1;++y)left+=tile[(b.y+y)*a.x+b.x].xyz;proxy[ly*a.y]=float4(left/float(y1-y0),0);}
+    if(ly==1){for(uint x=x0;x<x1;++x)top+=tile[b.y*a.x+b.x+x].xyz;proxy[lx]=float4(top/float(x1-x0),0);}
+    if(lx==1&&ly==1)proxy[0]=float4(tile[b.y*a.x+b.x].xyz,0);
+}
+// Drop the extra column and row: a (padded width, width, height).
+kernel void proxy_crop(device const float4 *padded [[buffer(0)]],device float4 *output [[buffer(1)]],
+                       constant uint4 &a [[buffer(2)]],uint i [[thread_position_in_grid]]) {
+    if(i<a.y*a.z)output[i]=padded[(i/a.y+1)*a.x+i%a.y+1];
+}
+// a: (tile width, tile height, image x, image y); b: (proxy row length, image columns in the
+// proxy, image rows in the proxy, factor); c: (leading pad, add to output).
+kernel void tile_sample_proxy(device const float4 *proxy [[buffer(0)]],device float4 *output [[buffer(1)]],
+                              constant uint4 &a [[buffer(2)]],constant uint4 &b [[buffer(3)]],
+                              constant uint2 &c [[buffer(4)]],uint i [[thread_position_in_grid]]) {
+    if(i>=a.x*a.y)return;
+    float2 p=(float2(a.z+i%a.x,a.w+i/a.x)+0.5f)/float(b.w)-0.5f;
+    p=clamp(p,float2(0),float2(b.y-1,b.z-1));
+    uint x0=uint(p.x),y0=uint(p.y),x1=min(x0+1,b.y-1),y1=min(y0+1,b.z-1);
+    float fx=p.x-float(x0),fy=p.y-float(y0);
+    x0+=c.x;x1+=c.x;y0+=c.x;y1+=c.x;
+    float3 top=mix(proxy[y0*b.x+x0].xyz,proxy[y0*b.x+x1].xyz,fx);
+    float3 bottom=mix(proxy[y1*b.x+x0].xyz,proxy[y1*b.x+x1].xyz,fx);
+    float3 value=mix(top,bottom,fy);
+    output[i]=float4(c.y!=0?output[i].xyz+value:value,0);
 }

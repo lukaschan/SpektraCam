@@ -178,6 +178,25 @@ actor PhotoRenderer {
         }
         return try await frame(input, recipe: recipe, library: library, gpu: gpu, preview: true, state: preview)
     }
+    private static let linear = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+    private var tiling: MetalFilmPipeline.Tiling { .fitting(available: ImageMemoryAllowance.available) }
+    /// Film render of a preview-size array, or of a full-size store rendered in tiles.
+    /// `finished` asks a tiled render for the final 8-bit image when no grading follows.
+    private func filmImage(
+        _ input: SourceImageRenderer.Input, pipeline: FilmPipeline, gpu: MetalFilmPipeline,
+        autoExposureEV: Double, edge: FilmEdgeGeometry? = nil, finished: Bool = false
+    ) async throws -> CGImage {
+        guard let store = input.store else {
+            return try await gpu.processImage(
+                input.pixels, width: input.width, height: input.height, pipeline: pipeline,
+                autoExposureEV: autoExposureEV, edge: edge)
+        }
+        let result = try await gpu.processImage(
+            store, pipeline: pipeline, autoExposureEV: autoExposureEV, edge: edge,
+            format: finished ? .byte : .float, tiling: tiling)
+        return try result.image(
+            colorSpace: CGColorSpace(name: finished ? CGColorSpace.sRGB : CGColorSpace.extendedSRGB)!)
+    }
     private func neutralFrame(_ input: SourceImageRenderer.Input, recipe: EditRecipe) throws -> CGImage {
         try ToneRenderer.render(SourceImageRenderer.workingImage(input), tone: recipe.tone)
     }
@@ -239,9 +258,14 @@ actor PhotoRenderer {
             if opticalFlags.contains(where: { optics.flag($0) }) || !optics.tone.rawStage.isIdentity
             {
                 let pipeline = try await renderResources.pipeline(optics)
-                source = try await gpu.processOptics(
-                    input.pixels, width: input.width, height: input.height,
-                    pipeline: pipeline)
+                if let store = input.store {
+                    source = try await gpu.processOptics(store, pipeline: pipeline, tiling: tiling)
+                        .image(colorSpace: Self.linear)
+                } else {
+                    source = try await gpu.processOptics(
+                        input.pixels, width: input.width, height: input.height,
+                        pipeline: pipeline)
+                }
             } else {
                 source = try SourceImageRenderer.workingImage(input)
             }
@@ -271,9 +295,17 @@ actor PhotoRenderer {
         } else {
             let exposure = try exposure(grain, library: library)
             let pipeline = try await renderResources.pipeline(grain)
-            noise = try await gpu.processGrainPair(
-                input.pixels, width: input.width, height: input.height,
-                pipeline: pipeline, autoExposureEV: exposure)
+            if let store = input.store {
+                let pair = try await gpu.processGrainPair(
+                    store, pipeline: pipeline, autoExposureEV: exposure, tiling: tiling)
+                noise = try (
+                    pair.0.image(colorSpace: Self.linear), pair.1.image(colorSpace: Self.linear)
+                )
+            } else {
+                noise = try await gpu.processGrainPair(
+                    input.pixels, width: input.width, height: input.height,
+                    pipeline: pipeline, autoExposureEV: exposure)
+            }
             if preview {
                 cache.grainKey = grain
                 cache.grainSize = size
@@ -311,10 +343,11 @@ actor PhotoRenderer {
             film = cached
         } else {
             let pipeline = try await renderResources.pipeline(recipe)
-            film = try await gpu.processImage(
-                input.pixels, width: input.width, height: input.height,
-                pipeline: pipeline,
-                autoExposureEV: exposure(recipe, library: library, state: cache))
+            // With nothing to grade afterwards, a tiled render writes the finished 8-bit image.
+            film = try await filmImage(
+                input, pipeline: pipeline, gpu: gpu,
+                autoExposureEV: exposure(recipe, library: library, state: cache),
+                finished: recipe.mix >= 1 && recipe.tone.outputStage.isIdentity)
             if preview {
                 cache.filmRecipe = key
                 cache.filmImage = film
@@ -337,7 +370,7 @@ actor PhotoRenderer {
                     data: data, fallback: source, recipe: recipe,
                     maximum: max(input.width, input.height), sourceType: sourceType,
                     intent: .developedPhoto, description: sourceDescription,
-                    decoder: preview ? cache.decoder : nil)
+                    decoder: preview ? cache.decoder : nil, allowsStore: !preview)
                 neutral = try SourceImageRenderer.workingImage(developed)
                 if preview {
                     cache.neutralKey = recipe.source
@@ -403,17 +436,21 @@ actor PhotoRenderer {
         let input = try SourceImageRenderer.prepare(data: data, fallback: source, recipe: material,
             maximum: decodeMaximum, sourceType: sourceType, intent: .sceneLinear,
             description: sourceDescription, framing: recipe,
-            targetSize: CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded())))
+            targetSize: CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded())),
+            allowsStore: true)
         let pipeline = try await renderResources.pipeline(material)
-        var image = try await gpu.processImage(FilmEdgeRenderer.padded(input, geometry: geometry),
-            width: geometry.width, height: geometry.height, pipeline: pipeline, autoExposureEV: autoEV, edge: geometry)
+        let composes = material.processingRecipe != recipe.processingRecipe
+        var image = try await filmImage(
+            FilmEdgeRenderer.padded(input, geometry: geometry), pipeline: pipeline, gpu: gpu,
+            autoExposureEV: autoEV, edge: geometry,
+            finished: !composes && original.tone.outputStage.isIdentity)
         try Task.checkCancellation()
-        if material.processingRecipe != recipe.processingRecipe {
+        if composes {
             // Keep LUTs, disabled Develop and every manual cross-family choice exactly as selected.
             // Release FFT work before the second graph; the completed support bitmap is retained.
             await gpu.releaseWorkingCaches()
             let centerInput = try SourceImageRenderer.prepare(data: data, fallback: source, recipe: recipe,
-                maximum: decodeMaximum, sourceType: sourceType, description: sourceDescription)
+                maximum: decodeMaximum, sourceType: sourceType, description: sourceDescription, allowsStore: true)
             let graded = recipe.look.enabled
                 ? try await frame(centerInput, recipe: recipe, library: library, gpu: gpu, preview: false)
                 : try neutralFrame(centerInput, recipe: recipe)
@@ -485,7 +522,7 @@ actor PhotoRenderer {
             selectInputMode(recipe.inputMode)
             let input = try SourceImageRenderer.prepare(
                 data: data, fallback: decoded, recipe: recipe, maximum: maximum,
-                sourceType: sourceType)
+                sourceType: sourceType, allowsStore: true)
             let graded: CGImage
             if recipe.look.enabled {
                 let (library, gpu) = try await renderResources.load()

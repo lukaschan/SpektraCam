@@ -54,6 +54,7 @@ checks['library'] = (checks['processed-export'][0] + ['LibraryPhoto','LibraryFil
 checks['monochrome-grain'] = (checks['metal-film'][0], ['.'])
 checks['film-noise'] = (checks['metal-film'][0], ['.'])
 checks['film-benchmark'] = (checks['metal-film'][0], ['.'])
+checks['metal-tiling'] = (checks['metal-film'][0], ['.'])
 checks['batch-export'] = (checks['library'][0] + ['BatchPhotoExporter','BatchExportModel','PhotoLibraryWriter'], ['.'])
 checks['sdr-pipeline'] = (checks['processed-export'][0] + ['BatchPhotoExporter'], ['.'])
 checks['render-cache'] = (checks['processed-export'][0], ['.'])
@@ -72,6 +73,7 @@ checks['film-edge'] = (list(dict.fromkeys(checks['processed-export'][0] + ['Prin
 checks['darkroom-orientation'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer'])), ['.'])
 checks['darkroom'] = (list(dict.fromkeys(checks['export'][0] + checks['recipe'][0] + ['PrintCompositor'])), [])
 for files, arguments in checks.values():
+ if any(f in files for f in ['MetalFilmPipeline','SourceImageRenderer','ToneRenderer']) and 'PixelStore' not in files: files.append('PixelStore')
  if 'EditRecipe' in files:
   for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout']:
    if dependency not in files: files.append(dependency)
