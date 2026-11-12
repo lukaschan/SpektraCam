@@ -6,9 +6,13 @@ struct CropControls: View {
     @Binding var crop: CropSelection
     @Binding var geometry: ImageGeometry
     let imageAspect: CGFloat
+    var filmGate: FilmEdgeLayout? = nil
     let rotateLeft: () -> Void
     let flipHorizontal: () -> Void
     let flipVertical: () -> Void
+    let reset: () -> Void
+    let done: () -> Void
+    let canReset: Bool
     var onStraightenEditingChanged: (Bool) -> Void = { _ in }
 
     private let common: [CropAspect] = [
@@ -16,14 +20,29 @@ struct CropControls: View {
     ]
 
     var body: some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                ScrollView { controls }
-                    .frame(height: 280)
-                    .clipped()
-            } else {
-                controls
+        VStack(spacing: 0) {
+            Group {
+                if typeSize.isAccessibilitySize {
+                    ScrollView { controls }
+                        .frame(height: 280)
+                        .clipped()
+                } else {
+                    controls
+                }
             }
+            HStack {
+                Button(String(localized: "editor.reset", defaultValue: "Reset"), action: reset)
+                    .buttonStyle(.glass).disabled(!canReset)
+                    .accessibilityLabel(String(localized: "editor.reset_crop", defaultValue: "Reset Crop"))
+                    .accessibilityIdentifier("crop.reset")
+                Spacer()
+                Button(String(localized: "common.done", defaultValue: "Done"),
+                    systemImage: "checkmark", action: done)
+                    .buttonStyle(.glassProminent).foregroundStyle(.white)
+                    .accessibilityIdentifier("crop.done")
+            }
+            .controlSize(.regular).frame(minHeight: 44)
+            .padding(.horizontal, 16).padding(.bottom, 8)
         }.background(.background)
             .onChange(of: geometry.straightenDegrees) { _, angle in
                 if angle == 0 {
@@ -35,7 +54,37 @@ struct CropControls: View {
 
     private var controls: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 8) {
+            if let filmGate {
+                LabeledContent(String(localized: "darkroom.edge.fixed_gate", defaultValue: "Fixed film gate"),
+                    value: filmGate.gateTitle(portrait: crop.orientation == .portrait))
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("crop.filmGate")
+            } else {
+                aspectControls
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    transformButtons
+                    Spacer()
+                    if filmGate?.format != .roll120 { orientationButtons }
+                }
+                VStack(spacing: 8) {
+                    HStack { transformButtons }
+                    if filmGate?.format != .roll120 { HStack { orientationButtons } }
+                }
+            }
+            .buttonStyle(.glass)
+            .controlSize(.large)
+
+            straightenControls
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    private var aspectControls: some View {
+        HStack(spacing: 8) {
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(common) { aspect in
@@ -66,23 +115,10 @@ struct CropControls: View {
                     String(localized: "crop.more_aspect_ratios", defaultValue: "More Aspect Ratios")
                 )
                 .accessibilityIdentifier("crop.moreRatios")
-            }
-
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    transformButtons
-                    Spacer()
-                    orientationButtons
-                }
-                VStack(spacing: 8) {
-                    HStack { transformButtons }
-                    HStack { orientationButtons }
-                }
-            }
-            .buttonStyle(.glass)
-            .controlSize(.large)
-
-            VStack(spacing: 2) {
+        }
+    }
+    private var straightenControls: some View {
+        VStack(spacing: 2) {
                 ViewThatFits(in: .horizontal) {
                     HStack {
                         Text(String(localized: "crop.straighten", defaultValue: "Straighten"))
@@ -111,10 +147,7 @@ struct CropControls: View {
                     )
                 )
                 .accessibilityIdentifier("crop.straighten")
-            }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
     }
 
     private var transformButtons: some View {

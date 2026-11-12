@@ -1,0 +1,227 @@
+{
+  "date": "2026-11-10",
+  "device": "iPhone 15 Pro Max",
+  "configuration": "Release + opt-in read-only checks",
+  "result": "PASS",
+  "cases": [
+    {
+      "case": 1,
+      "crop": [
+        5184,
+        3456
+      ],
+      "exifOrientation": 1,
+      "export": [
+        1080,
+        720
+      ],
+      "milliseconds": 1140.2321250061505,
+      "native": [
+        5184,
+        3456
+      ],
+      "portrait": false,
+      "preview": [
+        720,
+        506
+      ],
+      "raw": true,
+      "savedRecipeUnchanged": true,
+      "sourceUnchanged": true,
+      "type": "com.canon.cr2-raw-image"
+    },
+    {
+      "case": 2,
+      "crop": [
+        4032,
+        2688
+      ],
+      "exifOrientation": 1,
+      "export": [
+        1080,
+        720
+      ],
+      "milliseconds": 443.7178333173506,
+      "native": [
+        4032,
+        3024
+      ],
+      "portrait": false,
+      "preview": [
+        720,
+        506
+      ],
+      "raw": false,
+      "savedRecipeUnchanged": true,
+      "sourceUnchanged": true,
+      "type": "public.heic"
+    },
+    {
+      "case": 3,
+      "crop": [
+        2688,
+        4032
+      ],
+      "exifOrientation": 6,
+      "export": [
+        720,
+        1080
+      ],
+      "milliseconds": 1019.6962082991377,
+      "native": [
+        3024,
+        4032
+      ],
+      "portrait": true,
+      "preview": [
+        506,
+        720
+      ],
+      "raw": true,
+      "savedRecipeUnchanged": true,
+      "sourceUnchanged": true,
+      "type": "com.adobe.raw-image"
+    },
+    {
+      "case": 4,
+      "crop": [
+        2048,
+        1365
+      ],
+      "exifOrientation": 1,
+      "export": [
+        1080,
+        720
+      ],
+      "milliseconds": 261.19670836487785,
+      "native": [
+        2048,
+        1536
+      ],
+      "portrait": false,
+      "preview": [
+        720,
+        506
+      ],
+      "raw": false,
+      "savedRecipeUnchanged": true,
+      "sourceUnchanged": true,
+      "type": "public.jpeg"
+    },
+    {
+      "case": 5,
+      "crop": [
+        4032,
+        2688
+      ],
+      "exifOrientation": 1,
+      "export": [
+        1080,
+        720
+      ],
+      "milliseconds": 1029.3775833561085,
+      "native": [
+        4032,
+        3024
+      ],
+      "portrait": false,
+      "preview": [
+        720,
+        506
+      ],
+      "raw": true,
+      "savedRecipeUnchanged": true,
+      "sourceUnchanged": true,
+      "type": "com.adobe.raw-image"
+    },
+    {
+      "case": 6,
+      "crop": [
+        2688,
+        4032
+      ],
+      "exifOrientation": 6,
+      "export": [
+        720,
+        1080
+      ],
+      "milliseconds": 384.94912500027567,
+      "native": [
+        3024,
+        4032
+      ],
+      "portrait": true,
+      "preview": [
+        506,
+        720
+      ],
+      "raw": false,
+      "savedRecipeUnchanged": true,
+      "sourceUnchanged": true,
+      "type": "public.heic"
+    },
+    {
+      "case": 7,
+      "crop": [
+        4032,
+        2688
+      ],
+      "exifOrientation": 1,
+      "export": [
+        1080,
+        720
+      ],
+      "milliseconds": 1003.5617083194666,
+      "native": [
+        4032,
+        3024
+      ],
+      "portrait": false,
+      "preview": [
+        720,
+        506
+      ],
+      "raw": true,
+      "savedRecipeUnchanged": true,
+      "sourceUnchanged": true,
+      "type": "com.adobe.raw-image"
+    },
+    {
+      "case": 8,
+      "crop": [
+        4032,
+        2688
+      ],
+      "exifOrientation": 1,
+      "export": [
+        1080,
+        720
+      ],
+      "milliseconds": 1047.640708333347,
+      "native": [
+        4032,
+        3024
+      ],
+      "portrait": false,
+      "preview": [
+        720,
+        506
+      ],
+      "raw": true,
+      "savedRecipeUnchanged": true,
+      "sourceUnchanged": true,
+      "type": "com.adobe.raw-image"
+    }
+  ],
+  "preservation": {
+    "originalFiles": 49,
+    "lutAndIndexFiles": 28,
+    "photosLinks": 6,
+    "originalAndLUTBytesIdentical": true,
+    "photosLinksIdentical": true,
+    "concurrentRecipeEdits": 2,
+    "concurrentEditsConfirmedByUser": true,
+    "currentUserEditsPreserved": true
+  },
+  "scope": "720 preview and 1080 PNG paper export; real image contents and backups kept outside the repository. No full-native memory or calibrated analog-distress claim."
+}

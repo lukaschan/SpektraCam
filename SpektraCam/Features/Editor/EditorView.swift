@@ -20,53 +20,60 @@ struct EditorView: View {
     @ScaledMetric(relativeTo: .footnote) private var collapsedColorHeight: CGFloat = 208
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showExport = false
+    @State private var showDarkroom = false
+    @State private var cropReturnsToDarkroom = false
+    @State private var toolBeforeDarkroomCrop: EditorTool?
     @State private var showOriginal = false
     @State private var showResetConfirmation = false
     @State private var showRenderProgress = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            GeometryReader { workspace in
-                canvas.overlay(alignment: .bottom) {
-                    if activeTool != nil && activeTool != .crop {
-                        let maximum = maximumPanelHeight(in: workspace.size.height)
-                        inspector(
-                            height: panelExpanded ? maximum : min(maximum, collapsedPanelHeight)
-                        )
-                        .padding(.horizontal, 12).padding(.bottom, 8)
-                        .onGeometryChange(for: CGRect.self) {
-                            $0.frame(in: .global)
-                        } action: {
-                            inspectorFrame = $0
-                        }
-                    }
-                }
+        Group {
+            if showDarkroom {
+                DarkroomWorkspace(session: session, suspended: showExport, adjustCrop: openDarkroomCrop)
+            } else {
+                editorWorkspace
             }
-            if activeTool == .crop { toolPanel }
-
         }
         .background(EditorNavigationGuard().allowsHitTesting(false))
         .navigationTitle(
-            activeTool?.title ?? String(localized: "editor.editor", defaultValue: "Editor")
+            showDarkroom
+                ? String(localized: "darkroom.title", defaultValue: "Darkroom")
+                : activeTool?.title ?? String(localized: "editor.editor", defaultValue: "Editor")
         )
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            EditorToolbar(activeTool: $activeTool) {
-                setExpanded(false)
-                showExport = true
-            }
+            EditorToolbar(activeTool: Binding(
+                get: { showDarkroom ? nil : activeTool },
+                set: { tool in
+                    cropReturnsToDarkroom = tool == .crop && showDarkroom && session.recipe.filmEdgeLayout != nil
+                    if cropReturnsToDarkroom { toolBeforeDarkroomCrop = activeTool }
+                    activeTool = tool
+                    showDarkroom = false
+                }), darkroomActive: showDarkroom,
+                openDarkroom: { setExpanded(false); cropReturnsToDarkroom = false; showDarkroom = true },
+                export: { showExport = true })
             ToolbarItem(placement: .topBarLeading) {
                 Button(
-                    String(localized: "editor.close_editor", defaultValue: "Close Editor"),
-                    systemImage: "xmark", action: finish
+                    showDarkroom
+                        ? String(localized: "darkroom.back_to_editor", defaultValue: "Back to editor")
+                        : String(localized: "editor.close_editor", defaultValue: "Close Editor"),
+                    systemImage: showDarkroom ? "chevron.left" : "xmark",
+                    action: {
+                        if showDarkroom { showDarkroom = false }
+                        else { finish() }
+                    }
                 )
                 .photoActionStyle()
-                .accessibilityLabel(String(localized: "editor.close_editor", defaultValue: "Close Editor"))
-                .accessibilityIdentifier("editor.back")
+                .accessibilityLabel(
+                    showDarkroom
+                        ? String(localized: "darkroom.back_to_editor", defaultValue: "Back to editor")
+                        : String(localized: "editor.close_editor", defaultValue: "Close Editor"))
+                .accessibilityIdentifier(showDarkroom ? "darkroom.back" : "editor.back")
             }
             .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .topBarLeading) {
                 Menu(
                     String(localized: "editor.history", defaultValue: "History"),
                     systemImage: "arrow.uturn.backward"
@@ -89,39 +96,12 @@ struct EditorView: View {
                     ) { showResetConfirmation = true }
                     .disabled(!session.hasEdits)
                 }
-                .labelStyle(.iconOnly)
+                .photoActionStyle()
                 .accessibilityLabel(String(localized: "editor.history", defaultValue: "History"))
                 .accessibilityIdentifier("editor.history")
             }
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
-            if activeTool != .crop {
-                ToolbarItem(placement: .topBarTrailing) { CameraButton() }
-                    .sharedBackgroundVisibility(.hidden)
-            }
-            if activeTool == .crop {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "editor.reset", defaultValue: "Reset")) {
-                        session.update(key: "crop.reset") {
-                            $0.crop = CropSelection()
-                            $0.geometry = ImageGeometry()
-                        }
-                    }
-                    .disabled(
-                        session.recipe.crop == CropSelection() && session.recipe.geometry.isIdentity
-                    )
-                    .accessibilityLabel(
-                        String(localized: "editor.reset_crop", defaultValue: "Reset Crop")
-                    ).accessibilityIdentifier("crop.reset")
-                }
-                ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(
-                        String(localized: "common.done", defaultValue: "Done"),
-                        systemImage: "checkmark"
-                    ) { activeTool = nil }
-                    .labelStyle(.iconOnly).accessibilityIdentifier("crop.done")
-                }
-            }
+            .sharedBackgroundVisibility(.visible)
+            PhotoWorkspaceCameraToolbar()
         }
         .task(id: session.isBusy) {
             showRenderProgress = false
@@ -196,6 +176,23 @@ struct EditorView: View {
             }
         }
     }
+    private var editorWorkspace: some View {
+        VStack(spacing: 0) {
+            GeometryReader { workspace in
+                canvas.overlay(alignment: .bottom) {
+                    if activeTool != nil && activeTool != .crop {
+                        let maximum = maximumPanelHeight(in: workspace.size.height)
+                        inspector(height: panelExpanded ? maximum : min(maximum, collapsedPanelHeight))
+                            .padding(.horizontal, 12).padding(.bottom, 8)
+                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                                inspectorFrame = $0
+                            }
+                    }
+                }
+            }
+            if activeTool == .crop { toolPanel }
+        }
+    }
     private func finish() {
         guard !closing else { return }
         closing = true
@@ -206,6 +203,18 @@ struct EditorView: View {
             } catch { closeFailure = error.localizedDescription }
             closing = false
         }
+    }
+    private func openDarkroomCrop() {
+        setExpanded(false)
+        toolBeforeDarkroomCrop = activeTool
+        cropReturnsToDarkroom = true
+        activeTool = .crop
+        showDarkroom = false
+    }
+    private func finishDarkroomCrop() {
+        activeTool = toolBeforeDarkroomCrop
+        cropReturnsToDarkroom = false
+        showDarkroom = true
     }
     private var canvas: some View {
         ZStack {
@@ -223,7 +232,8 @@ struct EditorView: View {
                         if panelExpanded && point.y < inspectorFrame.minY - 44 {
                             setExpanded(false)
                         }
-                    }
+                    },
+                    detail: showOriginal ? nil : session.detailProvider
                 )
                 .overlay(alignment: .top) {
                     VStack(spacing: 8) {
@@ -290,6 +300,7 @@ struct EditorView: View {
                 crop: session.binding(\.crop, key: "crop"),
                 geometry: session.binding(\.geometry, key: "straighten"),
                 imageAspect: imageAspect,
+                filmGate: session.recipe.filmEdgeLayout,
                 rotateLeft: {
                     let aspect = imageAspect
                     session.update(key: "rotate") {
@@ -309,6 +320,17 @@ struct EditorView: View {
                         $0.geometry.flipVertical()
                     }
                 },
+                reset: {
+                    session.update(key: "crop.reset") {
+                        $0.crop = CropSelection()
+                        $0.geometry = ImageGeometry()
+                    }
+                },
+                done: {
+                    if cropReturnsToDarkroom { finishDarkroomCrop() }
+                    else { activeTool = nil }
+                },
+                canReset: session.recipe.crop != CropSelection() || !session.recipe.geometry.isIdentity,
                 onStraightenEditingChanged: {
                     session.setInteraction(key: "straighten", active: $0)
                 })
@@ -385,23 +407,7 @@ struct EditorView: View {
                     } else {
                         Spacer()
                     }
-                    Button(
-                        panelExpanded
-                            ? String(
-                                localized: "editor.collapse_panel", defaultValue: "Collapse Panel")
-                            : String(
-                                localized: "editor.expand_panel", defaultValue: "Expand Panel"),
-                        systemImage: panelExpanded ? "chevron.down" : "chevron.up"
-                    ) {
-                        setExpanded(!panelExpanded)
-                    }
-                    .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .accessibilityIdentifier("editor.expand")
-                    .accessibilityValue(
-                        panelExpanded
-                            ? String(localized: "editor.expanded", defaultValue: "Expanded")
-                            : String(localized: "editor.collapsed", defaultValue: "Collapsed"))
+                    PanelExpansionButton(expanded: $panelExpanded, identifier: "editor.expand")
                 }
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 toolPanel.font(.footnote).frame(height: height).glassEffect(
@@ -456,39 +462,5 @@ private struct EditorNavigationGuard: UIViewControllerRepresentable {
                 if recognizer.isEnabled { recognizer.isEnabled = false }
             }
         }
-    }
-}
-
-/// System glass buttons retain their native pressed state; the horizontal row can scroll.
-private struct PanelTabs<Selection: Hashable & RawRepresentable>: View
-where Selection.RawValue == String {
-    let options: [(Selection, String)]
-    @Binding var selection: Selection
-    let prefix: String
-    var isSelectionActive = true
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 10) {
-                ForEach(options, id: \.0) { option in
-                    Group {
-                        if isSelectionActive && selection == option.0 {
-                            tab(option).buttonStyle(.glassProminent).foregroundStyle(.white)
-                        } else {
-                            tab(option).buttonStyle(.glass)
-                        }
-                    }
-                    .accessibilityIdentifier(prefix + option.0.rawValue)
-                    .accessibilityAddTraits(isSelectionActive && selection == option.0 ? .isSelected : [])
-                }
-            }.padding(.vertical, 4)
-        }.scrollIndicators(.hidden).frame(height: 44)
-            .dynamicTypeSize(...DynamicTypeSize.large)
-    }
-    private func tab(_ option: (Selection, String)) -> some View {
-        Button(option.1) { selection = option.0 }
-            .tint(isSelectionActive ? Color.accentColor : Color.secondary)
-            .font(.subheadline.weight(.semibold)).lineLimit(1).fixedSize()
-            .frame(minHeight: 38)
-            .accessibilityShowsLargeContentViewer { Text(option.1) }
     }
 }

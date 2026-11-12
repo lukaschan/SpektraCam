@@ -2,18 +2,25 @@
 #include <metal_stdlib>
 using namespace metal;
 inline int diffusion_mirror(int i,int n){if(n==1)return 0;int period=2*(n-1),p=i%period;if(p<0)p+=period;return p<n?p:period-p;}
+// A block-mean proxy mirrors about the image edge itself, which is half a sample outside its first value.
+inline int diffusion_mirror_edge(int i,int n){int period=2*n,p=i%period;if(p<0)p+=period;return p<n?p:period-1-p;}
 kernel void diffusion_pad(device const float4* input [[buffer(0)]],device float* output [[buffer(1)]],
                           constant uint4& size [[buffer(2)]],constant uint& radius [[buffer(3)]],
-                          uint2 point [[thread_position_in_grid]]) {
+                          constant uint& edge [[buffer(4)]],uint2 point [[thread_position_in_grid]]) {
     uint w=size.x,h=size.y,fw=size.z,fh=size.w,x=point.x,y=point.y;
     if(x>=fw||y>=fh)return;
     float3 value=0;
-    if(x<w+2*radius&&y<h+2*radius)value=input[diffusion_mirror(int(y)-int(radius),int(h))*w+diffusion_mirror(int(x)-int(radius),int(w))].xyz;
+    if(x<w+2*radius&&y<h+2*radius){
+        int sx=int(x)-int(radius),sy=int(y)-int(radius);
+        value=edge!=0?input[diffusion_mirror_edge(sy,int(h))*w+diffusion_mirror_edge(sx,int(w))].xyz
+                     :input[diffusion_mirror(sy,int(h))*w+diffusion_mirror(sx,int(w))].xyz;
+    }
     uint index=y*fw+x,plane=fw*fh;
     output[index]=value.x;output[plane+index]=value.y;output[2*plane+index]=value.z;
 }
 kernel void diffusion_psf(device float* output [[buffer(0)]],device float4* sums [[buffer(1)]],
                           constant float4* components [[buffer(2)]],constant uint4& shape [[buffer(3)]],
+                          constant uint& samples [[buffer(4)]],
                           uint i [[thread_position_in_grid]],uint lane [[thread_index_in_threadgroup]],
                           uint group [[threadgroup_position_in_grid]]) {
     threadgroup float4 partial[128];
@@ -21,8 +28,16 @@ kernel void diffusion_psf(device float* output [[buffer(0)]],device float4* sums
     float3 value=0;
     if(i<edge*edge) {
         int dx=int(i%edge)-int(radius),dy=int(i/edge)-int(radius);
-        float r=sqrt(float(dx*dx+dy*dy));
-        for(uint k=0;k<shape.w;++k){float lambda=components[k].w;value+=components[k].xyz*(exp(-r/lambda)/(2*M_PI_F*lambda*lambda));}
+        if(samples<=1){
+            float r=sqrt(float(dx*dx+dy*dy));
+            for(uint k=0;k<shape.w;++k){float lambda=components[k].w;value+=components[k].xyz*(exp(-r/lambda)/(2*M_PI_F*lambda*lambda));}
+        } else {
+            for(uint sy=0;sy<samples;++sy)for(uint sx=0;sx<samples;++sx){
+                float2 d=float2(dx,dy)+(float2(sx,sy)+0.5f)/float(samples)-0.5f;float r=length(d);
+                for(uint k=0;k<shape.w;++k){float lambda=components[k].w;value+=components[k].xyz*(exp(-r/lambda)/(2*M_PI_F*lambda*lambda));}
+            }
+            value/=float(samples*samples);
+        }
         uint row=uint((dy+int(fh))%int(fh)),column=uint((dx+int(fw))%int(fw)),index=row*fw+column,plane=fw*fh;
         output[index]=value.x;output[plane+index]=value.y;output[2*plane+index]=value.z;
     }
@@ -42,4 +57,21 @@ kernel void diffusion_finish(device const float* filtered [[buffer(0)]],device c
     uint index=(i/w+radius)*fw+i%w+radius,plane=fw*fh;
     float3 value=float3(filtered[index],filtered[plane+index],filtered[2*plane+index])/sum[0].xyz;
     output[i]=float4(original[i].xyz*(1-fraction)+value*fraction,0);
+}
+// Tiled export: near part convolved in the tile, far part sampled from the low-resolution proxy.
+// mode.x: near part present; mode.y: far part present. far already carries its factor^2 gain.
+kernel void diffusion_finish_tile(device const float* filtered [[buffer(0)]],device const float4* original [[buffer(1)]],
+                                  device float4* output [[buffer(2)]],device const float4* nearSum [[buffer(3)]],
+                                  constant uint4& size [[buffer(4)]],constant uint& radius [[buffer(5)]],
+                                  constant float4& p [[buffer(6)]],device const float4* far [[buffer(7)]],
+                                  device const float4* farSum [[buffer(8)]],constant uint2& mode [[buffer(9)]],
+                                  uint i [[thread_position_in_grid]]) {
+    uint w=size.x,h=size.y,fw=size.z,fh=size.w;if(i>=w*h)return;
+    float3 value=0,total=0;
+    if(mode.x!=0){
+        uint index=(i/w+radius)*fw+i%w+radius,plane=fw*fh;
+        value+=float3(filtered[index],filtered[plane+index],filtered[2*plane+index]);total+=nearSum[0].xyz;
+    }
+    if(mode.y!=0){value+=far[i].xyz;total+=farSum[0].xyz*p.y;}
+    output[i]=float4(original[i].xyz*(1-p.x)+value/total*p.x,0);
 }

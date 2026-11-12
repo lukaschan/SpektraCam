@@ -36,6 +36,8 @@ actor PhotoRenderer {
         var filmImage: CGImage?
     }
     private var preview: PreviewState
+    // Finishing must not evict Develop's scene/LUT cache or meter the padded canvas.
+    private var edgeMetering = PreviewState(maximum: 720)
     // At most the active and one alternate resolution. A drag cannot evict the settled
     // source/film cache, and a 2160 px setting does not create an unbounded image ladder.
     private var alternatePreview: (maximum: Int, state: PreviewState)?
@@ -176,6 +178,42 @@ actor PhotoRenderer {
         }
         return try await frame(input, recipe: recipe, library: library, gpu: gpu, preview: true, state: preview)
     }
+    private static let linear = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+    private var tiling: MetalFilmPipeline.Tiling { .fitting(available: ImageMemoryAllowance.available) }
+    /// Storage for a frame that renders in tiles: a full-size export's own store, or a copy of a
+    /// preview whose diffusion transform would not fit as one frame.
+    private func tileStore(
+        _ input: SourceImageRenderer.Input, recipe: EditRecipe, edge: FilmEdgeGeometry? = nil
+    ) throws -> PixelStore? {
+        if let store = input.store { return store }
+        guard
+            RenderMemoryBudget.rendersInTiles(
+                width: input.width, height: input.height, recipe: recipe,
+                pixelPitchMicrometers: edge?.pixelPitchMicrometers)
+        else { return nil }
+        let store = try PixelStore(width: input.width, height: input.height, format: .float)
+        input.pixels.withUnsafeBytes {
+            store.base.copyMemory(from: $0.baseAddress!, byteCount: $0.count)
+        }
+        return store
+    }
+    /// Film render of a preview-size array, or of a full-size store rendered in tiles.
+    /// `finished` asks a tiled render for the final 8-bit image when no grading follows.
+    private func filmImage(
+        _ input: SourceImageRenderer.Input, pipeline: FilmPipeline, gpu: MetalFilmPipeline,
+        autoExposureEV: Double, edge: FilmEdgeGeometry? = nil, finished: Bool = false
+    ) async throws -> CGImage {
+        guard let store = try tileStore(input, recipe: pipeline.recipe, edge: edge) else {
+            return try await gpu.processImage(
+                input.pixels, width: input.width, height: input.height, pipeline: pipeline,
+                autoExposureEV: autoExposureEV, edge: edge)
+        }
+        let result = try await gpu.processImage(
+            store, pipeline: pipeline, autoExposureEV: autoExposureEV, edge: edge,
+            format: finished ? .byte : .float, tiling: tiling)
+        return try result.image(
+            colorSpace: CGColorSpace(name: finished ? CGColorSpace.sRGB : CGColorSpace.extendedSRGB)!)
+    }
     private func neutralFrame(_ input: SourceImageRenderer.Input, recipe: EditRecipe) throws -> CGImage {
         try ToneRenderer.render(SourceImageRenderer.workingImage(input), tone: recipe.tone)
     }
@@ -237,9 +275,14 @@ actor PhotoRenderer {
             if opticalFlags.contains(where: { optics.flag($0) }) || !optics.tone.rawStage.isIdentity
             {
                 let pipeline = try await renderResources.pipeline(optics)
-                source = try await gpu.processOptics(
-                    input.pixels, width: input.width, height: input.height,
-                    pipeline: pipeline)
+                if let store = try tileStore(input, recipe: pipeline.recipe) {
+                    source = try await gpu.processOptics(store, pipeline: pipeline, tiling: tiling)
+                        .image(colorSpace: Self.linear)
+                } else {
+                    source = try await gpu.processOptics(
+                        input.pixels, width: input.width, height: input.height,
+                        pipeline: pipeline)
+                }
             } else {
                 source = try SourceImageRenderer.workingImage(input)
             }
@@ -269,9 +312,17 @@ actor PhotoRenderer {
         } else {
             let exposure = try exposure(grain, library: library)
             let pipeline = try await renderResources.pipeline(grain)
-            noise = try await gpu.processGrainPair(
-                input.pixels, width: input.width, height: input.height,
-                pipeline: pipeline, autoExposureEV: exposure)
+            if let store = input.store {
+                let pair = try await gpu.processGrainPair(
+                    store, pipeline: pipeline, autoExposureEV: exposure, tiling: tiling)
+                noise = try (
+                    pair.0.image(colorSpace: Self.linear), pair.1.image(colorSpace: Self.linear)
+                )
+            } else {
+                noise = try await gpu.processGrainPair(
+                    input.pixels, width: input.width, height: input.height,
+                    pipeline: pipeline, autoExposureEV: exposure)
+            }
             if preview {
                 cache.grainKey = grain
                 cache.grainSize = size
@@ -309,10 +360,11 @@ actor PhotoRenderer {
             film = cached
         } else {
             let pipeline = try await renderResources.pipeline(recipe)
-            film = try await gpu.processImage(
-                input.pixels, width: input.width, height: input.height,
-                pipeline: pipeline,
-                autoExposureEV: exposure(recipe, library: library, state: cache))
+            // With nothing to grade afterwards, a tiled render writes the finished 8-bit image.
+            film = try await filmImage(
+                input, pipeline: pipeline, gpu: gpu,
+                autoExposureEV: exposure(recipe, library: library, state: cache),
+                finished: recipe.mix >= 1 && recipe.tone.outputStage.isIdentity)
             if preview {
                 cache.filmRecipe = key
                 cache.filmImage = film
@@ -335,7 +387,7 @@ actor PhotoRenderer {
                     data: data, fallback: source, recipe: recipe,
                     maximum: max(input.width, input.height), sourceType: sourceType,
                     intent: .developedPhoto, description: sourceDescription,
-                    decoder: preview ? cache.decoder : nil)
+                    decoder: preview ? cache.decoder : nil, allowsStore: !preview)
                 neutral = try SourceImageRenderer.workingImage(developed)
                 if preview {
                     cache.neutralKey = recipe.source
@@ -350,6 +402,197 @@ actor PhotoRenderer {
         return try ToneRenderer.render(mixed, tone: recipe.tone.outputStage)
     }
 
+    /// Sharp pixels for the visible part of a zoomed preview.
+    struct Detail: @unchecked Sendable {
+        let image: CGImage
+        /// Where the image lies in the displayed (turned and cropped) photo, in unit coordinates.
+        let rect: CGRect
+    }
+    private let detailDecoder = SourceImageRenderer.Decoder()
+    /// Render only what is on screen, at the resolution the zoom needs. `visible` is the part
+    /// of the displayed photo in view (unit coordinates, origin top left); `longEdge` is how
+    /// many pixels the whole displayed photo's long edge would need at this zoom.
+    /// Wide effects come from a low-resolution capture of the whole frame that is prepared once
+    /// per edit, so panning only pays for the tiles it exposes. Returns nil when the regular
+    /// preview is already sharp enough or the recipe needs the whole-frame route.
+    func renderDetail(_ original: EditRecipe, visible: CGRect, longEdge: Int) async throws -> Detail? {
+        try Task.checkCancellation()
+        guard let data, original.look.enabled, original.look.mode == .spektrafilm,
+            original.mix >= 1, original.filmEdgeLayout == nil,
+            original.printLayout.map(\.isIdentity) ?? true,
+            original.geometry.straightenDegrees == 0
+        else { return nil }
+        var recipe = original
+        recipe.numbers["film_render.halation.scatter_amount"] = min(
+            max(recipe.number("film_render.halation.scatter_amount"), 0), 1)
+        let nativeWidth = sourceDescription?.width ?? source.width
+        let nativeHeight = sourceDescription?.height ?? source.height
+        let oriented = recipe.geometry.quarterTurns % 2 == 0
+            ? CGSize(width: nativeWidth, height: nativeHeight)
+            : CGSize(width: nativeHeight, height: nativeWidth)
+        let crop = recipe.crop.pixelRect(in: oriented)
+        guard crop.width >= 1, crop.height >= 1 else { return nil }
+        // Zoom levels halve the native size, so a level's capture is reused while panning.
+        let wanted = Double(longEdge) / Double(max(crop.width, crop.height))
+        var scale = 1.0
+        while scale / 2 >= wanted { scale /= 2 }
+        let maximum = Int(ceil(Double(max(nativeWidth, nativeHeight)) * scale))
+        guard maximum > previewMaximum * 5 / 4 else { return nil }
+        func decode(_ region: SourceImageRenderer.Region?, target: CGSize? = nil, long: Int)
+            throws -> SourceImageRenderer.Input
+        {
+            try SourceImageRenderer.prepare(
+                data: data, fallback: source, recipe: recipe, maximum: long,
+                sourceType: sourceType, intent: .sceneLinear, description: sourceDescription,
+                decoder: region == nil ? nil : detailDecoder, targetSize: target, region: region)
+        }
+        let size = try decode(.measure, long: maximum)
+        let width = size.width, height = size.height
+        let tiling = self.tiling
+        let factor = tiling.resolvedFactor(width: width, height: height)
+        let (library, gpu) = try await renderResources.load()
+        let pipeline = try await renderResources.pipeline(recipe)
+        let autoEV = try exposure(recipe, library: library, state: preview)
+        var prepared = try await gpu.prepareRegion(
+            width: width, height: height, factor: factor, pipeline: pipeline,
+            autoExposureEV: autoEV, tiling: tiling, proxy: nil)
+        if prepared == nil {
+            let proxyWidth = (width + factor - 1) / factor, proxyHeight = (height + factor - 1) / factor
+            let proxy = try decode(
+                nil, target: CGSize(width: proxyWidth, height: proxyHeight),
+                long: max(proxyWidth, proxyHeight))
+            try Task.checkCancellation()
+            prepared = try await gpu.prepareRegion(
+                width: width, height: height, factor: factor, pipeline: pipeline,
+                autoExposureEV: autoEV, tiling: tiling, proxy: proxy.pixels)
+        }
+        guard let halo = prepared else { throw PhotoExporter.Failure.render }
+        let unit = CGRect(x: 0, y: 0, width: 1, height: 1)
+        let shown = visible.intersection(unit)
+        guard !shown.isEmpty else { return nil }
+        let turned = CGRect(
+            x: (crop.minX + shown.minX * crop.width) / oriented.width,
+            y: (crop.minY + shown.minY * crop.height) / oriented.height,
+            width: shown.width * crop.width / oriented.width,
+            height: shown.height * crop.height / oriented.height)
+        let from = recipe.geometry.sourceRect(forOriented: turned)
+        let x0 = min(max(Int(floor(from.minX * Double(width))), 0), width - 1)
+        let y0 = min(max(Int(floor(from.minY * Double(height))), 0), height - 1)
+        let x1 = min(max(Int(ceil(from.maxX * Double(width))), x0 + 1), width)
+        let y1 = min(max(Int(ceil(from.maxY * Double(height))), y0 + 1), height)
+        let sx0 = max(0, x0 - halo), sy0 = max(0, y0 - halo)
+        let sx1 = min(width, x1 + halo), sy1 = min(height, y1 + halo)
+        let part = try decode(
+            .rect(x: sx0, y: sy0, width: sx1 - sx0, height: sy1 - sy0), long: maximum)
+        guard let store = part.store else { throw PhotoExporter.Failure.render }
+        try Task.checkCancellation()
+        let key = MetalFilmPipeline.RegionKey(
+            recipe: pipeline.recipe, width: width, height: height, factor: factor,
+            autoExposureEV: autoEV, seed: 0)
+        let result = try await gpu.processRegion(
+            store, origin: (sx0, sy0), region: (x0, y0, x1 - x0, y1 - y0), key: key,
+            pipeline: pipeline)
+        try Task.checkCancellation()
+        let film = try result.image(colorSpace: CGColorSpace(name: CGColorSpace.extendedSRGB)!)
+        let finished = try ToneRenderer.render(film, tone: recipe.tone.outputStage)
+        guard let image = GeometryRenderer.render(finished, geometry: recipe.geometry.orientationOnly)
+        else { throw PhotoExporter.Failure.render }
+        let back = recipe.geometry.orientedRect(
+            forSource: CGRect(
+                x: Double(x0) / Double(width), y: Double(y0) / Double(height),
+                width: Double(x1 - x0) / Double(width), height: Double(y1 - y0) / Double(height)))
+        return Detail(
+            image: image,
+            rect: CGRect(
+                x: (back.minX * oriented.width - crop.minX) / crop.width,
+                y: (back.minY * oriented.height - crop.minY) / crop.height,
+                width: back.width * oriented.width / crop.width,
+                height: back.height * oriented.height / crop.height))
+    }
+
+    /// Saved viewer/library presentation uses the same edge and paper finishing as export.
+    func renderPresentation(_ recipe: EditRecipe, maximum: Int) async throws -> CGImage {
+        let photograph: CGImage
+        if recipe.filmEdgeLayout != nil {
+            photograph = try await renderFilmEdge(recipe, maximum: maximum)
+        } else {
+            let developed = try await render(recipe, maximum: maximum)
+            guard let transformed = GeometryRenderer.render(developed, geometry: recipe.geometry),
+                  let cropped = transformed.cropping(to: recipe.crop.pixelRect(in: CGSize(width: transformed.width, height: transformed.height)))
+            else { throw PhotoExporter.Failure.render }
+            photograph = cropped
+        }
+        if let layout = recipe.printLayout, !layout.isIdentity {
+            return try PrintCompositor.render(photograph, layout: layout, maximum: maximum)
+        }
+        return photograph
+    }
+
+    /// Complete capture-support presentation, before paper placement and final file encoding.
+    /// The final long edge includes the rebate; native export never grows the canvas silently.
+    func renderFilmEdge(_ original: EditRecipe, maximum: Int?, allowOvercommit: Bool = false) async throws -> CGImage {
+        try Task.checkCancellation()
+        guard let layout = original.filmEdgeLayout else { throw PhotoExporter.Failure.render }
+        let dimensions = sourceDescription.map { CGSize(width: $0.width, height: $0.height) }
+            ?? CGSize(width: source.width, height: source.height)
+        var recipe = original
+        recipe.constrainFilmEdgeCrop(imageSize: dimensions)
+        let oriented = original.geometry.quarterTurns % 2 == 0 ? dimensions
+            : CGSize(width: dimensions.height, height: dimensions.width)
+        let crop = recipe.crop.pixelRect(in: oriented)
+        let nativeLong = max(1, Int(max(crop.width, crop.height)))
+        let long = min(nativeLong, maximum ?? nativeLong)
+        recipe.tone.monochrome = false
+        let material = FilmEdgeRenderer.materialRecipe(recipe)
+        // Holes follow the source stock: cine camera negatives are BH-1866, still film KS-1870.
+        guard let geometry = FilmEdgeGeometry(imageSize: crop.size, layout: layout, longEdge: long,
+                                              perforation: .source(filmID: material.filmID))
+        else { throw PhotoExporter.Failure.render }
+        let originalLong = max(dimensions.width, dimensions.height)
+        let decodeMaximum = min(Int(originalLong), max(1, Int(ceil(originalLong * max(geometry.gate.width, geometry.gate.height) / Double(nativeLong)))))
+        let decodeScale = Double(decodeMaximum) / originalLong
+        try RenderMemoryBudget.check(width: max(1, Int(ceil(dimensions.width * decodeScale))),
+            height: max(1, Int(ceil(dimensions.height * decodeScale))), recipe: material, allowOvercommit: allowOvercommit,
+            pixelPitchMicrometers: geometry.pixelPitchMicrometers)
+        try RenderMemoryBudget.check(width: geometry.width, height: geometry.height,
+            recipe: material, allowOvercommit: allowOvercommit, pixelPitchMicrometers: geometry.pixelPitchMicrometers)
+        let (library, gpu) = try await renderResources.load()
+        let autoEV = try exposure(material, library: library, state: edgeMetering)
+        let input = try SourceImageRenderer.prepare(data: data, fallback: source, recipe: material,
+            maximum: decodeMaximum, sourceType: sourceType, intent: .sceneLinear,
+            description: sourceDescription, framing: recipe,
+            targetSize: CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded())),
+            allowsStore: true)
+        let pipeline = try await renderResources.pipeline(material)
+        let composes = material.processingRecipe != recipe.processingRecipe
+        // A composed centre fades through the soft gate itself, so the material graph's scene must
+        // stop inside the penumbra; otherwise its own developed image shows as a rim.
+        var materialGeometry = geometry
+        materialGeometry.erodesGate = composes
+        var image = try await filmImage(
+            FilmEdgeRenderer.padded(input, geometry: geometry), pipeline: pipeline, gpu: gpu,
+            autoExposureEV: autoEV, edge: materialGeometry,
+            finished: !composes && original.tone.outputStage.isIdentity)
+        try Task.checkCancellation()
+        if composes {
+            // Keep LUTs, disabled Develop and every manual cross-family choice exactly as selected.
+            // Release FFT work before the second graph; the completed support bitmap is retained.
+            await gpu.releaseWorkingCaches()
+            let centerInput = try SourceImageRenderer.prepare(data: data, fallback: source, recipe: recipe,
+                maximum: decodeMaximum, sourceType: sourceType, description: sourceDescription, allowsStore: true)
+            let graded = recipe.look.enabled
+                ? try await frame(centerInput, recipe: recipe, library: library, gpu: gpu, preview: false)
+                : try neutralFrame(centerInput, recipe: recipe)
+            guard let transformed = GeometryRenderer.render(graded, geometry: recipe.geometry),
+                  let center = transformed.cropping(to: recipe.crop.pixelRect(in: CGSize(width: transformed.width, height: transformed.height)))
+            else { throw PhotoExporter.Failure.render }
+            let paperPrint = !material.bypassesPrint && FilmStock.prints.first { $0.id == material.printID }?.support != "film"
+            image = try FilmEdgeRenderer.replacingCenter(image, with: center, geometry: geometry, paperPrint: paperPrint)
+        }
+        try Task.checkCancellation()
+        return try ToneRenderer.render(image, tone: original.tone.outputStage)
+    }
+
     func export(
         _ recipe: EditRecipe, size: PhotoExporter.Size, format: PhotoExporter.Format,
         quality: Double,
@@ -361,6 +604,19 @@ actor PhotoRenderer {
         let image: CGImage
         if let cached = exportImage {
             image = cached
+        } else if recipe.filmEdgeLayout != nil {
+            guard data != nil else { throw PhotoExporter.Failure.decode }
+            releasePreviewCaches(keepMetering: true)
+            let (_, gpu) = try await renderResources.load()
+            await gpu.releaseWorkingCaches()
+            do {
+                let edged = try await renderFilmEdge(recipe, maximum: size.maximum, allowOvercommit: allowOvercommit)
+                image = try recipe.printLayout.map { try PrintCompositor.render(edged, layout: $0, maximum: size.maximum) } ?? edged
+            } catch {
+                await gpu.releaseWorkingCaches()
+                throw error
+            }
+            await gpu.releaseWorkingCaches()
         } else {
             releasePreviewCaches(keepMetering: true)
             guard let data else { throw PhotoExporter.Failure.decode }
@@ -395,7 +651,7 @@ actor PhotoRenderer {
             selectInputMode(recipe.inputMode)
             let input = try SourceImageRenderer.prepare(
                 data: data, fallback: decoded, recipe: recipe, maximum: maximum,
-                sourceType: sourceType)
+                sourceType: sourceType, allowsStore: true)
             let graded: CGImage
             if recipe.look.enabled {
                 let (library, gpu) = try await renderResources.load()
@@ -416,7 +672,11 @@ actor PhotoRenderer {
                     to: recipe.crop.pixelRect(
                         in: CGSize(width: transformed.width, height: transformed.height)))
             else { throw PhotoExporter.Failure.render }
-            image = try Self.resize(cropped, maximum: size.maximum)
+            if let layout = recipe.printLayout, !layout.isIdentity {
+                image = try PrintCompositor.render(cropped, layout: layout, maximum: size.maximum)
+            } else {
+                image = try Self.resize(cropped, maximum: size.maximum)
+            }
             exportImage = image
             exportKey = recipe
             exportSize = size
@@ -440,11 +700,15 @@ actor PhotoRenderer {
     }
     func releasePreviewCaches(keepMetering: Bool = false) {
         let next = PreviewState(maximum: previewMaximum)
+        let nextEdge = PreviewState(maximum: 720)
         if keepMetering {
             next.meter = preview.meter
             next.meteredEV = preview.meteredEV
+            nextEdge.meter = edgeMetering.meter
+            nextEdge.meteredEV = edgeMetering.meteredEV
         }
         preview = next
+        edgeMetering = nextEdge
         alternatePreview = nil
     }
     private static func resize(_ image: CGImage, maximum: Int?) throws -> CGImage {

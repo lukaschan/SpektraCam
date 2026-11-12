@@ -26,6 +26,8 @@ import SwiftUI
     var hasFilmPreview = false
     var isBusy: Bool { (isRendering || isProcessingFilm) && !isRefiningPreview }
     @ObservationIgnored private let filmRenderer: PhotoRenderer
+    @ObservationIgnored private var edgeTask: Task<CGImage, Error>?
+    @ObservationIgnored private var edgeEpoch = UUID()
     @ObservationIgnored private var filmSource: CGImage
     @ObservationIgnored private var renderedSource: CGImage
     @ObservationIgnored private var filmTask: Task<Void, Never>?
@@ -53,6 +55,7 @@ import SwiftUI
     private var lastChange = Date.distantPast
     private var lastKey = ""
     @ObservationIgnored private var interactionKey: String?
+    @ObservationIgnored private var presentationInteractionKey: String?
 
     @ObservationIgnored var recipeDidChange: ((EditRecipe, Bool) -> Void)?
 
@@ -74,6 +77,7 @@ import SwiftUI
         uneditedRecipe = original
         var initial = restored ?? original
         if initial.temperature == nil { initial.temperature = photo.rawTemperature }
+        initial.constrainFilmEdgeCrop(imageSize: CGSize(width: photo.width, height: photo.height))
         recipe = initial
         let initialPreview = UIImage(cgImage: photo.preview)
         geometryImage = initialPreview
@@ -147,13 +151,25 @@ import SwiftUI
             recipeDidChange?(recipe, true)
         }
     }
+    /// Group finishing gestures without cancelling or rescheduling the film renderer.
+    func setPresentationInteraction(key: String, active: Bool) {
+        if active {
+            presentationInteractionKey = key
+            lastKey = ""
+        } else if presentationInteractionKey == key {
+            presentationInteractionKey = nil
+            recipeDidChange?(recipe, true)
+        }
+    }
     func update(key: String, _ change: (inout EditRecipe) -> Void) {
         var next = recipe
         change(&next)
+        next.constrainFilmEdgeCrop(imageSize: CGSize(width: photo.width, height: photo.height))
         next.removeDefaultOverrides()
         guard next != recipe else { return }
         let now = Date()
-        if lastKey != key || (interactionKey != key && now.timeIntervalSince(lastChange) > 0.4) {
+        if lastKey != key || (interactionKey != key && presentationInteractionKey != key
+            && now.timeIntervalSince(lastChange) > 0.4) {
             undoStack.append(recipe)
             if undoStack.count > 100 { undoStack.removeFirst() }
         }
@@ -192,6 +208,8 @@ import SwiftUI
         URL, Int, Int
     ) {
         let snapshot = recipe
+        edgeTask?.cancel()
+        _ = await edgeTask?.result
         settleTask?.cancel()
         settleTask = nil
         waitingToRefine = false
@@ -210,6 +228,16 @@ import SwiftUI
             snapshot, size: size, format: format, quality: quality, allowOvercommit: allowOvercommit
         )
     }
+    func filmEdgePreview(_ snapshot: EditRecipe, maximum: Int) async throws -> CGImage {
+        edgeTask?.cancel()
+        let epoch = UUID()
+        edgeEpoch = epoch
+        let renderer = filmRenderer
+        let job = Task { try await renderer.renderFilmEdge(snapshot, maximum: maximum) }
+        edgeTask = job
+        defer { if edgeEpoch == epoch { edgeTask = nil } }
+        return try await withTaskCancellationHandler { try await job.value } onCancel: { job.cancel() }
+    }
     func discardExport() { Task { await filmRenderer.discardExport() } }
     func resumeAfterExport() {
         scheduleRefinement()
@@ -218,22 +246,44 @@ import SwiftUI
     func undo() {
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(recipe)
-        recipe = previous
-        recipeDidChange?(recipe, true)
-        lastKey = ""
-        scheduleRefinement()
-        renderFilmIfNeeded()
-        renderGeometry()
+        restoreHistory(previous)
     }
     func redo() {
         guard let next = redoStack.popLast() else { return }
         undoStack.append(recipe)
+        restoreHistory(next)
+    }
+    private func restoreHistory(_ saved: EditRecipe) {
+        var next = saved
+        next.constrainFilmEdgeCrop(imageSize: CGSize(width: photo.width, height: photo.height))
+        let processingChanged = recipe.processingRecipe != next.processingRecipe
+        let geometryChanged = recipe.geometry != next.geometry || recipe.crop != next.crop
         recipe = next
         recipeDidChange?(recipe, true)
         lastKey = ""
-        scheduleRefinement()
-        renderFilmIfNeeded()
-        renderGeometry()
+        if processingChanged {
+            scheduleRefinement()
+            renderFilmIfNeeded()
+        }
+        if processingChanged || geometryChanged { renderGeometry() }
+    }
+    var detailProvider: PhotoScrollView.DetailProvider {
+        { [weak self] visible, longEdge in
+            await self?.detail(visible: visible, longEdge: longEdge)
+        }
+    }
+    /// Sharp render of the part of the displayed photo in view, for a zoomed canvas. Nil while
+    /// an edit is in progress or when the displayed frame is not the current recipe.
+    func detail(visible: CGRect, longEdge: Int) async -> PhotoRenderer.Detail? {
+        let snapshot = recipe
+        guard interactionKey == nil, !waitingToRefine, hasFilmPreview, !isRendering,
+            renderedFilmRecipe == snapshot.processingRecipe,
+            renderedGeometry == snapshot.geometry, renderedCrop == snapshot.crop.normalizedRect
+        else { return nil }
+        let result = try? await filmRenderer.renderDetail(
+            snapshot, visible: visible, longEdge: longEdge)
+        guard recipe == snapshot else { return nil }
+        return result
     }
     /// One render in flight and one latest desired state. Completed frames remain visible
     /// during a drag; a continuous stream of slider events never postpones rendering.
@@ -421,6 +471,9 @@ import SwiftUI
     }
 
     func cancelRendering() {
+        edgeEpoch = UUID()
+        edgeTask?.cancel()
+        edgeTask = nil
         settleTask?.cancel()
         settleTask = nil
         waitingToRefine = false

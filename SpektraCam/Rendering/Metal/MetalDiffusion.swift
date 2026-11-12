@@ -61,8 +61,8 @@ nonisolated final class DiffusionMetalKernels {
     private struct Key: Hashable {
         let width: Int, height: Int, radius: Int, pixelSize: Double, parameters: DiffusionCore.Parameters
     }
-    private struct PSF { let spectrum: MTLBuffer, normalization: MTLBuffer }
-    private final class Plan {
+    struct PSF { let spectrum: MTLBuffer, normalization: MTLBuffer }
+    final class Plan {
         let width: Int, height: Int, shape: [NSNumber], spectrumShape: [NSNumber]
         let graph = MPSGraph()
         let rawKernel: MPSGraphTensor, kernelFFT: MPSGraphTensor, image: MPSGraphTensor,
@@ -89,7 +89,7 @@ nonisolated final class DiffusionMetalKernels {
     }
     private let device: MTLDevice
     private let pad: MTLComputePipelineState, psf: MTLComputePipelineState, sum: MTLComputePipelineState,
-        finish: MTLComputePipelineState
+        finish: MTLComputePipelineState, finishTile: MTLComputePipelineState
     #if targetEnvironment(simulator)
         private var simulatorKernels = [Key: SpatialCore.Image]()
     #endif
@@ -107,6 +107,7 @@ nonisolated final class DiffusionMetalKernels {
         psf = try pipeline("diffusion_psf")
         sum = try pipeline("diffusion_sum")
         finish = try pipeline("diffusion_finish")
+        finishTile = try pipeline("diffusion_finish_tile")
     }
     func clear() {
         #if targetEnvironment(simulator)
@@ -182,45 +183,11 @@ nonisolated final class DiffusionMetalKernels {
             if let cached = cache[key] {
                 kernel = cached
             } else {
-                let raw = try allocate(3 * fw * fh * 4)
-                let spectrum = try allocate(3 * fh * (fw / 2 + 1) * 8)
-                let normalization = try allocate(16)
                 let components = try DiffusionCore.components(pixelSize: pixelSize, parameters: p).map {
                     SIMD4<Float>(Float($0.1.x), Float($0.1.y), Float($0.1.z), Float($0.0))
                 }
-                guard components.allSatisfy({ $0.w.isFinite && $0.w > 0 }) else {
-                    throw DiffusionCore.Failure.invalidParameter
-                }
-                let groups = ((2 * radius + 1) * (2 * radius + 1) + 127) / 128
-                let partial = try allocate(groups * 16)
-                let values = try buffer(components)
-                guard let blit = command.makeBlitCommandEncoder() else {
-                    throw MetalDiffusion.Failure.allocation
-                }
-                blit.fill(buffer: raw, range: 0..<raw.length, value: 0)
-                blit.endEncoding()
-                let encoder = try self.encoder(command, psf, [raw, partial, values])
-                var shape = SIMD4<UInt32>(UInt32(radius), UInt32(fw), UInt32(fh), UInt32(components.count))
-                encoder.setBytes(&shape, length: MemoryLayout.size(ofValue: shape), index: 3)
-                encoder.dispatchThreadgroups(
-                    MTLSize(width: groups, height: 1, depth: 1),
-                    threadsPerThreadgroup: MTLSize(width: 128, height: 1, depth: 1))
-                encoder.endEncoding()
-                let reduce = try self.encoder(command, sum, [partial, normalization])
-                var groupCount = UInt32(groups)
-                reduce.setBytes(&groupCount, length: 4, index: 2)
-                dispatch(reduce, sum, 1)
-                current.graph.encode(
-                    to: command,
-                    feeds: [
-                        current.rawKernel: MPSGraphTensorData(raw, shape: current.shape, dataType: .float32)
-                    ],
-                    targetOperations: nil,
-                    resultsDictionary: [
-                        current.kernelFFT: MPSGraphTensorData(
-                            spectrum, shape: current.spectrumShape, dataType: .complexFloat32)
-                    ], executionDescriptor: nil)
-                kernel = PSF(spectrum: spectrum, normalization: normalization)
+                kernel = try makePSF(
+                    plan: current, radius: radius, components: components, command: command)
                 cache[key] = kernel
             }
             recent.removeAll { $0 == key }
@@ -231,8 +198,10 @@ nonisolated final class DiffusionMetalKernels {
             let prepare = try encoder(command, pad, [input, padded])
             var dimensions = SIMD4<UInt32>(UInt32(width), UInt32(height), UInt32(fw), UInt32(fh))
             var border = UInt32(radius)
+            var wholeSample: UInt32 = 0
             prepare.setBytes(&dimensions, length: 16, index: 2)
             prepare.setBytes(&border, length: 4, index: 3)
+            prepare.setBytes(&wholeSample, length: 4, index: 4)
             prepare.dispatchThreads(
                 MTLSize(width: fw, height: fh, depth: 1),
                 threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
@@ -254,6 +223,142 @@ nonisolated final class DiffusionMetalKernels {
             blend.setBytes(&fraction, length: 4, index: 6)
             dispatch(blend, finish, width * height)
         #endif
+    }
+    /// Transform a point-spread function sampled on the plan's grid. `samples` > 1 area-samples it.
+    func makePSF(
+        plan current: Plan, radius: Int, components: [SIMD4<Float>], samples: Int = 1,
+        command: MPSCommandBuffer
+    ) throws -> PSF {
+        let fw = current.width, fh = current.height
+        guard !components.isEmpty, components.allSatisfy({ $0.w.isFinite && $0.w > 0 }),
+            2 * radius + 1 <= min(fw, fh)
+        else { throw DiffusionCore.Failure.invalidParameter }
+        let raw = try allocate(3 * fw * fh * 4)
+        let spectrum = try allocate(3 * fh * (fw / 2 + 1) * 8)
+        let normalization = try allocate(16)
+        let groups = ((2 * radius + 1) * (2 * radius + 1) + 127) / 128
+        let partial = try allocate(groups * 16)
+        let values = try buffer(components)
+        guard let blit = command.makeBlitCommandEncoder() else {
+            throw MetalDiffusion.Failure.allocation
+        }
+        blit.fill(buffer: raw, range: 0..<raw.length, value: 0)
+        blit.endEncoding()
+        let encoder = try self.encoder(command, psf, [raw, partial, values])
+        var shape = SIMD4<UInt32>(UInt32(radius), UInt32(fw), UInt32(fh), UInt32(components.count))
+        var subsamples = UInt32(max(samples, 1))
+        encoder.setBytes(&shape, length: MemoryLayout.size(ofValue: shape), index: 3)
+        encoder.setBytes(&subsamples, length: 4, index: 4)
+        encoder.dispatchThreadgroups(
+            MTLSize(width: groups, height: 1, depth: 1),
+            threadsPerThreadgroup: MTLSize(width: 128, height: 1, depth: 1))
+        encoder.endEncoding()
+        let reduce = try self.encoder(command, sum, [partial, normalization])
+        var groupCount = UInt32(groups)
+        reduce.setBytes(&groupCount, length: 4, index: 2)
+        dispatch(reduce, sum, 1)
+        current.graph.encode(
+            to: command,
+            feeds: [
+                current.rawKernel: MPSGraphTensorData(raw, shape: current.shape, dataType: .float32)
+            ],
+            targetOperations: nil,
+            resultsDictionary: [
+                current.kernelFFT: MPSGraphTensorData(
+                    spectrum, shape: current.spectrumShape, dataType: .complexFloat32)
+            ], executionDescriptor: nil)
+        return PSF(spectrum: spectrum, normalization: normalization)
+    }
+
+    /// Fixed transform size and buffers reused by every tile of one export.
+    final class Workspace {
+        let plan: Plan, padded: MTLBuffer, filtered: MTLBuffer
+        fileprivate init(plan: Plan, padded: MTLBuffer, filtered: MTLBuffer) {
+            self.plan = plan
+            self.padded = padded
+            self.filtered = filtered
+        }
+    }
+    func workspace(width: Int, height: Int) throws -> Workspace {
+        try Workspace(
+            plan: Plan(width: width, height: height), padded: allocate(3 * width * height * 4),
+            filtered: allocate(3 * width * height * 4))
+    }
+    /// Mirror-pad `input` and convolve it with `kernel`; the planar result stays in the workspace.
+    func convolve(
+        _ work: Workspace, kernel: PSF, input: MTLBuffer, width: Int, height: Int, radius: Int,
+        mirrorsAtEdge: Bool = false, command: MPSCommandBuffer
+    ) throws {
+        let fw = work.plan.width, fh = work.plan.height
+        guard width + 2 * radius <= fw, height + 2 * radius <= fh else {
+            throw DiffusionCore.Failure.invalidParameter
+        }
+        let prepare = try encoder(command, pad, [input, work.padded])
+        var dimensions = SIMD4<UInt32>(UInt32(width), UInt32(height), UInt32(fw), UInt32(fh))
+        var border = UInt32(radius)
+        var edge: UInt32 = mirrorsAtEdge ? 1 : 0
+        prepare.setBytes(&dimensions, length: 16, index: 2)
+        prepare.setBytes(&border, length: 4, index: 3)
+        prepare.setBytes(&edge, length: 4, index: 4)
+        prepare.dispatchThreads(
+            MTLSize(width: fw, height: fh, depth: 1),
+            threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
+        prepare.endEncoding()
+        work.plan.graph.encode(
+            to: command,
+            feeds: [
+                work.plan.image: MPSGraphTensorData(
+                    work.padded, shape: work.plan.shape, dataType: .float32),
+                work.plan.kernel: MPSGraphTensorData(
+                    kernel.spectrum, shape: work.plan.spectrumShape, dataType: .complexFloat32),
+            ], targetOperations: nil,
+            resultsDictionary: [
+                work.plan.output: MPSGraphTensorData(
+                    work.filtered, shape: work.plan.shape, dataType: .float32)
+            ], executionDescriptor: nil)
+    }
+    /// Unnormalized convolution result as interleaved pixels. `finite` supplies ignored operands.
+    func extract(
+        _ work: Workspace, output: MTLBuffer, finite: MTLBuffer, width: Int, height: Int,
+        radius: Int, command: MPSCommandBuffer
+    ) throws {
+        let ones = try buffer([SIMD4<Float>(repeating: 1)])
+        let blend = try encoder(command, finish, [work.filtered, finite, output, ones])
+        var dimensions = SIMD4<UInt32>(
+            UInt32(width), UInt32(height), UInt32(work.plan.width), UInt32(work.plan.height))
+        var border = UInt32(radius)
+        var fraction: Float = 1
+        blend.setBytes(&dimensions, length: 16, index: 4)
+        blend.setBytes(&border, length: 4, index: 5)
+        blend.setBytes(&fraction, length: 4, index: 6)
+        dispatch(blend, finish, width * height)
+    }
+    /// Blend the near (in-tile) and far (proxy) parts with the unfiltered tile.
+    func finishTile(
+        _ work: Workspace?, near: PSF?, far: MTLBuffer?, farSum: MTLBuffer?, farGain: Float,
+        original: MTLBuffer, output: MTLBuffer, width: Int, height: Int, radius: Int,
+        fraction: Float, command: MPSCommandBuffer
+    ) throws {
+        guard (work != nil && near != nil) || (far != nil && farSum != nil) else {
+            throw DiffusionCore.Failure.invalidParameter
+        }
+        let placeholder = original
+        let blend = try encoder(
+            command, finishTile,
+            [work?.filtered ?? placeholder, original, output, near?.normalization ?? placeholder])
+        blend.setBuffer(far ?? placeholder, offset: 0, index: 7)
+        blend.setBuffer(farSum ?? placeholder, offset: 0, index: 8)
+        var dimensions = SIMD4<UInt32>(
+            UInt32(width), UInt32(height), UInt32(work?.plan.width ?? width),
+            UInt32(work?.plan.height ?? height))
+        var border = UInt32(radius)
+        var p = SIMD4<Float>(fraction, farGain, 0, 0)
+        var mode = SIMD2<UInt32>(near == nil ? 0 : 1, far == nil ? 0 : 1)
+        blend.setBytes(&dimensions, length: 16, index: 4)
+        blend.setBytes(&border, length: 4, index: 5)
+        blend.setBytes(&p, length: 16, index: 6)
+        blend.setBytes(&mode, length: 8, index: 9)
+        dispatch(blend, finishTile, width * height)
     }
     func allocate(_ length: Int) throws -> MTLBuffer {
         guard length <= device.maxBufferLength,

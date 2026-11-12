@@ -57,6 +57,7 @@
         "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
         "CODE_SIGN_STYLE": "Automatic",
         "CURRENT_PROJECT_VERSION": "8",
+        "DEVELOPMENT_TEAM": "7GN2969G32",
         "ENABLE_PREVIEWS": "YES",
         "GENERATE_INFOPLIST_FILE": "YES",
         "INFOPLIST_KEY_CFBundleDisplayName": "SpektraCam",

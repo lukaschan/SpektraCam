@@ -41,7 +41,7 @@ import UniformTypeIdentifiers
             precondition(data == original)
         }
         let large = encode(image(3072, 2048), orientation: 1)
-        let imported = ImportedPhoto.decode(large)!
+        let imported = ImportedPhoto.decode(large, maximum: 1080)!
         precondition(imported.preview.width == 1080 && imported.preview.height == 720)
         precondition(imported.width == 3072 && imported.height == 2048 && imported.data == large)
         var crop = CropSelection(); crop.setAspect(.square, imageAspect: 1.5)

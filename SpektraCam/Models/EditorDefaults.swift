@@ -11,6 +11,8 @@ nonisolated enum EditorDefaults {
     }
     static func originalRecipe(temperature: Double?) -> EditRecipe {
         var recipe = EditRecipe()
+        recipe.filmID = "fujifilm_c200"
+        recipe.printID = "fujifilm_crystal_archive_typeii"
         recipe.look.enabled = false
         recipe.temperature = temperature
         recipe.flags["film_render.halation.active"] = flag(halationKey, fallback: true)

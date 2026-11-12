@@ -27,6 +27,13 @@ nonisolated enum PhotoSource {
         let height: Int
         let temperature: Double?
     }
+    /// Every size used by Crop/finishing describes the upright decoded image, not sensor storage.
+    static func uprightSize(width: Int, height: Int, orientation: CGImagePropertyOrientation) -> CGSize {
+        switch orientation {
+        case .leftMirrored, .right, .rightMirrored, .left: CGSize(width: height, height: width)
+        default: CGSize(width: width, height: height)
+        }
+    }
 
     static func typeHint(for url: URL) -> String? {
         UTType(filenameExtension: url.pathExtension)?.identifier
@@ -53,9 +60,9 @@ nonisolated enum PhotoSource {
                 (1...65536).contains(raw.nativeSize.height),
                 raw.neutralTemperature.isFinite, (1000...50000).contains(raw.neutralTemperature)
             else { return nil }
-            return .init(
-                type: type, isRAW: true, width: Int(raw.nativeSize.width),
-                height: Int(raw.nativeSize.height), temperature: Double(raw.neutralTemperature))
+            let size = uprightSize(width: Int(raw.nativeSize.width), height: Int(raw.nativeSize.height), orientation: raw.orientation)
+            return .init(type: type, isRAW: true, width: Int(size.width),
+                height: Int(size.height), temperature: Double(raw.neutralTemperature))
         }
         guard CGImageSourceGetCount(source) > 0,
             let p = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -63,7 +70,9 @@ nonisolated enum PhotoSource {
             let height = p[kCGImagePropertyPixelHeight] as? Int,
             (1...65536).contains(width), (1...65536).contains(height)
         else { return nil }
-        return .init(type: detected, isRAW: false, width: width, height: height, temperature: nil)
+        let orientation = CGImagePropertyOrientation(rawValue: (p[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1) ?? .up
+        let size = uprightSize(width: width, height: height, orientation: orientation)
+        return .init(type: detected, isRAW: false, width: Int(size.width), height: Int(size.height), temperature: nil)
     }
 
     /// Neutral development for viewing, photo LUTs and the film Mix zero endpoint.

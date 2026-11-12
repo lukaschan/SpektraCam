@@ -98,7 +98,8 @@ actor LibraryFiles {
         _ photo: LibraryPhoto, thumbnail: Bool, maximum: Int = PreviewQuality.libraryMaximum
     ) -> URL {
         // Render changes must rebuild saved previews even when the edit recipe is unchanged.
-        let revision = "v11-"
+        let hasFilmEdge = photo.recipeData.flatMap { try? JSONDecoder().decode(EditRecipe.self, from: $0) }?.filmEdgeLayout != nil
+        let revision = hasFilmEdge ? "v14-distress-" : "v11-"
         return cache.appendingPathComponent(photo.id.uuidString)
             .appendingPathComponent(
                 revision + photo.renderKey + (thumbnail ? "-thumb.jpg" : "-preview-\(maximum).jpg"))

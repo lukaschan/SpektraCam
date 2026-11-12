@@ -45,6 +45,7 @@ checks['exposure'] = (checks['color-pipeline'][0], ['.'])
 checks['preview'] = (checks['metal-film'][0] + ['SourceImageRenderer','ToneRenderer','CubeLUT','PhotoExporter','GeometryRenderer','RenderMemoryBudget','FilmRenderResources','PhotoRenderer'], ['.'])
 checks['processed-export'] = (checks['preview'][0] + ['PhotoMetadata','ImportedPhoto'], ['.'])
 checks['bypass'] = checks['processed-export']
+checks['detail'] = (checks['processed-export'][0], ['.'])
 checks['stress-export'] = checks['processed-export']
 checks['contrast'] = checks['preview']
 checks['tone-response'] = checks['processed-export']
@@ -54,6 +55,7 @@ checks['library'] = (checks['processed-export'][0] + ['LibraryPhoto','LibraryFil
 checks['monochrome-grain'] = (checks['metal-film'][0], ['.'])
 checks['film-noise'] = (checks['metal-film'][0], ['.'])
 checks['film-benchmark'] = (checks['metal-film'][0], ['.'])
+checks['metal-tiling'] = (checks['metal-film'][0], ['.'])
 checks['batch-export'] = (checks['library'][0] + ['BatchPhotoExporter','BatchExportModel','PhotoLibraryWriter'], ['.'])
 checks['sdr-pipeline'] = (checks['processed-export'][0] + ['BatchPhotoExporter'], ['.'])
 checks['render-cache'] = (checks['processed-export'][0], ['.'])
@@ -65,9 +67,21 @@ for key, (files, arguments) in checks.items():
  if 'LibraryImages' in files and 'ImageRequestPool' not in files:
   files.append('ImageRequestPool')
 checks['image-requests'] = (['ImageRequestPool'], [])
-checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','EditorDefaults','PhotoHistogram','LUTLibrary'])), ['.'])
+checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','EditorDefaults','PhotoHistogram','LUTLibrary','PhotoCanvas','PhotoInfoPanel'])), ['.'])
 checks['editor-benchmark'] = (checks['processed-export'][0], ['.'])
 checks['lut-grain'] = (checks['processed-export'][0], ['.'])
+checks['film-edge'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer', 'BatchPhotoExporter'])), ['.'])
+checks['darkroom-orientation'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer'])), ['.'])
+checks['darkroom'] = (list(dict.fromkeys(checks['export'][0] + checks['recipe'][0] + ['PrintCompositor'])), [])
+for files, arguments in checks.values():
+ if any(f in files for f in ['MetalFilmPipeline','SourceImageRenderer','ToneRenderer']) and 'PixelStore' not in files: files.append('PixelStore')
+ if 'EditRecipe' in files:
+  for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout']:
+   if dependency not in files: files.append(dependency)
+ if 'SourceImageRenderer' in files and 'GeometryRenderer' not in files: files.append('GeometryRenderer')
+ if 'PhotoRenderer' in files:
+  for dependency in ['PrintCompositor', 'FilmEdgeRenderer']:
+   if dependency not in files: files.append(dependency)
 parser=argparse.ArgumentParser();parser.add_argument('checks',nargs='*',choices=list(checks));parser.add_argument('--debug-benchmarks', action='store_true');parser.add_argument('--input', nargs='+', default=[]);parser.add_argument('--simulator', action='store_true');args=parser.parse_args()
 sdkName = 'iphonesimulator' if args.simulator else 'macosx'
 sdk=subprocess.check_output(['/usr/bin/xcrun','--sdk',sdkName,'--show-sdk-path'],env=env,text=True).strip()

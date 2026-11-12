@@ -117,7 +117,7 @@ import UniformTypeIdentifiers
         try await library!.finishEditing(photo.id, recipe: oldRecipe)
         let oldBytes = library!.photo(photo.id)!.recipeData
         let restoredOld = try library!.recipe(photo.id)!
-        precondition(restoredOld.version == 4 && restoredOld.look.enabled)
+        precondition(restoredOld.version == EditRecipe.currentVersion && restoredOld.look.enabled)
         try await library!.finishEditing(photo.id, recipe: restoredOld)
         precondition(library!.photo(photo.id)!.recipeData == oldBytes,
             "Closing an unchanged legacy edit rewrote its stored bytes")
@@ -183,6 +183,34 @@ import UniformTypeIdentifiers
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         let rebuilt = try await library!.images.image(library!.photo(photo.id)!, thumbnail: false)
         precondition(rebuilt.width == rendered.width && rebuilt.height == rendered.height)
+        var edgeRecipe = recipe
+        edgeRecipe.filmEdgeLayout = FilmEdgeLayout()
+        var edgeChoice = FilmEdgeSelection(); edgeChoice.mode = .manual; edgeChoice.manualType = .reversalScan
+        edgeRecipe.filmEdgeSelection = edgeChoice
+        var paper = PrintLayout(); paper.paper = .eightByTen; paper.scale = 0.75
+        edgeRecipe.printLayout = paper
+        edgeRecipe.tone.monochrome = true
+        try await library!.finishEditing(photo.id, recipe: edgeRecipe)
+        let oldEdgeCache = cache.appendingPathComponent(photo.id.uuidString)
+            .appendingPathComponent("v11-" + library!.photo(photo.id)!.renderKey + "-preview-\(PreviewQuality.libraryMaximum).jpg")
+        try FileManager.default.createDirectory(at: oldEdgeCache.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try originalBytes.write(to: oldEdgeCache)
+        let framed = try await library!.images.image(library!.photo(photo.id)!, thumbnail: false)
+        precondition(framed.width == 26 && framed.height == 32, "Saved library preview lost Darkroom paper finishing")
+        library = nil
+        try FileManager.default.removeItem(at: cache)
+        try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+        library = try PhotoLibrary(root: root, cache: cache, modelDirectory: dataDirectory)
+        let savedEdge = try library!.recipe(photo.id)
+        precondition(savedEdge == edgeRecipe, "Restart lost enabled edge, manual family, paper or B&W")
+        let recoveredEdge = try await library!.images.image(library!.photo(photo.id)!, thumbnail: false)
+        let recoveredThumb = try await library!.images.image(library!.photo(photo.id)!, thumbnail: true)
+        precondition(recoveredEdge.width == 26 && recoveredEdge.height == 32)
+        precondition(recoveredThumb.width == 26 && recoveredThumb.height == 32)
+        let preservedSource = try Data(contentsOf: library!.files.sourceURL(photo))
+        precondition(preservedSource == originalBytes)
+        try await library!.finishEditing(photo.id, recipe: recipe)
+        print("PASS: Darkroom enabled edge/manual choice/paper/B&W survive restart; viewer/grid rebuilds include finishing; original bytes preserved")
         let cubeFile = temporary.appendingPathComponent("Identity.cube")
         var cubeText = "LUT_3D_SIZE 2\n"
         for b in 0...1 { for g in 0...1 { for r in 0...1 { cubeText += "\(r) \(g) \(b)\n" } } }

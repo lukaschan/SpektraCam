@@ -70,6 +70,11 @@ nonisolated enum PrintExposureCore {
             }
             return raw
         }
+        /// An open source perforation contains neither dye nor the stock's base density.
+        var clearExposure: RGB {
+            Self.integrate(Array(repeating: 0, count: base.count), light: printLight, sensitivity: sensitivity)
+                * factor * printExposure + preflash * printExposure
+        }
         /// Stock reference calculations use the balanced/preflashed exposure before print gain.
         func baseExposure(_ density: RGB) -> RGB {
             var raw = RGB.zero

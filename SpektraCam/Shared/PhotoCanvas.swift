@@ -18,6 +18,8 @@ struct ZoomablePhoto: UIViewRepresentable {
     var fitCenterY: CGFloat? = nil
     var label = String(localized: "photo_canvas.edited_photo", defaultValue: "Edited photo")
     var onTap: ((CGPoint) -> Void)?
+    /// Sharp pixels for the part of the photo in view, at the resolution the zoom needs.
+    var detail: PhotoScrollView.DetailProvider? = nil
     func makeUIView(context: Context) -> PhotoScrollView {
         let view = PhotoScrollView()
         view.delegate = context.coordinator
@@ -51,6 +53,9 @@ struct ZoomablePhoto: UIViewRepresentable {
         view.showsVerticalScrollIndicator = false
         view.bouncesZoom = true
         view.addSubview(view.photoView)
+        view.detailView.isHidden = true
+        view.detailView.isAccessibilityElement = false
+        view.photoView.addSubview(view.detailView)
         let tap = UITapGestureRecognizer(
             target: context.coordinator, action: #selector(Coordinator.doubleTap(_:)))
         tap.numberOfTapsRequired = 2
@@ -68,6 +73,7 @@ struct ZoomablePhoto: UIViewRepresentable {
         view.zoomedTopInset = zoomedTopInset
         view.fitCenterY = fitCenterY
         view.photoView.accessibilityLabel = label
+        view.detailProvider = detail
         view.setPhoto(image)
         view.setNeedsLayout()
     }
@@ -75,6 +81,7 @@ struct ZoomablePhoto: UIViewRepresentable {
     static func dismantleUIView(_ view: PhotoScrollView, coordinator: Coordinator) {
         view.delegate = nil
         coordinator.onTap = nil
+        view.detailProvider = nil
         view.photoView.image = nil
     }
     final class Coordinator: NSObject, UIScrollViewDelegate {
@@ -87,6 +94,10 @@ struct ZoomablePhoto: UIViewRepresentable {
         }
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             (scrollView as? PhotoScrollView)?.centerPhoto()
+            (scrollView as? PhotoScrollView)?.viewportChanged()
+        }
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            (scrollView as? PhotoScrollView)?.viewportChanged()
         }
         @objc func doubleTap(_ recognizer: UITapGestureRecognizer) {
             guard let view = recognizer.view as? PhotoScrollView else { return }
@@ -115,6 +126,74 @@ final class PhotoScrollView: UIScrollView {
     private var lastBounds = CGSize.zero
     private var pendingViewport: (zoom: CGFloat, center: CGPoint)?
     private var replacingImage = false
+
+    // Zoomed detail: the base image stays in place and a sharper render of the visible
+    // region is laid over it once the view settles.
+    typealias DetailProvider = @MainActor (_ visible: CGRect, _ longEdge: Int) async -> PhotoRenderer.Detail?
+    let detailView = UIImageView()
+    var detailProvider: DetailProvider? {
+        didSet { if detailProvider == nil { clearDetail() } }
+    }
+    private var detailTask: Task<Void, Never>?
+    private var detailGeneration = 0
+    private var detailRect = CGRect.null
+    private var detailLong = 0
+    private var detailAsked = 0
+    private func clearDetail() {
+        detailTask?.cancel()
+        detailTask = nil
+        detailView.image = nil
+        detailView.isHidden = true
+        detailRect = .null
+        detailLong = 0
+        detailAsked = 0
+    }
+    func viewportChanged() {
+        guard let provider = detailProvider, imageSize.width > 0, imageSize.height > 0,
+            !replacingImage
+        else { return }
+        let long = max(imageSize.width, imageSize.height)
+        let needed = Int((long * zoomScale * traitCollection.displayScale).rounded())
+        // Until the screen shows more pixels than the preview has, there is nothing to add.
+        guard CGFloat(needed) > long * 1.25 else {
+            clearDetail()
+            return
+        }
+        let seen = photoView.convert(bounds, from: self).intersection(
+            CGRect(origin: .zero, size: imageSize))
+        guard !seen.isNull, !seen.isEmpty else { return }
+        let unit = CGRect(
+            x: seen.minX / imageSize.width, y: seen.minY / imageSize.height,
+            width: seen.width / imageSize.width, height: seen.height / imageSize.height)
+        if detailView.image != nil, detailRect.contains(unit),
+            detailLong * 10 >= needed * 9 || detailAsked >= needed
+        {
+            return
+        }
+        detailTask?.cancel()
+        let generation = detailGeneration
+        detailTask = Task { @MainActor [weak self] in
+            // Wait for the gesture or the edit to settle; one render then covers some panning.
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            let wide = unit.insetBy(dx: -0.2 * unit.width, dy: -0.2 * unit.height)
+                .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+            guard let detail = await provider(wide, needed), !Task.isCancelled, let self,
+                generation == self.detailGeneration, self.imageSize.width > 0
+            else { return }
+            let size = self.imageSize
+            self.detailView.image = UIImage(cgImage: detail.image)
+            self.detailView.frame = CGRect(
+                x: detail.rect.minX * size.width, y: detail.rect.minY * size.height,
+                width: detail.rect.width * size.width, height: detail.rect.height * size.height)
+            self.detailView.isHidden = false
+            self.detailRect = detail.rect
+            self.detailLong = Int(
+                Double(detail.image.width) / max(detail.rect.width, 1e-6) * Double(long)
+                    / Double(size.width))
+            self.detailAsked = needed
+        }
+    }
     private func viewport() -> (zoom: CGFloat, center: CGPoint) {
         let point = photoView.convert(CGPoint(x: bounds.midX, y: bounds.midY), from: self)
         return (
@@ -124,8 +203,12 @@ final class PhotoScrollView: UIScrollView {
     }
     func setPhoto(_ image: UIImage) {
         guard photoView.image !== image else { return }
+        // The overlay belongs to the previous frame; a new one follows when this settles.
+        detailGeneration &+= 1
+        clearDetail()
         photoView.preferredImageDynamicRange = .standard
         photoView.image = image
+        defer { viewportChanged() }
         if image.size != imageSize {
             // Rendered/cropped and original images can have different pixel sizes. Keep the
             // relative zoom and normalized point when Compare swaps these images.
@@ -215,6 +298,7 @@ struct PhotoViewport: View {
     var topAligned = true
     var usePortraitReference = false
     var onTap: ((CGPoint) -> Void)?
+    var detail: PhotoScrollView.DetailProvider? = nil
     var body: some View {
         GeometryReader { proxy in
             ZoomablePhoto(
@@ -225,7 +309,8 @@ struct PhotoViewport: View {
                     : nil,
                 label: edited
                     ? String(localized: "photo_canvas.edited_photo", defaultValue: "Edited photo")
-                    : String(localized: "photo_canvas.photo", defaultValue: "Photo"), onTap: onTap
+                    : String(localized: "photo_canvas.photo", defaultValue: "Photo"), onTap: onTap,
+                detail: detail
             )
             .frame(width: proxy.size.width, height: proxy.size.height)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)

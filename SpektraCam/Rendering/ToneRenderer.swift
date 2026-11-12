@@ -77,43 +77,49 @@ nonisolated enum ToneRenderer {
             monochromeResidual: monochromeResidual, normalizationEV: normalizationEV)
     }
     /// Grade is pointwise: strips preserve the exact LUT/tone/noise math without full-frame textures.
+    /// Full-size results go to file-backed storage, and store-backed inputs are read in place.
     static func tiledWorking(
         _ image: CGImage, tone: EditRecipe.Tone,
         luts: [CubeLUT.Application] = [], residual: (CGImage, CGImage)? = nil,
         monochromeResidual: Bool = false, normalizationEV: Double = 0
     ) throws -> CGImage {
         guard let gpu else { throw Failure.render }
-        var pixels = Data(count: image.width * image.height * 16)
-        try pixels.withUnsafeMutableBytes { bytes in
-            for y in stride(from: 0, to: image.height, by: 128) {
+        let width = image.width, height = image.height
+        if let residual,
+            [residual.0, residual.1].contains(where: { $0.width != width || $0.height != height })
+        {
+            throw Failure.parameters
+        }
+        func part(_ image: CGImage, _ y: Int, _ rows: Int) throws -> CIImage {
+            if let store = PixelStore.of(image) { return store.ciImage(rows: y..<(y + rows)) }
+            guard let strip = image.cropping(to: CGRect(x: 0, y: y, width: width, height: rows))
+            else { throw Failure.render }
+            return CIImage(cgImage: strip)
+        }
+        func fill(_ base: UnsafeMutableRawPointer) throws {
+            defer { gpu.releaseStrips() }
+            for y in stride(from: 0, to: height, by: 128) {
                 try Task.checkCancellation()
                 try autoreleasepool {
-                    let rows = min(128, image.height - y)
-                    let rect = CGRect(x: 0, y: y, width: image.width, height: rows)
-                    guard let strip = image.cropping(to: rect) else { throw Failure.render }
-                    let noise: (CGImage, CGImage)?
-                    if let residual {
-                        guard let dirty = residual.0.cropping(to: rect),
-                            let clean = residual.1.cropping(to: rect)
-                        else { throw Failure.render }
-                        noise = (dirty, clean)
-                    } else {
-                        noise = nil
-                    }
-                    let graded = try gpu.render(
-                        strip, tone: tone, luts: luts, residual: noise,
-                        monochromeResidual: monochromeResidual, normalizationEV: normalizationEV)
-                    context.render(
-                        CIImage(cgImage: graded),
-                        toBitmap: bytes.baseAddress!.advanced(by: y * image.width * 16),
-                        rowBytes: image.width * 16,
-                        bounds: CGRect(x: 0, y: 0, width: image.width, height: rows),
-                        format: .RGBAf, colorSpace: linear)
+                    let rows = min(128, height - y)
+                    try gpu.render(
+                        strip: part(image, y, rows), width: width, height: rows, tone: tone,
+                        luts: luts,
+                        residual: residual.map { (try part($0.0, y, rows), try part($0.1, y, rows)) },
+                        monochromeResidual: monochromeResidual, normalizationEV: normalizationEV,
+                        into: base.advanced(by: y * width * 16))
                 }
             }
         }
+        if PixelStore.isLarge(width: width, height: height) {
+            let store = try PixelStore(width: width, height: height, format: .float)
+            try fill(store.base)
+            return try store.image(colorSpace: linear)
+        }
+        var pixels = Data(count: width * height * 16)
+        try pixels.withUnsafeMutableBytes { try fill($0.baseAddress!) }
         return try PhotoColorBridge.workingImage(
-            pixels, width: image.width, height: image.height, encoded: false)
+            pixels, width: width, height: height, encoded: false)
     }
     static func render(
         _ image: CGImage, tone: EditRecipe.Tone,
@@ -132,7 +138,13 @@ nonisolated enum ToneRenderer {
         )
     }
     static func resolve(_ image: CGImage) throws -> CGImage {
-        let input = CIImage(cgImage: image)
+        let input = PixelStore.ciImage(image)
+        if PixelStore.isLarge(width: image.width, height: image.height) {
+            return try PixelStore.render(
+                input, width: image.width, height: image.height, context: context,
+                colorSpace: display, format: .byte
+            ).image(colorSpace: display)
+        }
         guard
             let result = context.createCGImage(
                 input, from: input.extent, format: .RGBA8,
@@ -195,18 +207,71 @@ nonisolated private final class GradeKernel: @unchecked Sendable {
     ) throws -> CGImage {
         lock.lock()
         defer {
-            if max(image.width, image.height) > 2048 {
-                input = nil
-                output = nil
-                cachedImage = nil
-                residualTextures = []
-                residualImages = []
-            }
+            if max(image.width, image.height) > 2048 { releaseFrame() }
             lock.unlock()
         }
-        if input?.width != image.width || input?.height != image.height {
+        if let residual,
+            [residual.0, residual.1].contains(where: {
+                $0.width != image.width || $0.height != image.height
+            })
+        {
+            throw ToneRenderer.Failure.parameters
+        }
+        let result = try graded(
+            width: image.width, height: image.height, key: image, source: CIImage(cgImage: image),
+            residual: residual.map {
+                [($0.0, CIImage(cgImage: $0.0)), ($0.1, CIImage(cgImage: $0.1))]
+            }, tone: tone, luts: luts, monochromeResidual: monochromeResidual,
+            normalizationEV: normalizationEV)
+        guard
+            let frame = context.createCGImage(
+                result, from: CGRect(x: 0, y: 0, width: image.width, height: image.height),
+                format: .RGBAf, colorSpace: ToneRenderer.linear, deferred: false)
+        else {
+            cachedImage = nil
+            throw ToneRenderer.Failure.render
+        }
+        return frame
+    }
+    /// One strip of a full-size image, graded straight into the caller's float bitmap.
+    func render(
+        strip: CIImage, width: Int, height: Int, tone: EditRecipe.Tone,
+        luts: [CubeLUT.Application], residual: (CIImage, CIImage)?, monochromeResidual: Bool,
+        normalizationEV: Double, into target: UnsafeMutableRawPointer
+    ) throws {
+        // Strips of one image share their textures; the caller releases them after the last one.
+        lock.lock()
+        defer { lock.unlock() }
+        let result = try graded(
+            width: width, height: height, key: nil, source: strip,
+            residual: residual.map { [(nil, $0.0), (nil, $0.1)] }, tone: tone, luts: luts,
+            monochromeResidual: monochromeResidual, normalizationEV: normalizationEV)
+        context.render(
+            result, toBitmap: target, rowBytes: width * 16,
+            bounds: CGRect(x: 0, y: 0, width: width, height: height), format: .RGBAf,
+            colorSpace: ToneRenderer.linear)
+    }
+    func releaseStrips() {
+        lock.lock()
+        releaseFrame()
+        lock.unlock()
+    }
+    private func releaseFrame() {
+        input = nil
+        output = nil
+        cachedImage = nil
+        residualTextures = []
+        residualImages = []
+    }
+    /// The graded frame as a view of the output texture. Call with the lock held.
+    private func graded(
+        width: Int, height: Int, key: CGImage?, source: CIImage,
+        residual: [(key: CGImage?, image: CIImage)]?, tone: EditRecipe.Tone,
+        luts: [CubeLUT.Application], monochromeResidual: Bool, normalizationEV: Double
+    ) throws -> CIImage {
+        if input?.width != width || input?.height != height {
             let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-                pixelFormat: .rgba32Float, width: image.width, height: image.height,
+                pixelFormat: .rgba32Float, width: width, height: height,
                 mipmapped: false)
             descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
             descriptor.storageMode = .private
@@ -219,21 +284,17 @@ nonisolated private final class GradeKernel: @unchecked Sendable {
         guard let input, let output, let command = queue.makeCommandBuffer() else {
             throw ToneRenderer.Failure.render
         }
-        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        if cachedImage !== image {
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        if key == nil || cachedImage !== key {
             context.render(
-                CIImage(cgImage: image), to: input, commandBuffer: command, bounds: bounds,
+                source, to: input, commandBuffer: command, bounds: bounds,
                 colorSpace: ToneRenderer.linear)
         }
         var residualInputs = [input, input]
         if let residual {
-            let frames = [residual.0, residual.1]
-            guard frames.allSatisfy({ $0.width == image.width && $0.height == image.height }) else {
-                throw ToneRenderer.Failure.parameters
-            }
             if residualTextures.isEmpty {
                 let d = MTLTextureDescriptor.texture2DDescriptor(
-                    pixelFormat: .rgba32Float, width: image.width, height: image.height,
+                    pixelFormat: .rgba32Float, width: width, height: height,
                     mipmapped: false)
                 // Core Image can use a compute encoder to fill these textures.
                 d.usage = [.shaderRead, .shaderWrite, .renderTarget]
@@ -243,12 +304,15 @@ nonisolated private final class GradeKernel: @unchecked Sendable {
                 else { throw ToneRenderer.Failure.render }
                 residualTextures = [a, b]
             }
-            for i in 0..<2 where residualImages.count != 2 || residualImages[i] !== frames[i] {
+            for i in 0..<2
+            where residual[i].key == nil || residualImages.count != 2
+                || residualImages[i] !== residual[i].key
+            {
                 context.render(
-                    CIImage(cgImage: frames[i]), to: residualTextures[i], commandBuffer: command,
+                    residual[i].image, to: residualTextures[i], commandBuffer: command,
                     bounds: bounds, colorSpace: ToneRenderer.linear)
             }
-            residualImages = frames
+            residualImages = residual.compactMap(\.key)
             residualInputs = residualTextures
         } else {
             residualTextures = []
@@ -294,26 +358,23 @@ nonisolated private final class GradeKernel: @unchecked Sendable {
         encoder.setBuffer(invalid, offset: 0, index: 1)
 
         parameters.withUnsafeBytes { encoder.setBytes($0.baseAddress!, length: $0.count, index: 0) }
-        let width = pipeline.threadExecutionWidth
+        let group = pipeline.threadExecutionWidth
         encoder.dispatchThreads(
-            MTLSize(width: image.width, height: image.height, depth: 1),
+            MTLSize(width: width, height: height, depth: 1),
             threadsPerThreadgroup: MTLSize(
-                width: width, height: max(1, pipeline.maxTotalThreadsPerThreadgroup / width),
+                width: group, height: max(1, pipeline.maxTotalThreadsPerThreadgroup / group),
                 depth: 1))
         encoder.endEncoding()
         command.commit()
         command.waitUntilCompleted()
         guard command.status == .completed, invalid.contents().load(as: UInt32.self) == 0,
-            let result = CIImage(mtlTexture: output, options: [.colorSpace: ToneRenderer.linear]),
-            let frame = context.createCGImage(
-                result, from: bounds, format: .RGBAf, colorSpace: ToneRenderer.linear,
-                deferred: false)
+            let result = CIImage(mtlTexture: output, options: [.colorSpace: ToneRenderer.linear])
         else {
             cachedImage = nil
             throw ToneRenderer.Failure.render
         }
-        cachedImage = image
-        return frame
+        cachedImage = key
+        return result
     }
     private func makeTexture(_ cube: CubeLUT) throws -> MTLTexture {
         let d = MTLTextureDescriptor()

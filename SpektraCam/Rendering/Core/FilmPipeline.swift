@@ -48,14 +48,20 @@ nonisolated struct FilmPipeline: Sendable {
         reference = try .init(recipe: recipe, film: film, paper: paper, color: color)
     }
     func process(
-        _ linearRGB: [RGB], width: Int, height: Int, stochastic: Bool = true, seed: UInt64 = 0
+        _ linearRGB: [RGB], width: Int, height: Int, stochastic: Bool = true, seed: UInt64 = 0,
+        edge: FilmEdgeGeometry? = nil, autoExposureEV: Double? = nil
     )
         throws -> [RGB]
     {
         let image = try SpatialCore.Image(width: width, height: height, pixels: linearRGB)
-        let pitch = recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
+        guard edge == nil || autoExposureEV != nil || !recipe.flag("camera.auto_exposure") else {
+            // Callers must meter the original scene, never a padded support canvas.
+            throw SpectralCore.Failure.invalidShape
+        }
+        let pitch = edge?.pixelPitchMicrometers
+            ?? recipe.number("camera.film_format_mm") * 1000 / Double(max(width, height))
         guard pitch.isFinite, pitch > 0 else { throw SpectralCore.Failure.invalidShape }
-        let scale = pow(2, try color.autoExposureEV(linearRGB, width: width, height: height))
+        let scale = pow(2, try autoExposureEV ?? color.autoExposureEV(linearRGB, width: width, height: height))
         let manual = pow(2, recipe.number("camera.exposure_compensation_ev"))
         var raw = image
         raw.pixels = linearRGB.map { color.exposure.raw($0 * scale) * manual }
@@ -67,6 +73,19 @@ nonisolated struct FilmPipeline: Sendable {
             raw, pixelSize: pitch, parameters: diffusion("camera.diffusion_filter"))
         let lens = recipe.number("camera.lens_blur_um")
         if lens > 0 { raw = raw.gaussian(RGB(repeating: lens / pitch)) }
+        if let edge {
+            guard edge.width == width, edge.height == height else { throw SpectralCore.Failure.invalidShape }
+            // Gate coverage, then unwanted exposure that bypasses the lens (fog piping, body leaks).
+            // Front (through-the-lens) light is gated with the scene; back leaks and base fog are not.
+            let neutral = color.exposure.raw(RGB(repeating: 0.184))
+            let light = edge.leakLight(neutral: neutral), fog = edge.fogLight(neutral: neutral)
+            for i in raw.pixels.indices {
+                let x = i % width, y = i / width
+                let e = edge.hasExposureNoise ? edge.exposureFields(x: x, y: y) : FilmEdgeGeometry.Exposure()
+                raw.pixels[i] = (raw.pixels[i] + light * e.front) * edge.gateCoverage(x: x, y: y)
+                    + light * e.back + fog * e.fog
+            }
+        }
         raw = try HalationCore.apply(raw, parameters: halation, pixelSizeMicrometers: pitch)
         if reference.filmingScale != 1 { raw.pixels = raw.pixels.map { $0 * reference.filmingScale } }
         let logRaw = raw.pixels.map(Self.logarithm)
@@ -97,9 +116,23 @@ nonisolated struct FilmPipeline: Sendable {
                 layers: film.densityLayers.map { $0.map(ModelLibrary.vector) }, positive: film.positive,
                 pixelSize: pitch, parameters: grain, seed: seed)
         }
+        if let edge, edge.hasEmulsionScratches {
+            for i in density.pixels.indices {
+                density.pixels[i] = edge.scratchedDensity(density.pixels[i], x: i % width, y: i / width)
+            }
+        }
         if let enlarger = color.enlarger, let curve = color.printCurve {
             var printRaw = image
             printRaw.pixels = density.pixels.map { enlarger.rawExposure($0) * reference.printingScale }
+            if let edge {
+                let clear = enlarger.clearExposure * reference.printingScale
+                // Contact printing onto cinema print film has no carrier; the scanner holder masks later.
+                let cinema = FilmStock.prints.first { $0.id == recipe.printID }?.support == "film"
+                let mode: FilmEdgeGeometry.Transmission = cinema ? [.damage] : [.damage, .carrier, .reflection]
+                for i in printRaw.pixels.indices {
+                    printRaw.pixels[i] = edge.transmit(printRaw.pixels[i], clear: clear, x: i % width, y: i / width, mode: mode)
+                }
+            }
             printRaw = try DiffusionCore.apply(
                 printRaw, pixelSize: pitch, parameters: diffusion("enlarger.diffusion_filter"))
             density.pixels = printRaw.pixels.map { curve.density(at: Self.logarithm($0)) }
@@ -130,6 +163,18 @@ nonisolated struct FilmPipeline: Sendable {
                 for i in xyz.pixels.indices { xyz.pixels[i] += white * (field.pixels[i].x / 100) }
             }
         }
+        if let edge {
+            let scan = color.scanBasis
+            let clear = reference.correct(zip(scan.illuminant, scan.cmfs).reduce(RGB.zero) { $0 + $1.0 * $1.1 } / scan.normalization)
+            // Paper has no holes. Cinema destination stock has its own physical support.
+            let destinationFilm = !recipe.bypassesPrint && FilmStock.prints.first { $0.id == recipe.printID }?.support == "film"
+            if recipe.bypassesPrint || destinationFilm {
+                let mode: FilmEdgeGeometry.Transmission = destinationFilm ? [.carrier, .destination] : [.damage, .carrier]
+                for i in xyz.pixels.indices {
+                    xyz.pixels[i] = edge.transmit(xyz.pixels[i], clear: clear, x: i % width, y: i / width, mode: mode)
+                }
+            }
+        }
         var output = image
         output.pixels = xyz.pixels.map {
             color.compression.compress(ColorPipeline.apply(color.scanMatrix, $0))
@@ -142,6 +187,15 @@ nonisolated struct FilmPipeline: Sendable {
             let blur = output.gaussian(RGB(repeating: sigma))
             for i in output.pixels.indices {
                 output.pixels[i] += amount * (output.pixels[i] - blur.pixels[i])
+            }
+        }
+        // Negative-print presentation uses clear openings as the black reference. Keep
+        // the colored intact rebate; do not globally subtract its scanner/paper D-max tint.
+        let paperOutput = !recipe.bypassesPrint
+            && FilmStock.prints.first { $0.id == recipe.printID }?.support != "film"
+        if let edge, paperOutput {
+            for i in output.pixels.indices {
+                output.pixels[i] = edge.transmit(output.pixels[i], clear: .zero, x: i % width, y: i / width, mode: [.endpoint, .carrier])
             }
         }
         return output.pixels.map {

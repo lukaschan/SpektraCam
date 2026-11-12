@@ -48,6 +48,24 @@ nonisolated struct CropSelection: Codable, Equatable, Sendable {
         )
     }
 
+    /// Trim the existing window to a required aperture without stretching or revealing
+    /// previously excluded content. The interactive Crop tool uses this same selection.
+    mutating func constrain(to aspect: CropAspect, orientation: CropOrientation, imageAspect: CGFloat) {
+        self.aspect = aspect
+        self.orientation = orientation
+        guard let ratio = effectiveRatio(imageAspect: imageAspect), imageAspect > 0 else { return }
+        let old = normalizedRect.intersection(Self.fullImage)
+        guard !old.isNull, !old.isEmpty else { return }
+        let normalizedRatio = ratio / imageAspect
+        let width = min(old.width, old.height * normalizedRatio)
+        let height = min(old.height, old.width / normalizedRatio)
+        // Avoid accumulating floating-point trimming during a drag or repeated render.
+        guard abs(width - old.width) > 1e-10 || abs(height - old.height) > 1e-10 else { return }
+        normalizedRect = CGRect(x: width == old.width ? old.minX : old.midX - width / 2,
+                                y: height == old.height ? old.minY : old.midY - height / 2,
+                                width: width, height: height)
+    }
+
     mutating func move(from start: CGRect, by delta: CGSize) {
         normalizedRect = CGRect(
             x: clamp(start.minX + delta.width, 0, 1 - start.width),

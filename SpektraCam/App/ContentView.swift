@@ -43,6 +43,7 @@ struct ContentView: View {
                         try? await library.luts.load()
                         try? await library.repairRAWDimensions()
                         #if DEBUG || PERFORMANCE_CHECKS
+                            await DarkroomOrientationChecks.run(library)
                             await RenderPerformanceChecks.run(library)
                             await ExportValidation.checkSDR(library)
                         #endif

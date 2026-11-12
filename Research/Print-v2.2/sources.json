@@ -1,0 +1,119 @@
+{
+  "reviewed_utc": "2026-11-09T06:13:09.577197+00:00",
+  "scope": "Source and documentation audit; no third-party application was built, installed or benchmarked. No v2.2 application implementation.",
+  "baseline": {
+    "repository": "https://github.com/runzeni/SpektraCam",
+    "revision": "98a5dbe6ad6cf3e1cac533853e6be06bd357afb0"
+  },
+  "repositories": [
+    {
+      "repository": "https://github.com/JamesQiu2005/SpektraLab",
+      "revision": "d4b8145f6f9bdade15cda014776e99521adf0b5f",
+      "files": [
+        {
+          "path": "engine/src/pipeline/overscan.cpp",
+          "sha256": "87e562d062a7d84b041a1279ddc22adefc56ce20a29c960694e0ddafff785561"
+        },
+        {
+          "path": "engine/src/shaders/overscan.metal",
+          "sha256": "56cbe1f8d6d25cc91fdf013180aff1a2d1a59d4f342cd483399381c37bf2c62b"
+        },
+        {
+          "path": "engine/src/pipeline/pipeline.cpp",
+          "sha256": "4965cfe747b55797e9cc2cfdcbaa31fecb525c32a5187079ab8ea96c7ac8d786"
+        },
+        {
+          "path": "engine/tests/overscan_checks.py",
+          "sha256": "84a1669635e9b9ec456adcde326614c029ae1bb7ad2e1b9726f1d0e70fbad482"
+        },
+        {
+          "path": "app/SpektraLab/Sources/Features/Develop/FilmEdgeColumn.swift",
+          "sha256": "9b56acf70faa22dd69e3fec252653fd809722a5a127cad389e227d1a5dadb62d"
+        },
+        {
+          "path": "ARCHITECTURE.md",
+          "sha256": "1dcc95820d33b5ccf05e1cb631722ecc9e79cdfada2a0c76bd3988abfe7912ce"
+        },
+        {
+          "path": "license/NOTICE.md",
+          "sha256": "d35a1d4dc2b993f78c0644767047b98340481be2bc615fc531425a730efd9841"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/jeremieLouvaert/ComfyUI-Darkroom",
+      "revision": "69612f04b2481dc0d0e45c9c7784d0e8a6d7be45",
+      "files": [
+        {
+          "path": "nodes/film_rebate.py",
+          "sha256": "3c94edbdca46574fbb4b54c6f4b03b669edb96d6b9e8fcdcb2a91618a1b87009"
+        },
+        {
+          "path": "nodes/halation.py",
+          "sha256": "4f98e7b519074db4a217da063d35521fd9ad97fac2248331a50ed5e12a6e514c"
+        },
+        {
+          "path": "docs/halation-derivation.md",
+          "sha256": "d042830a3df1ecff75453d893d0d02b4dba498d9893098d192dbe6068b583cdc"
+        },
+        {
+          "path": "README.md",
+          "sha256": "69550648a16822a8658872cc954839d208169fd80134c6db12feb0cb9a147971"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "sha256": "fbc746aabf0eb1847dfd92e2efc4596d79fa897d60b8e64062a22f585508fb3f"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/darktable-org/darktable",
+      "revision": "0c23f000db413843f385e402d53a796b71d4cba0",
+      "files": [
+        {
+          "path": "src/iop/borders.c",
+          "sha256": "bc8368d8390cf427c88d4b13384cbac83d5525ef0fb4ae093fdc047498fb32dc"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+        }
+      ]
+    }
+  ],
+  "documentation": [
+    {
+      "title": "Kodak Essential Reference Guide for Filmmakers",
+      "url": "https://www.kodak.com/content/products-brochures/Film/kodak-essential-reference-guide-for-filmmakers.pdf",
+      "sha256": "9287c8980eeba96d5d2d794e4a90824da07d36a05926b624ba3333ff911b89d4",
+      "reviewed_pdf_pages": [
+        33,
+        34,
+        58
+      ],
+      "printed_pages": [
+        31,
+        32,
+        56
+      ]
+    },
+    {
+      "title": "Apple: Reducing the memory footprint of Metal apps",
+      "url": "https://developer.apple.com/documentation/metal/reducing-the-memory-footprint-of-metal-apps",
+      "markdown_sha256": "0e9fd817b27a59f3878fc7eb841bd7d078a7a2fa3faebfbaac8303ac8b311f4e"
+    },
+    {
+      "title": "RawTherapee Framing",
+      "url": "https://rawpedia.pixls.us/framing/",
+      "access": "Read through web tool"
+    }
+  ],
+  "illustration": {
+    "description": "Uncalibrated synthetic exposure-domain illustration, not a SpektraLab comparison or app output.",
+    "files": {
+      "boundary_concept.png": "4c9fff6079ce42433aa79b74e5c8ea1058f008d999575563212a28f84cf6a19f",
+      "boundary_concept.py": "16961c16a7bfc6bc09d79012837a158dd9e097f383191853e63b7065dd02ecfd",
+      "boundary_concept.svg": "aa868492bf22876a793c6e02ba9a29349bbcc70fcd05f3ddf61017e3ae02edb7"
+    }
+  }
+}

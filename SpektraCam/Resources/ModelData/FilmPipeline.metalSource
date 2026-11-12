@@ -1,5 +1,242 @@
 // Photochemical image graph composed from verified spektrafilm 3bb2c2d stages. GPLv3.
 // Compiled after ColorPipeline, Spatial, Grain and Diffusion shader resources.
+// Nominal KS-1870 geometry from SMPTE ST 139:2003. Geometry is shared with the CPU oracle.
+// Distress fields mirror FilmEdgeGeometry (Models/FilmEdgeLayout.swift) hash-for-hash.
+// e[0] size/pitch/portrait, e[1] gate, e[2] holes (perforated, centre, KS radius, scratches-in-image),
+// e[3] gate shape/erosion + tilt, e[4] seed/stock/wear, e[5] carrier (roughness, scale, open half along/across),
+// e[6] fog/leak, e[7..8] leak frame + dust/scratches, e[9] leak light, e[10] source holes, e[11] destination KS,
+// e[12] hole variation/perforation leak + leak kind/shape, e[13] fog light + carrier reflection,
+// e[14] carrier blur/detail + streak direction, e[15..] 16 scratches (3 each).
+inline uint fe_hash(uint x){x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;x^=x>>16;return x;}
+inline uint fe_hash2(int i,int j,uint s){return fe_hash((as_type<uint>(i)*0x8da6b343u)^fe_hash((as_type<uint>(j)*0xd8163841u)^s));}
+inline float fe_unit(uint h){return float(h>>8)*(1.0f/16777216.0f);}
+inline float fe_value(float x,float y,uint s){
+    float fx=floor(x),fy=floor(y),tx=x-fx,ty=y-fy;
+    float ux=tx*tx*(3-2*tx),uy=ty*ty*(3-2*ty);int ix=int(fx),iy=int(fy);
+    float a=fe_unit(fe_hash2(ix,iy,s)),b=fe_unit(fe_hash2(ix+1,iy,s));
+    float c=fe_unit(fe_hash2(ix,iy+1,s)),d=fe_unit(fe_hash2(ix+1,iy+1,s));
+    return ((a+(b-a)*ux)*(1-uy)+(c+(d-c)*ux)*uy)*2-1;
+}
+inline float fe_penumbra(float d,float r){float u=clamp(d/max(r,1e-9f),-1.0f,1.0f);return 0.5f-(asin(u)+u*sqrt(max(1-u*u,0.0f)))/M_PI_F;}
+inline float fe_box(float2 p,float2 h,float r){float2 q=abs(p)-(h-r);return length(max(q,float2(0)))+min(max(q.x,q.y),0.0f)-r;}
+inline uint fe_seed(constant float4 *e,uint stream){uint seed=uint(e[4].x)|(uint(e[4].y)<<16);return fe_hash(seed^(stream*0x9e3779b9u));}
+inline float2 fe_canvas(float2 px,constant float4 *e){return (px-e[0].xy*0.5f)*e[0].z;}
+inline float2 fe_film(float2 px,constant float4 *e){float2 c=fe_canvas(px,e);return float2(e[3].z*c.x+e[3].w*c.y,-e[3].w*c.x+e[3].z*c.y);}
+inline float2 fe_strip(float2 f,constant float4 *e){return e[0].w!=0?float2(f.y,-f.x):f;}
+inline float fe_pixel_radius(constant float4 *e){return 0.56f*e[0].z;}
+struct FeHole{int index;int side;float local;float t;float distance;};
+inline float fe_hole_distance(float local,float t,constant float4 *e,float4 k){
+    if(k.x!=0)return max(abs(local)-k.z,length(float2(local,t))-k.w);
+    float r=e[2].z;float2 q=float2(abs(local),abs(t))-(float2(k.z,k.w)-r);
+    return length(max(q,float2(0)))+min(max(q.x,q.y),0.0f)-r;
+}
+inline FeHole fe_hole(float2 mm,constant float4 *e,float4 k){
+    FeHole h;float kk=floor(mm.x/k.y);h.index=int(kk);h.side=mm.y<0?-1:1;
+    h.local=mm.x-(kk+0.5f)*k.y;h.t=abs(mm.y)-e[2].y;h.distance=fe_hole_distance(h.local,h.t,e,k);return h;
+}
+// Punch tolerance: per-hole position/size offsets and a faint edge texture (hole variation).
+inline FeHole fe_jitter(FeHole h,constant float4 *e,float4 k){
+    float v=e[12].x;uint s=fe_seed(e,40);uint r=fe_hash2(h.index,h.side,s);
+    r=fe_hash(r);float da=0.012f*v*(fe_unit(r)*2-1);
+    r=fe_hash(r);float dt=0.01f*v*(fe_unit(r)*2-1);
+    r=fe_hash(r);float grow=0.008f*v*(fe_unit(r)*2-1);
+    FeHole o=h;o.local=h.local-da;o.t=h.t-dt;
+    float rough=0.003f*v*fe_value(o.local/0.045f+float(h.index)*3.7f,o.t/0.045f+float(h.side)*11.1f,s);
+    o.distance=fe_hole_distance(o.local,o.t,e,k)-grow+rough;return o;
+}
+inline float edge_support(float2 origin, constant float4 *e, bool destination=false) {
+    if(e[2].x==0)return 1;
+    float4 k=destination?e[11]:e[10];bool vary=!destination&&e[12].x>0;
+    // Most pixels are far from the two perforation bands.
+    float across=fe_strip(fe_film(origin+0.5f,e),e).y;
+    if(abs(abs(across)-e[2].y)>k.w+e[0].z*1.5f+0.2f)return 1;
+    float covered=0;
+    for(uint y=0;y<4;++y)for(uint x=0;x<4;++x){
+        FeHole h=fe_hole(fe_strip(fe_film(origin+(float2(x,y)+0.5f)/4,e),e),e,k);
+        if(vary&&abs(h.distance)<0.1f)h=fe_jitter(h,e,k);
+        covered+=h.distance>=0?1:0;
+    }
+    return covered/16;
+}
+// Light piped in through the cut hole wall: a thin, streaky rim of base-path fog around each hole.
+inline float edge_hole_rim(float a,float t,constant float4 *e){
+    FeHole h=fe_jitter(fe_hole(float2(a,t),e,e[10]),e,e[10]);
+    if(!(h.distance>-0.004f&&h.distance<0.2f))return 0;
+    float strength=0.35f+0.65f*fe_unit(fe_hash2(h.index,h.side,fe_seed(e,47)));
+    float streak=clamp(0.3f+0.7f*fe_value(h.local/0.05f,h.t/0.05f+float(h.index)*5.3f,fe_seed(e,48)),0.0f,1.0f);
+    return 2.0f*e[12].x*strength*streak*exp(-max(h.distance,0.0f)/0.03f);
+}
+// Gate outline: 0 standard, 1 rounded corners (radius in e[1].z), 2 bulge, 3 dip, 4 keystone.
+inline float fe_gate_distance(float2 f,constant float4 *e){
+    float hx=e[1].x,hy=e[1].y,ux=clamp(f.x/hx,-1.0f,1.0f),uy=clamp(f.y/hy,-1.0f,1.0f);int shape=int(e[3].x);
+    if(shape==2){hx+=0.035f*(1-uy*uy);hy+=0.05f*(1-ux*ux);}
+    else if(shape==3){hx-=0.035f*(1-uy*uy);hy-=0.05f*(1-ux*ux);}
+    else if(shape==4){hy*=1+0.0035f*ux;hx+=0.03f*uy;}
+    return fe_box(f,float2(hx,hy),e[1].z);
+}
+inline float edge_gate(float2 px,constant float4 *e){
+    float2 f=fe_film(px,e);
+    float base=fe_gate_distance(f,e);
+    float pr=fe_pixel_radius(e),r=sqrt(e[1].w*e[1].w+pr*pr),wear=e[4].w,shift=e[3].y!=0?r+wear:0;
+    if(base+shift< -(r+wear))return 1;
+    if(base+shift>r+wear)return 0;
+    float d=base;
+    if(wear>0){float2 s=fe_strip(f,e);d+=wear*(0.65f*fe_value(s.x/0.9f,s.y/0.9f,fe_seed(e,1))+0.35f*fe_value(s.x/0.16f,s.y/0.16f,fe_seed(e,2)));}
+    return e[3].y!=0?fe_penumbra(d+shift,pr):fe_penumbra(d,r);
+}
+inline float edge_leak_field(float2 f,constant float4 *e){
+    float size=e[6].w;float2 v=f-e[7].xy;
+    float depth=max(0.0f,dot(v,e[7].zw)),lateral=v.x*e[7].w-v.y*e[7].z;
+    float n=fe_value(f.x/(0.6f*size),f.y/(0.6f*size),fe_seed(e,4));
+    int shape=int(e[12].w);
+    if(shape==0){
+        float lobeA=exp(-lateral*lateral/(2*pow(1.4f*size,2.0f)));
+        float shifted=lateral-e[8].x*size,lobeB=exp(-shifted*shifted/(2*pow(0.7f*size,2.0f)));
+        return exp(-depth/size)*(lobeA+e[8].y*lobeB)*(0.75f+0.25f*n);
+    }
+    if(shape==1){
+        float2 dir=e[14].zw;float along=max(0.0f,dot(v,dir)),across=v.x*dir.y-v.y*dir.x;
+        float core=exp(-across*across/(2*pow(0.22f*size,2.0f)));
+        float shifted=across-e[8].x*0.9f*size,echo=e[8].y*0.5f*exp(-shifted*shifted/(2*pow(0.12f*size,2.0f)));
+        return exp(-along/(3.5f*size))*(core+echo)*(0.7f+0.3f*n);
+    }
+    float broad=exp(-lateral*lateral/(2*pow(3*size,2.0f)));
+    float band=0.8f+0.2f*fe_value(lateral/(1.5f*size),0.5f,fe_seed(e,4));
+    return exp(-depth/(2.2f*size))*broad*band;
+}
+inline float edge_perforation_fog(float a,float t,constant float4 *e){
+    float4 k=e[10];float leak=e[12].y;int side=t<0?-1:1;int k0=int(floor(a/k.y));uint s=fe_seed(e,41);float total=0;
+    for(int dk=-1;dk<=1;++dk){
+        int kk=k0+dk;uint h0=fe_hash2(kk,side,s);
+        float active=clamp((leak*0.85f-fe_unit(h0))/0.12f,0.0f,1.0f);if(active<=0)continue;
+        uint h1=fe_hash(h0),h2=fe_hash(h1),h3=fe_hash(h2),h4=fe_hash(h3);
+        float centerA=(float(kk)+0.5f)*k.y+(fe_unit(h1)-0.5f)*0.6f*k.y,inward=0.3f+1.2f*fe_unit(h2);
+        float local=a-centerA,tt=abs(t)-(e[2].y-inward),soft=0.12f+0.35f*fe_unit(h3),r=soft*(tt<0?1.8f:1.0f);
+        total+=active*(0.4f+0.6f*fe_unit(h4))*fe_penumbra(fe_hole_distance(local,tt,e,k),r);
+    }
+    return 1.5f*leak*leak*total;
+}
+// (front, back, fog) exposure relative to mid grey.
+inline float3 edge_exposure(float2 px,constant float4 *e){
+    float2 f=fe_film(px,e),s=fe_strip(f,e);float3 ex=float3(0);
+    if(e[6].x>0){
+        float distance=max(0.0f,e[4].z-abs(s.y));
+        float n=fe_value(s.x/6,s.y>0?3.5f:-3.5f,fe_seed(e,3));
+        ex.z+=6*e[6].x*e[6].x*exp(-distance/e[6].y)*(0.6f+0.4f*n);
+    }
+    if(e[12].y>0&&e[2].x!=0)ex.z+=edge_perforation_fog(s.x,s.y,e);
+    if(e[12].x>0&&e[2].x!=0)ex.z+=edge_hole_rim(s.x,s.y,e);
+    if(e[6].z>0){float v=6*e[6].z*e[6].z*edge_leak_field(f,e);if(e[12].z!=0)ex.x=v;else ex.y=v;}
+    return ex;
+}
+inline float edge_carrier_distance(float2 px,constant float4 *e){
+    float2 c=fe_canvas(px,e);float pr=fe_pixel_radius(e);
+    float2 opening=e[0].w!=0?e[5].wz:e[5].zw;
+    float base=fe_box(c,opening,0);float amplitude=e[5].x;
+    if(amplitude<=0||base<= -(amplitude*1.6f+pr+e[14].x))return base;
+    float2 s=fe_strip(c,e);float scale=e[5].y;
+    float broad=0.5f+0.5f*(0.85f*fe_value(s.x/scale,s.y/scale,fe_seed(e,6))+0.15f*fe_value(s.x/(0.2f*scale),s.y/(0.2f*scale),fe_seed(e,7)));
+    float n=fe_value(s.x/(0.35f*scale),s.y/(0.35f*scale),fe_seed(e,8));
+    float notch=clamp((n-0.6f)/0.3f,0.0f,1.0f);
+    return base+amplitude*(broad+0.5f*notch*notch*(3-2*notch));
+}
+// Defocused holder edge plus specks of light through its abraded edge.
+inline float edge_carrier(float2 px,constant float4 *e){
+    float d=edge_carrier_distance(px,e),r=max(e[14].x,fe_pixel_radius(e));
+    if(d< -r)return 1;
+    float open=fe_penumbra(d,r),detail=e[14].y;
+    if(detail<=0||d>=r+0.45f)return open;
+    float2 s=fe_strip(fe_canvas(px,e),e);
+    float n=0.6f*fe_value(s.x/0.05f,s.y/0.05f,fe_seed(e,49))+0.4f*fe_value(s.x/0.15f,s.y/0.15f,fe_seed(e,51));
+    float u=clamp((n-0.15f)/0.55f,0.0f,1.0f);
+    float patch=0.5f+0.5f*fe_value(s.x/0.6f,s.y/0.6f,fe_seed(e,50));
+    float speck=u*u*(3-2*u)*patch*patch;
+    return open+(1-open)*detail*0.5f*speck*exp(-max(d-r*0.5f,0.0f)/0.12f);
+}
+inline float edge_reflection(float2 px,constant float4 *e){
+    float r=e[13].w;if(r<=0)return 0;
+    float d=edge_carrier_distance(px,e);if(d>=0)return 0;
+    float2 s=fe_strip(fe_canvas(px,e),e);
+    return 0.4f*r*exp(d/0.45f)*(0.7f+0.3f*fe_value(s.x/4,s.y/4,fe_seed(e,43)));
+}
+inline float edge_dust(float2 px,constant float4 *e){
+    float density=e[8].z;if(density<=0)return 0;
+    float2 s=fe_strip(fe_film(px,e),e);float cell=1.6f,pr=fe_pixel_radius(e);
+    int ci=int(floor(s.x/cell)),cj=int(floor(s.y/cell));float clearValue=1;uint seed=fe_seed(e,9);
+    for(int dj=-1;dj<=1;++dj)for(int di=-1;di<=1;++di){
+        int i=ci+di,j=cj+dj;uint h0=fe_hash2(i,j,seed);
+        float activation=clamp((density*0.45f-fe_unit(h0))/0.04f,0.0f,1.0f);
+        if(activation<=0)continue;
+        uint h1=fe_hash(h0),h2=fe_hash(h1),h3=fe_hash(h2),h4=fe_hash(h3);
+        float pa=(float(i)+fe_unit(h1))*cell-s.x,pt=(float(j)+fe_unit(h2))*cell-s.y;
+        float kind=fe_unit(h3),size=fe_unit(h4),cover;
+        if(kind<0.75f){
+            float rho=0.008f+0.045f*size*size,rr=max(rho,pr*0.9f);
+            cover=(rho/rr)*(rho/rr)*fe_penumbra(length(float2(pa,pt))-rr,pr);
+        } else {
+            float angle=kind*25.1327f,len=0.12f+0.6f*size;float2 u=float2(cos(angle),sin(angle));
+            float along=clamp(-(pa*u.x+pt*u.y),-len/2,len/2);
+            float distance=length(float2(-pa-along*u.x,-pt-along*u.y));
+            float rho=0.005f+0.008f*fe_unit(fe_hash(h4)),rr=max(rho,pr*0.9f);
+            cover=(rho/rr)*fe_penumbra(distance-rr,pr);
+        }
+        clearValue*=1-cover*activation*(0.85f+0.15f*size);
+    }
+    return 1-clearValue;
+}
+// (cyan, magenta, yellow) dye removal in .xyz and scatter in .w.
+inline float4 edge_scratches(float2 px,constant float4 *e){
+    float amount=e[8].w;if(amount<=0)return float4(0);
+    float2 f=fe_film(px,e),s=fe_strip(f,e);float pr=fe_pixel_radius(e);float4 result=float4(0);
+    float outside=1;
+    if(e[2].w==0){outside=1-fe_penumbra(fe_gate_distance(f,e),pr);if(outside<=0)return result;}
+    for(int k=0;k<16;++k){
+        float active=clamp(amount*16-float(k),0.0f,1.0f);if(active<=0)continue;
+        float4 a=e[15+3*k],b=e[16+3*k],c=e[17+3*k];
+        float ends=clamp((s.x-b.x)/2,0.0f,1.0f)*clamp((b.y-s.x)/2,0.0f,1.0f);if(ends<=0)continue;
+        float line=a.x+c.x*s.x+a.y*sin(s.x/a.z*6.2832f+a.w),rr=max(b.z,pr*0.9f);
+        if(abs(s.y-line)>rr+pr)continue;
+        float pressure=fe_value(s.x/c.y,float(k)*7.31f,fe_seed(e,30));
+        float broken=clamp((pressure+c.z)/0.35f,0.0f,1.0f);
+        float cover=(b.z/rr)*fe_penumbra(abs(s.y-line)-rr,pr)*ends*active*broken*outside;
+        if(b.w>0){float d=b.w*3;result.xyz=max(result.xyz,float3(clamp(d-2,0.0f,1.0f),clamp(d-1,0.0f,1.0f),clamp(d,0.0f,1.0f))*cover);}
+        else result.w=max(result.w,-b.w*cover);
+    }
+    return result;
+}
+kernel void film_edge_gate(device float4 *image [[buffer(0)]],constant float4 *e [[buffer(1)]],
+                           constant float4 &unused [[buffer(2)]],constant uint4 &tile [[buffer(3)]],
+                           uint i [[thread_position_in_grid]]) {
+    if(i>=tile.x*tile.y)return;
+    float2 p=float2(tile.z+i%tile.x,tile.w+i/tile.x)+0.5f;
+    float3 ex=edge_exposure(p,e);
+    image[i].xyz=(image[i].xyz+e[9].xyz*ex.x)*edge_gate(p,e)+e[9].xyz*ex.y+e[13].xyz*ex.z;
+}
+// clear.w: 1 source damage, 2 carrier/holder, 4 paper black endpoint, 8 destination KS holes, 16 carrier reflection.
+kernel void film_edge_transmission(device float4 *image [[buffer(0)]],constant float4 *e [[buffer(1)]],
+                                   constant float4 &clear [[buffer(2)]],constant uint4 &tile [[buffer(3)]],
+                                   uint i [[thread_position_in_grid]]) {
+    if(i>=tile.x*tile.y)return;
+    uint mode=uint(clear.w);float2 p=float2(tile.z+i%tile.x,tile.w+i/tile.x)+0.5f;
+    float support=edge_support(p-0.5f,e,(mode&8u)!=0),carrier=(mode&2u)!=0?edge_carrier(p,e):1;
+    if((mode&4u)!=0){image[i].xyz*=1-carrier*(1-support);return;}
+    float3 occlusion=float3(0);
+    if((mode&1u)!=0){
+        float scatter=edge_scratches(p,e).w;
+        occlusion=1-(1-edge_dust(p,e))*(1-scatter*float3(0.23f,0.45f,1.0f));
+    }
+    float3 light=(image[i].xyz*support+clear.xyz*(1-support))*(1-occlusion*support)*carrier;
+    if((mode&16u)!=0)light+=clear.xyz*edge_reflection(p,e)*carrier;
+    image[i].xyz=light;
+}
+// Emulsion scratches thin the developed dye stack before printing or scanning.
+kernel void film_edge_density(device float4 *image [[buffer(0)]],constant float4 *e [[buffer(1)]],
+                              constant float4 &unused [[buffer(2)]],constant uint4 &tile [[buffer(3)]],
+                              uint i [[thread_position_in_grid]]) {
+    if(i>=tile.x*tile.y)return;
+    float2 p=float2(tile.z+i%tile.x,tile.w+i/tile.x)+0.5f;
+    image[i].xyz*=1-edge_scratches(p,e).xyz;
+}
 #define FILM_MODEL_ARGS \
 device const float4 *input [[buffer(0)]],device float4 *output [[buffer(1)]], \
 device const float4 *filmTable [[buffer(2)]],device const float4 *filmCurve [[buffer(3)]], \
@@ -69,7 +306,8 @@ kernel void boost_image(device const float4 *input [[buffer(0)]],device float4 *
     float x0=min(max(p.z,0.0f),m);
     if(m>0&&x0<m) {
         float scale=p.x/exp_minus_one_minus_x(p.y*(1-x0/m))*m;
-        for(uint c=0;c<3;++c)if(value[c]>x0)value[c]+=scale*exp_minus_one_minus_x(p.y*(value[c]-x0)/m);
+        // p.w: the maximum is an estimate from a coarser image; never extrapolate the curve past it.
+        for(uint c=0;c<3;++c)if(value[c]>x0)value[c]+=scale*exp_minus_one_minus_x(p.y*((p.w!=0?min(value[c],m):value[c])-x0)/m);
     }
     output[i]=float4(value,0);
 }
@@ -77,7 +315,7 @@ kernel void grain_layers_image(device const float4 *density [[buffer(0)]],device
                                device float4 *second [[buffer(2)]],device float4 *third [[buffer(3)]],
                                device const float4 *curves [[buffer(4)]],constant float4 *p [[buffer(5)]],
                                constant uint4& shape [[buffer(6)]],constant uint2& seed [[buffer(7)]],
-                               constant uint2& offset [[buffer(8)]],uint i [[thread_position_in_grid]]) {
+                               constant uint4& tile [[buffer(8)]],uint i [[thread_position_in_grid]]) {
     if(i>=shape.x)return;
     bool layers=shape.z!=0,positive=(shape.w&1)!=0;
     float3 split[3];
@@ -86,7 +324,7 @@ kernel void grain_layers_image(device const float4 *density [[buffer(0)]],device
         float3 layer=lookup_curve(float3(value),curves+ch*shape.y,shape.y);
         split[0][ch]=layer.x;split[1][ch]=layer.y;split[2][ch]=layer.z;
     }
-    uint n=layers?3:1;ulong pixel=(ulong(offset.y)<<32)+ulong(offset.x)+ulong(i);
+    uint n=layers?3:1;ulong pixel=ulong(tile.w+i/tile.x)*ulong(tile.y)+ulong(tile.z+i%tile.x);
     for(uint layer=0;layer<n;++layer) {
         float3 value=layers?split[layer]+p[6+layer].xyz:density[i].xyz+p[6].xyz,result;
         for(uint ch=0;ch<3;++ch) {
@@ -100,10 +338,11 @@ kernel void grain_layers_image(device const float4 *density [[buffer(0)]],device
 }
 kernel void random_lognormal_image(device float4 *output [[buffer(0)]],constant float2& p [[buffer(1)]],
                                    constant uint4& shape [[buffer(2)]],constant uint2& seed [[buffer(3)]],
-                                   constant uint& independent [[buffer(4)]],uint i [[thread_position_in_grid]]) {
+                                   constant uint& independent [[buffer(4)]],constant uint4& tile [[buffer(5)]],
+                                   uint i [[thread_position_in_grid]]) {
     if(i>=shape.x)return;
     float variance=log(1+(p.y/p.x)*(p.y/p.x)),sigma=sqrt(variance),mu=log(p.x)-variance*0.5f;
-    float3 value;ulong pixel=(ulong(shape.w)<<32)+ulong(shape.z)+ulong(i);
+    float3 value;ulong pixel=ulong(tile.w+i/tile.x)*ulong(tile.y)+ulong(tile.z+i%tile.x);
     for(uint ch=0;ch<(independent!=0?3:1);++ch) {
         GrainStream random={pixel,shape.y+ch,seed,0,4,uint4(0)};
         float normal=sigma<1e-6f?0:sqrt(-2*log(grain_uniform(random)))*cos(2*M_PI_F*grain_uniform(random));
@@ -122,4 +361,45 @@ kernel void finish_grain_image(device const float4 *first [[buffer(0)]],device c
 kernel void apply_glare_image(device float4 *xyz [[buffer(0)]],device const float4 *glare [[buffer(1)]],
                               constant float4& white [[buffer(2)]],constant uint& count [[buffer(3)]],uint i [[thread_position_in_grid]]) {
     if(i<count)xyz[i].xyz+=white.xyz*(glare[i].x/100.0f);
+}
+// Tiled export. A low-resolution proxy of the whole frame carries the wide kernels;
+// each proxy pixel is the area mean of a factor x factor block of the full image.
+// The proxy has one extra column and row before the image. They hold the means of the image's
+// own first column and row, so a recursive filter starts from the same constant extension
+// as it does on the full frame instead of from a block mean.
+// a: (tile width, padded proxy width, padded proxy height, factor); b: payload origin in the
+// tile and its size; c: (image x, image y) of the payload origin.
+kernel void tile_downsample(device const float4 *tile [[buffer(0)]],device float4 *proxy [[buffer(1)]],
+                            constant uint4 &a [[buffer(2)]],constant uint4 &b [[buffer(3)]],
+                            constant uint4 &c [[buffer(4)]],uint2 id [[thread_position_in_grid]]) {
+    uint f=a.w,lx=c.x/f+id.x+1,ly=c.y/f+id.y+1;
+    if(id.x*f>=b.z||id.y*f>=b.w||lx>=a.y||ly>=a.z)return;
+    uint x0=id.x*f,x1=min(x0+f,b.z),y0=id.y*f,y1=min(y0+f,b.w);
+    float3 sum=0,left=0,top=0;
+    for(uint y=y0;y<y1;++y)for(uint x=x0;x<x1;++x)sum+=tile[(b.y+y)*a.x+b.x+x].xyz;
+    proxy[ly*a.y+lx]=float4(sum/float((x1-x0)*(y1-y0)),0);
+    if(lx==1){for(uint y=y0;y<y1;++y)left+=tile[(b.y+y)*a.x+b.x].xyz;proxy[ly*a.y]=float4(left/float(y1-y0),0);}
+    if(ly==1){for(uint x=x0;x<x1;++x)top+=tile[b.y*a.x+b.x+x].xyz;proxy[lx]=float4(top/float(x1-x0),0);}
+    if(lx==1&&ly==1)proxy[0]=float4(tile[b.y*a.x+b.x].xyz,0);
+}
+// Drop the extra column and row: a (padded width, width, height).
+kernel void proxy_crop(device const float4 *padded [[buffer(0)]],device float4 *output [[buffer(1)]],
+                       constant uint4 &a [[buffer(2)]],uint i [[thread_position_in_grid]]) {
+    if(i<a.y*a.z)output[i]=padded[(i/a.y+1)*a.x+i%a.y+1];
+}
+// a: (tile width, tile height, image x, image y); b: (proxy row length, image columns in the
+// proxy, image rows in the proxy, factor); c: (leading pad, add to output).
+kernel void tile_sample_proxy(device const float4 *proxy [[buffer(0)]],device float4 *output [[buffer(1)]],
+                              constant uint4 &a [[buffer(2)]],constant uint4 &b [[buffer(3)]],
+                              constant uint2 &c [[buffer(4)]],uint i [[thread_position_in_grid]]) {
+    if(i>=a.x*a.y)return;
+    float2 p=(float2(a.z+i%a.x,a.w+i/a.x)+0.5f)/float(b.w)-0.5f;
+    p=clamp(p,float2(0),float2(b.y-1,b.z-1));
+    uint x0=uint(p.x),y0=uint(p.y),x1=min(x0+1,b.y-1),y1=min(y0+1,b.z-1);
+    float fx=p.x-float(x0),fy=p.y-float(y0);
+    x0+=c.x;x1+=c.x;y0+=c.x;y1+=c.x;
+    float3 top=mix(proxy[y0*b.x+x0].xyz,proxy[y0*b.x+x1].xyz,fx);
+    float3 bottom=mix(proxy[y1*b.x+x0].xyz,proxy[y1*b.x+x1].xyz,fx);
+    float3 value=mix(top,bottom,fy);
+    output[i]=float4(c.y!=0?output[i].xyz+value:value,0);
 }

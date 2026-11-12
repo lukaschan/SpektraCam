@@ -67,8 +67,7 @@ struct PhotoDetailView: View {
             ToolbarItem(placement: .principal) {
                 if let photo { PhotoBanner(photo: photo) }
             }
-            ToolbarItem(placement: .topBarTrailing) { CameraButton() }
-                .sharedBackgroundVisibility(.hidden)
+            PhotoWorkspaceCameraToolbar()
         }
         .task(id: "\(selectedID)-\(photo?.renderKey ?? "")-\(previewMaximum)") {
             await loadPreview()
@@ -202,7 +201,9 @@ struct PhotoDetailView: View {
                     let session = EditorSession(
                         photo: imported, recipe: recipe, luts: library.luts,
                         resources: library.images.resources, sourceFilename: photo.filename)
-                    if let image, photo.hasEdits { session.displayImage = image }
+                    if let image, photo.hasEdits, recipe?.filmEdgeLayout == nil, recipe?.printLayout == nil {
+                        session.displayImage = image
+                    }
                     if exporting {
                         export = ExportRequest(
                             session: session, originalURL: library.files.sourceURL(photo), sourceFilename: photo.filename)
