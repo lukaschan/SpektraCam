@@ -46,7 +46,7 @@ struct DarkroomView: View {
                             (.filmEdge, String(localized: "darkroom.film_edge_later", defaultValue: "Film edge")),
                         ],
                         selection: Binding(get: { edge == nil ? .cleanPrint : .filmEdge },
-                            set: { edge = $0 == .filmEdge ? (edge ?? FilmEdgeLayout()) : nil }), prefix: "darkroom.")
+                            set: { edge = $0 == .filmEdge ? (edge ?? FilmEdgeLayout.newDefault()) : nil }), prefix: "darkroom.")
                     PanelExpansionButton(expanded: $expanded, identifier: "darkroom.expand")
                 }
                 .dynamicTypeSize(...DynamicTypeSize.large)
@@ -91,7 +91,7 @@ struct DarkroomView: View {
             }
             Picker(String(localized: "darkroom.edge.format", defaultValue: "Film format"), selection: Binding(
                 get: { edge?.format ?? .film35 }, set: { format in
-                    var next = edge ?? FilmEdgeLayout()
+                    var next = edge ?? FilmEdgeLayout.newDefault()
                     next.format = format
                     edge = next
                 })) {
@@ -104,6 +104,15 @@ struct DarkroomView: View {
             }
             Text(String(localized: "darkroom.edge.aperture_note", defaultValue: "35 mm uses a fixed 3:2 crop. 120 uses a square crop without perforations."))
                 .font(.caption).foregroundStyle(.secondary)
+            Picker(String(localized: "darkroom.gate", defaultValue: "Gate"), selection: Binding(
+                get: { edge?.gateShape ?? FilmEdgeLayout.preferredGateShape }, set: { shape in
+                    var next = edge ?? FilmEdgeLayout.newDefault()
+                    next.gateShape = shape
+                    FilmEdgeLayout.preferredGateShape = shape
+                    edge = next
+                })) {
+                ForEach(FilmEdgeLayout.GateShape.allCases, id: \.self) { Text($0.title).tag($0) }
+            }.accessibilityIdentifier("darkroom.edge.gateShape")
             Divider().padding(.vertical, 4)
             distressControls
         }
@@ -112,7 +121,7 @@ struct DarkroomView: View {
     // MARK: Distress — presets for a quick start, every physical parameter for fine control.
     private var distress: FilmEdgeDistress { edge?.distress ?? FilmEdgeDistress() }
     private func setDistress(_ change: (inout FilmEdgeDistress) -> Void) {
-        var next = edge ?? FilmEdgeLayout()
+        var next = edge ?? FilmEdgeLayout.newDefault()
         change(&next.distress)
         edge = next
     }
@@ -154,22 +163,22 @@ struct DarkroomView: View {
                                        step: 0.01, unit: "°", identifier: "tilt", fillOrigin: 0)
                     }
                     distressGroup(String(localized: "darkroom.distress.sprockets", defaultValue: "Sprocket holes")) {
-                        distressSlider(String(localized: "darkroom.distress.perforation_wear", defaultValue: "Hole wear"), \.perforationWear,
-                                       scale: 100, step: 1, unit: "%", identifier: "perforationWear")
+                        distressSlider(String(localized: "darkroom.distress.hole_variation", defaultValue: "Hole variation"), \.holeVariation,
+                                       scale: 100, step: 1, unit: "%", identifier: "holeVariation")
                         distressSlider(String(localized: "darkroom.distress.perforation_leak", defaultValue: "Light through holes"), \.perforationLeak,
                                        scale: 100, step: 1, unit: "%", identifier: "perforationLeak")
                     }
                     distressGroup(String(localized: "darkroom.distress.carrier", defaultValue: "Carrier and holder")) {
+                        distressSlider(String(localized: "darkroom.distress.carrier_blur", defaultValue: "Holder blur"), \.carrierBlur,
+                                       step: 0.01, unit: "mm", identifier: "carrierBlur")
+                        distressSlider(String(localized: "darkroom.distress.carrier_detail", defaultValue: "Holder edge detail"), \.carrierDetail,
+                                       scale: 100, step: 1, unit: "%", identifier: "carrierDetail")
                         distressSlider(String(localized: "darkroom.distress.carrier_roughness", defaultValue: "Filed roughness"), \.carrierRoughness,
                                        step: 0.01, unit: "mm", identifier: "carrier")
                         distressSlider(String(localized: "darkroom.distress.carrier_scale", defaultValue: "Roughness scale"), \.carrierScale,
                                        step: 0.05, unit: "mm", identifier: "carrierScale")
                         distressSlider(String(localized: "darkroom.distress.carrier_reflection", defaultValue: "Edge reflection (print)"), \.carrierReflection,
                                        scale: 100, step: 1, unit: "%", identifier: "carrierReflection")
-                        distressSlider(String(localized: "darkroom.distress.tape", defaultValue: "Tape"), \.tape,
-                                       scale: 100, step: 1, unit: "%", identifier: "tape")
-                        distressSlider(String(localized: "darkroom.distress.tape_age", defaultValue: "Tape age"), \.tapeAge,
-                                       scale: 100, step: 1, unit: "%", identifier: "tapeAge")
                     }
                     distressGroup(String(localized: "darkroom.distress.light", defaultValue: "Fog and leaks")) {
                         distressSlider(String(localized: "darkroom.distress.edge_fog", defaultValue: "Edge fog"), \.edgeFog,

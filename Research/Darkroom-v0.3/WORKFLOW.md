@@ -2,6 +2,22 @@
 
 Updated 2026-11-10. This file is the repository handoff point; read it before continuing Darkroom work. Changes are local and uncommitted. Preserve the preexisting Xcode project version/signing edits.
 
+## Nov 11 — Edge refinement from Runze's scans (distress revision 3)
+
+References: Runze's camera scans P1485659 (Gold 200), P1485695 and P1485707 (UltraMax 400), kept outside the repository. Edge cache key `v15`.
+
+- **Presets:** Clean · Lab scan · Hand print · Old camera · Light leak. Filed carrier removed. Only Old camera carries dirt (dust and scratches). **Tape removed** everywhere.
+- **White rim fixed (creative routes):** with Develop off, a LUT or a cross-family edge, the centre is composited through the soft gate over the material render. Inside the penumbra that render held its own developed image, which showed as a light rim (slide, cinema, faintly print). `FilmEdgeGeometry.erodesGate` now stops the material graph's scene at the inner edge of the penumbra, so the centre fades straight into rebate. Matched routes were already physical; the small DIR adjacency overshoot is film chemistry and kept. Regression test: creative slide/cinema/print with 100 µm softness show no peak above the interior.
+- **Hole variation** (default 50 %, replaces hole wear): per-hole punch tolerance (±12 µm along, ±10 µm across, ±8 µm size, faint edge texture) plus a thin, streaky **light-piping rim** of base-path fog at the cut hole wall. That rim prints orange on RA-4/inverted scans, as in P1485695.
+- **Sprockets stay pure:** new test, with leaks, fog and perforation fog at full: interior sprocket pixels are identical to a leak-free render on all four routes.
+- **Holder:** the canvas now extends 0.5 mm past the carrier opening. Defaults are a defocused holder edge (`carrierBlur` 0.35 mm penumbra radius) and organic abrasion specks (`carrierDetail` 30 %). On a print the opaque holder is white and the clear holes fade through orange into it, as in P1485707/P1485659. Canvas is 38.6 × 27.4 mm for 135.
+- **Scratches:** 16 candidates, clustered in four rail bands, mostly faint with a few strong, often dashed (per-scratch dash length/bias), thinner (3–15 µm), 75 % scatter (blue-white on prints), 25 % shallow emulsion cuts.
+- **Gate shapes:** Standard (default), Rounded corners (0.45 mm), Film bulge, Film dip (edges bow 35–50 µm) and Tilted plane (keystone ~40 µm). The choice is saved per edit and remembered (`UserDefaults` `darkroom.gateShape`) as the default for the next film edge.
+
+- **Scatter colour:** scratch scatter weights are now Rayleigh-like λ⁻⁴ (0.23 / 0.45 / 1.0), so rail scuffs print blue-violet as in the scans. Old camera scratches are stronger (65 %, wider 4–20 µm, stronger scatter).
+
+Verification: `python3 Scripts/core-checks.py film-edge` passes on the final code. Default-route CPU/Metal max is 2.2e-5; full distress parity max is 5.3e-5. The complete `python3 Scripts/check-darkroom.py` suite passed, with 6/6 UI tests (`/private/tmp/spektrafilm-build/darkroom-workflow-1794442189678225000.xcresult`), before the final scatter-weight/scratch tweak, which film-edge then re-verified. `editor-session-benchmark` needed `PhotoCanvas` and `PhotoInfoPanel` in its compile list after the zoom-overlay commit. Proof crops against P1485707 are in the vault, `02_Projects/SpektraCam/Claude/Edge-proof-nov11/`, outside the repo. A generic iOS Release build succeeded; the iPhone was unavailable for install. The default-route CPU/Metal tolerance is now 3e-4 because defaults include seeded hole and holder noise (observed max ≈1.1e-4).
+
 ## Nov 10 (evening) — Seeded distress, BH perforations and penumbra
 
 `FilmEdgeLayout.distress` (`FilmEdgeDistress`, algorithm revision 2) is saved with the edge. Six presets (Clean, Lab scan, Filed carrier, Hand print, Old camera, Light leak) plus a global **Amount** (scales intensities only) and a dice seed; every physical field is under **Fine-tune**. All fields are in film millimetres with independent seeded streams; Strength activates fixed candidates, never reshuffles them. Edge-only cache key is now `v14-distress-`.

@@ -565,9 +565,13 @@ actor PhotoRenderer {
             allowsStore: true)
         let pipeline = try await renderResources.pipeline(material)
         let composes = material.processingRecipe != recipe.processingRecipe
+        // A composed centre fades through the soft gate itself, so the material graph's scene must
+        // stop inside the penumbra; otherwise its own developed image shows as a rim.
+        var materialGeometry = geometry
+        materialGeometry.erodesGate = composes
         var image = try await filmImage(
             FilmEdgeRenderer.padded(input, geometry: geometry), pipeline: pipeline, gpu: gpu,
-            autoExposureEV: autoEV, edge: geometry,
+            autoExposureEV: autoEV, edge: materialGeometry,
             finished: !composes && original.tone.outputStage.isIdentity)
         try Task.checkCancellation()
         if composes {

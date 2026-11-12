@@ -67,7 +67,7 @@ for key, (files, arguments) in checks.items():
  if 'LibraryImages' in files and 'ImageRequestPool' not in files:
   files.append('ImageRequestPool')
 checks['image-requests'] = (['ImageRequestPool'], [])
-checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','EditorDefaults','PhotoHistogram','LUTLibrary'])), ['.'])
+checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','EditorDefaults','PhotoHistogram','LUTLibrary','PhotoCanvas','PhotoInfoPanel'])), ['.'])
 checks['editor-benchmark'] = (checks['processed-export'][0], ['.'])
 checks['lut-grain'] = (checks['processed-export'][0], ['.'])
 checks['film-edge'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer', 'BatchPhotoExporter'])), ['.'])

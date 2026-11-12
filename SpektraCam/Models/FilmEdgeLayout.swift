@@ -6,6 +6,31 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
     enum Format: String, Codable, CaseIterable, Sendable { case film35, roll120 }
     var format = Format.film35
     var distress = FilmEdgeDistress()
+    /// Subtle per-camera aperture outline and film-flatness variations; one is the default.
+    enum GateShape: String, Codable, CaseIterable, Sendable {
+        case standard, rounded, bowed, pinched, keystone
+        var title: String {
+            switch self {
+            case .standard: String(localized: "darkroom.gate.standard", defaultValue: "Standard")
+            case .rounded: String(localized: "darkroom.gate.rounded", defaultValue: "Rounded corners")
+            case .bowed: String(localized: "darkroom.gate.bowed", defaultValue: "Film bulge")
+            case .pinched: String(localized: "darkroom.gate.pinched", defaultValue: "Film dip")
+            case .keystone: String(localized: "darkroom.gate.keystone", defaultValue: "Tilted plane")
+            }
+        }
+    }
+    var gateShape = GateShape.standard
+    /// The last gate a person chose becomes the default for their next film edge.
+    static let gateShapeKey = "darkroom.gateShape"
+    static var preferredGateShape: GateShape {
+        get { UserDefaults.standard.string(forKey: gateShapeKey).flatMap(GateShape.init(rawValue:)) ?? .standard }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: gateShapeKey) }
+    }
+    static func newDefault() -> Self {
+        var layout = Self()
+        layout.gateShape = preferredGateShape
+        return layout
+    }
     var gateSize: CGSize { format == .film35 ? CGSize(width: 36, height: 24) : CGSize(width: 56, height: 56) }
     var cropAspect: CropAspect { format == .film35 ? .threeTwo : .rollSquare }
     func gateTitle(portrait: Bool) -> String {
@@ -28,22 +53,23 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         return abs(max(imageSize.width, imageSize.height) - min(imageSize.width, imageSize.height) * ratio) <= ratio
     }
     init() {}
-    enum CodingKeys: String, CodingKey { case format, distress }
+    enum CodingKeys: String, CodingKey { case format, distress, gateShape }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         format = try values.decodeIfPresent(Format.self, forKey: .format) ?? .film35
         distress = try values.decodeIfPresent(FilmEdgeDistress.self, forKey: .distress) ?? FilmEdgeDistress()
+        gateShape = (try? values.decodeIfPresent(GateShape.self, forKey: .gateShape)) ?? .standard
     }
 }
 
 /// Procedural, seeded imperfections in physical film millimetres. Every field is placed at
 /// the stage where its mechanism acts (see Research/Darkroom-v0.3/DISTRESS-AND-LEAKS.md):
 /// camera gate, leaks and perforation fog are exposure before development; scratches thin the
-/// developed dye or scatter light; dust, tape and the carrier act where the film is printed or
+/// developed dye or scatter light; dust and the carrier/holder act where the film is printed or
 /// scanned. `amount` scales only intensities, so beginners can dial a preset while geeks edit
 /// fields. These ranges are engineering choices, not calibrated measurements.
 nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
-    static let algorithmRevision = 2
+    static let algorithmRevision = 3
     /// Through the lens (front) light is gated with the scene and reaches the top, blue-sensitive
     /// layer first; a back/door-seal leak bypasses the gate and enters through the base.
     enum LeakKind: String, Codable, CaseIterable, Sendable { case back, front }
@@ -55,15 +81,19 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     var gateSoftness = 0.02
     var gateWear = 0.0
     var tilt = 0.0
-    /// Sprocket teeth strain the hole edges; light through the holes of the outer wrap fogs the next.
-    var perforationWear = 0.0
+    /// Natural, always-present hole differences: punch tolerance between holes and the thin rim
+    /// where light piped in through the cut hole wall fogged the bottom (red-sensitive) layer.
+    var holeVariation = 0.5
+    /// Light through the holes of the outer wrap fogs the next one.
     var perforationLeak = 0.0
     var carrierRoughness = 0.0
     var carrierScale = 1.2
+    /// The holder/carrier is not in the film plane, so its edge is out of focus (penumbra radius, mm).
+    var carrierBlur = 0.35
+    /// An abraded holder edge lets specks of light through near the edge.
+    var carrierDetail = 0.3
     /// Unmasked enlarger light reflected by a bare-metal carrier edge onto the paper (prints only).
     var carrierReflection = 0.0
-    var tape = 0.0
-    var tapeAge = 0.4
     var edgeFog = 0.0
     var fogDepth = 2.0
     var leak = 0.0
@@ -81,47 +111,42 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
 
     static let ranges: [WritableKeyPath<Self, Double>: ClosedRange<Double>] = [
         \.amount: 0...2, \.gateSoftness: 0...0.12, \.gateWear: 0...0.12, \.tilt: -1...1,
-        \.perforationWear: 0...1, \.perforationLeak: 0...1,
-        \.carrierRoughness: 0...0.5, \.carrierScale: 0.2...4, \.carrierReflection: 0...1,
-        \.tape: 0...1, \.tapeAge: 0...1, \.edgeFog: 0...1, \.fogDepth: 0.3...8,
+        \.holeVariation: 0...1, \.perforationLeak: 0...1,
+        \.carrierRoughness: 0...0.5, \.carrierScale: 0.2...4, \.carrierBlur: 0...1, \.carrierDetail: 0...1,
+        \.carrierReflection: 0...1, \.edgeFog: 0...1, \.fogDepth: 0.3...8,
         \.leak: 0...1, \.leakSize: 2...30, \.leakPosition: 0...1, \.warmth: -1...1,
         \.dust: 0...1, \.scratches: 0...1,
     ]
     static func defaultWarmth(_ kind: LeakKind) -> Double { kind == .front ? -0.4 : 0.6 }
 
     enum Preset: String, CaseIterable, Sendable {
-        case clean, lab, filed, handPrint, worn, leaky
+        case clean, lab, handPrint, worn, leaky
         var title: String {
             switch self {
             case .clean: String(localized: "darkroom.distress.clean", defaultValue: "Clean")
             case .lab: String(localized: "darkroom.distress.lab", defaultValue: "Lab scan")
-            case .filed: String(localized: "darkroom.distress.filed", defaultValue: "Filed carrier")
             case .handPrint: String(localized: "darkroom.distress.hand_print", defaultValue: "Hand print")
             case .worn: String(localized: "darkroom.distress.worn", defaultValue: "Old camera")
             case .leaky: String(localized: "darkroom.distress.leaky", defaultValue: "Light leak")
             }
         }
+        /// Only Old camera carries dirt; the others stay clean apart from natural hole variation.
         var values: FilmEdgeDistress {
             var d = FilmEdgeDistress()
             switch self {
             case .clean: break
             case .lab:
-                d.gateWear = 0.012; d.tilt = 0.12; d.carrierRoughness = 0.04; d.perforationWear = 0.15
-                d.edgeFog = 0.08; d.fogDepth = 1.5; d.dust = 0.18; d.scratches = 0.06
-            case .filed:
-                d.gateWear = 0.02; d.tilt = 0.08; d.carrierRoughness = 0.22; d.carrierScale = 1.8
-                d.perforationWear = 0.2; d.dust = 0.12; d.scratches = 0.04
+                d.gateWear = 0.012; d.tilt = 0.12; d.edgeFog = 0.06; d.fogDepth = 1.5
             case .handPrint:
-                d.gateWear = 0.015; d.tilt = 0.18; d.carrierRoughness = 0.06; d.carrierReflection = 0.45
-                d.tape = 0.6; d.tapeAge = 0.5; d.perforationWear = 0.2; d.dust = 0.22; d.scratches = 0.08
+                d.gateWear = 0.015; d.tilt = 0.18; d.carrierRoughness = 0.05; d.carrierReflection = 0.45
             case .worn:
                 d.gateSoftness = 0.035; d.gateWear = 0.05; d.tilt = 0.3; d.carrierRoughness = 0.08
-                d.perforationWear = 0.5; d.perforationLeak = 0.25
+                d.holeVariation = 0.8; d.perforationLeak = 0.25
                 d.edgeFog = 0.3; d.fogDepth = 3; d.leak = 0.3; d.leakSize = 10; d.warmth = 0.7
-                d.dust = 0.4; d.scratches = 0.35
+                d.dust = 0.4; d.scratches = 0.65
             case .leaky:
                 d.gateWear = 0.015; d.tilt = 0.1; d.edgeFog = 0.35; d.fogDepth = 4.5; d.perforationLeak = 0.35
-                d.leak = 0.5; d.leakShape = .flare; d.leakSize = 14; d.warmth = 0.8; d.dust = 0.1
+                d.leak = 0.5; d.leakShape = .flare; d.leakSize = 14; d.warmth = 0.8
             }
             return d
         }
@@ -141,13 +166,14 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
         self = preset.values
         (seed, amount, leakPosition, scratchesInImage) = keep
     }
-    /// Intensities after the global Amount. Sizes, softness, depth and colour are unchanged.
+    /// Intensities after the global Amount. Natural properties (softness, hole variation, carrier
+    /// blur and detail), sizes, depth and colour are unchanged.
     var effective: Self {
         var e = self
         let a = max(0, amount)
         e.gateWear *= a; e.tilt *= a; e.carrierRoughness *= a
-        e.perforationWear = min(1, perforationWear * a); e.perforationLeak = min(1, perforationLeak * a)
-        e.carrierReflection = min(1, carrierReflection * a); e.tape = min(1, tape * a)
+        e.perforationLeak = min(1, perforationLeak * a)
+        e.carrierReflection = min(1, carrierReflection * a)
         e.edgeFog = min(1, edgeFog * a); e.leak = min(1, leak * a)
         e.dust = min(1, dust * a); e.scratches = min(1, scratches * a)
         return e
@@ -155,8 +181,8 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
 
     init() {}
     enum CodingKeys: String, CodingKey {
-        case revision, seed, amount, gateSoftness, gateWear, tilt, perforationWear, perforationLeak,
-            carrierRoughness, carrierScale, carrierReflection, tape, tapeAge,
+        case revision, seed, amount, gateSoftness, gateWear, tilt, holeVariation, perforationLeak,
+            carrierRoughness, carrierScale, carrierBlur, carrierDetail, carrierReflection,
             edgeFog, fogDepth, leak, leakKind, leakShape, leakSize, leakPosition, warmth, dust, scratches, scratchesInImage
     }
     init(from decoder: Decoder) throws {
@@ -174,13 +200,13 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
         gateSoftness = try n(.gateSoftness, \.gateSoftness)
         gateWear = try n(.gateWear, \.gateWear)
         tilt = try n(.tilt, \.tilt)
-        perforationWear = try n(.perforationWear, \.perforationWear)
+        holeVariation = try n(.holeVariation, \.holeVariation)
         perforationLeak = try n(.perforationLeak, \.perforationLeak)
         carrierRoughness = try n(.carrierRoughness, \.carrierRoughness)
         carrierScale = try n(.carrierScale, \.carrierScale)
+        carrierBlur = try n(.carrierBlur, \.carrierBlur)
+        carrierDetail = try n(.carrierDetail, \.carrierDetail)
         carrierReflection = try n(.carrierReflection, \.carrierReflection)
-        tape = try n(.tape, \.tape)
-        tapeAge = try n(.tapeAge, \.tapeAge)
         edgeFog = try n(.edgeFog, \.edgeFog)
         fogDepth = try n(.fogDepth, \.fogDepth)
         leak = try n(.leak, \.leak)
@@ -244,7 +270,13 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// Seeded, resolution-independent features, computed once per geometry.
     let leakFrame: LeakFrame
     let scratchCandidates: [Scratch]
-    let tapePieces: [TapePiece]
+    let gateShape: FilmEdgeLayout.GateShape
+    /// Carrier opening half sizes in transport/across axes (mm); the canvas extends past them so
+    /// the out-of-focus holder edge is visible.
+    let carrierHalf: (along: Double, across: Double)
+    /// Creative routes: the material graph's scene stops at the inner edge of the penumbra, so a
+    /// separately developed centre can fade straight into rebate without a rim of the material image.
+    var erodesGate = false
     static let stockWidth = 34.975
     static let holeAcross = 2.794, holeAlong = 1.981, holeRadius = 0.51
     static let holePitch = 4.750, holeOuterGap = 2.01
@@ -288,8 +320,9 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     let perforation: Perforation
     /// Provisional rounded gate corner; replace with measurements of real camera strips.
     static let gateCorner = 0.15
+    static let roundedGateCorner = 0.45
     static let rollStockWidth = 61.0
-    static let scratchCount = 8
+    static let scratchCount = 16
 
     /// What a transmission node does. Damage is source-film material; the carrier masks light
     /// where printing or scanning happens; the endpoint keeps clear openings black on paper.
@@ -313,9 +346,11 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         portrait = imageSize.height > imageSize.width
         let short = layout.gateSize.height
         let long = layout.gateSize.width
-        let alongReveal = 0.8
-        let acrossReveal = format == .film35 ? 1.2 : 0.8
-        let extent = CGSize(width: long + 2 * alongReveal, height: short + 2 * acrossReveal)
+        gateShape = layout.gateShape
+        // Carrier opening (as before) plus room for the defocused holder edge beyond it.
+        let alongOpen = 0.8, acrossOpen = format == .film35 ? 1.2 : 0.8, holder = 0.5
+        carrierHalf = (long / 2 + alongOpen, short / 2 + acrossOpen)
+        let extent = CGSize(width: long + 2 * (alongOpen + holder), height: short + 2 * (acrossOpen + holder))
         let factor = Double(longEdge) / max(extent.width, extent.height)
         let landscapeSize = CGSize(width: max(1, (extent.width * factor).rounded()),
                                    height: max(1, (extent.height * factor).rounded()))
@@ -330,8 +365,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let ha = Double(portrait ? height : width) / factor / 2
         let ht = Double(portrait ? width : height) / factor / 2
         leakFrame = Self.leakFrame(distress, portrait: portrait, halfAlong: ha, halfAcross: ht)
-        scratchCandidates = Self.scratches(distress, halfAlong: ha, halfAcross: ht, gateAcross: short / 2)
-        tapePieces = Self.tapePieces(distress, halfAlong: ha, halfAcross: ht, gateAcross: short / 2)
+        scratchCandidates = Self.scratches(distress, halfAlong: ha, halfAcross: carrierHalf.across, gateAcross: short / 2)
     }
 
     var pixelPitchMicrometers: Double { millimetersPerPixel * 1000 }
@@ -355,15 +389,31 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     private var pixelRadius: Double { 0.56 * millimetersPerPixel }
     private func seed(_ stream: UInt32) -> UInt32 { Self.streamSeed(distress.seed, stream) }
 
+    /// Signed distance to the camera aperture in film x/y (> 0 outside), including the subtle
+    /// outline of the chosen gate: rounded corners, film bulge/dip (edges bow ~35–50 µm) or a
+    /// slightly tilted film plane (keystone ~40 µm). Engineering values, not camera measurements.
+    func gateDistance(_ fx: Double, _ fy: Double) -> Double {
+        var (hx, hy) = gateHalf
+        let ux = min(max(fx / hx, -1), 1), uy = min(max(fy / hy, -1), 1)
+        var corner = Self.gateCorner
+        switch gateShape {
+        case .standard: break
+        case .rounded: corner = Self.roundedGateCorner
+        case .bowed: hx += 0.035 * (1 - uy * uy); hy += 0.05 * (1 - ux * ux)
+        case .pinched: hx -= 0.035 * (1 - uy * uy); hy -= 0.05 * (1 - ux * ux)
+        case .keystone: hy *= 1 + 0.0035 * ux; hx += 0.03 * uy
+        }
+        return FilmEdgeNoise.box(fx, fy, hx, hy, corner)
+    }
     /// Camera-gate exposure coverage: penumbra, pixel area and seeded wear of the aperture edge.
     func gateCoverage(x: Int, y: Int) -> Double {
         let (fx, fy) = film(Double(x) + 0.5, Double(y) + 0.5)
-        let (hx, hy) = gateHalf
-        let base = FilmEdgeNoise.box(fx, fy, hx, hy, Self.gateCorner)
+        let base = gateDistance(fx, fy)
         let r = (distress.gateSoftness * distress.gateSoftness + pixelRadius * pixelRadius).squareRoot()
         let wear = distress.gateWear
-        if base < -(r + wear) { return 1 }
-        if base > r + wear { return 0 }
+        let shift = erodesGate ? r + wear : 0
+        if base + shift < -(r + wear) { return 1 }
+        if base + shift > r + wear { return 0 }
         var d = base
         if wear > 0 {
             let (a, t) = strip(fx, fy)
@@ -371,7 +421,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             let fine = FilmEdgeNoise.value(a / 0.16, t / 0.16, seed(2))
             d += wear * (0.65 * broad + 0.35 * fine)
         }
-        return FilmEdgeNoise.penumbra(d, r)
+        return erodesGate ? FilmEdgeNoise.penumbra(d + shift, pixelRadius) : FilmEdgeNoise.penumbra(d, r)
     }
 
     /// Unwanted exposure, relative to a mid-grey scene exposure. `front` light comes through the
@@ -389,6 +439,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             e.fog += 6 * distress.edgeFog * distress.edgeFog * exp(-distance / distress.fogDepth) * (0.6 + 0.4 * n)
         }
         if distress.perforationLeak > 0 && format == .film35 { e.fog += perforationFog(a, t) }
+        if distress.holeVariation > 0 && format == .film35 { e.fog += holeRim(a, t) }
         if distress.leak > 0 {
             let value = 6 * distress.leak * distress.leak * leakField(fx, fy)
             if distress.leakKind == .front { e.front = value } else { e.back = value }
@@ -419,6 +470,17 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             let band = 0.8 + 0.2 * FilmEdgeNoise.value(lateral / (1.5 * size), 0.5, seed(4))
             return exp(-depth / (2.2 * size)) * broad * band
         }
+    }
+    /// Light piped in through the cut hole wall fogs a thin rim around each hole — strongest on
+    /// the bottom, red-sensitive layer, so an orange, streaky rim on a print or inverted scan.
+    private func holeRim(_ a: Double, _ t: Double) -> Double {
+        let hole = jittered(perforation.hole(along: a, across: t), perforation)
+        guard hole.distance > -0.004, hole.distance < 0.2 else { return 0 }
+        let v = distress.holeVariation
+        let h = FilmEdgeNoise.hash(hole.index, hole.side, seed(47))
+        let strength = 0.35 + 0.65 * FilmEdgeNoise.unit(h)
+        let streak = min(max(0.3 + 0.7 * FilmEdgeNoise.value(hole.local / 0.05, hole.t / 0.05 + Double(hole.index) * 5.3, seed(48)), 0), 1)
+        return 2 * v * strength * streak * exp(-max(hole.distance, 0) / 0.03)
     }
     /// Light through a hole of the wrap above: a softened image of the hole, displaced toward the
     /// picture, on a seeded subset of holes. Very small exposures; through the base (warm).
@@ -473,57 +535,38 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     func supportCoverage(x: Int, y: Int, destination: Bool = false) -> Double {
         guard format == .film35 else { return 1 }
         let kind = destination ? Perforation.ks1870 : perforation
-        let wear = destination ? 0 : distress.perforationWear
+        let vary = !destination && distress.holeVariation > 0
         var covered = 0.0
         for sy in 0..<4 { for sx in 0..<4 {
             let (fx, fy) = film(Double(x) + (Double(sx) + 0.5) / 4, Double(y) + (Double(sy) + 0.5) / 4)
             let (along, across) = strip(fx, fy)
             // Centered frame; phase is fixed, with no random shuffling.
             var hole = kind.hole(along: along, across: across)
-            if wear > 0 && abs(hole.distance) < 0.2 { hole = worn(hole, kind) }
+            if vary && abs(hole.distance) < 0.1 { hole = jittered(hole, kind) }
             if hole.distance >= 0 { covered += 1 }
         }}
         return covered / 16
     }
-    /// Punched edges are not perfect: fine per-hole roughness, and on a strained hole a small tear
-    /// on the side the sprocket teeth pull (+along). Hole size is otherwise the nominal standard.
-    private func worn(_ hole: Perforation.Hole, _ kind: Perforation) -> Perforation.Hole {
-        let wear = distress.perforationWear, s = seed(40)
-        let h0 = FilmEdgeNoise.hash(hole.index, hole.side, s)
-        let rough = (0.004 + 0.016 * wear * (0.4 + 0.6 * FilmEdgeNoise.unit(h0)))
-            * FilmEdgeNoise.value(hole.local / 0.045 + Double(hole.index) * 3.7, hole.t / 0.045 + Double(hole.side) * 11.1, s)
-        var tear = 0.0
-        let h1 = FilmEdgeNoise.hash(h0)
-        if FilmEdgeNoise.unit(h1) < wear * 0.7 {
-            let h2 = FilmEdgeNoise.hash(h1), h3 = FilmEdgeNoise.hash(h2)
-            let t0 = (FilmEdgeNoise.unit(h2) * 2 - 1) * 0.75 * kind.halfAcross
-            let width = 0.12 + 0.22 * FilmEdgeNoise.unit(h3), depth = (0.025 + 0.07 * FilmEdgeNoise.unit(h3)) * wear
-            let leading = pow(min(max(hole.local / kind.halfAlong, 0), 1), 4)
-            tear = depth * leading * exp(-pow((hole.t - t0) / width, 2))
-        }
-        return Perforation.Hole(index: hole.index, side: hole.side, local: hole.local, t: hole.t,
-                                distance: hole.distance + rough - tear)
-    }
-    /// The punched wall scatters a little light just outside each hole (a faint, patchy shoulder).
-    func perforationShoulder(x: Int, y: Int) -> Double {
-        let wear = distress.perforationWear
-        guard wear > 0, format == .film35 else { return 0 }
-        let (fx, fy) = film(Double(x) + 0.5, Double(y) + 0.5)
-        let (along, across) = strip(fx, fy)
-        let hole = perforation.hole(along: along, across: across)
-        guard hole.distance > -0.01, hole.distance < 0.15 else { return 0 }
-        let patch = 0.6 + 0.4 * FilmEdgeNoise.value(hole.local / 0.3, hole.t / 0.3 + Double(hole.index), seed(42))
-        return (0.03 + 0.1 * wear) * exp(-max(hole.distance, 0) / 0.035) * patch
+    /// Punch tolerance: each hole sits and sizes a few microns differently, with a faint edge texture.
+    func jittered(_ hole: Perforation.Hole, _ kind: Perforation) -> Perforation.Hole {
+        let v = distress.holeVariation, s = seed(40)
+        var h = FilmEdgeNoise.hash(hole.index, hole.side, s)
+        func next() -> Double { h = FilmEdgeNoise.hash(h); return FilmEdgeNoise.unit(h) * 2 - 1 }
+        let da = 0.012 * v * next(), dt = 0.01 * v * next(), grow = 0.008 * v * next()
+        let local = hole.local - da, t = hole.t - dt
+        let rough = 0.003 * v * FilmEdgeNoise.value(local / 0.045 + Double(hole.index) * 3.7, t / 0.045 + Double(hole.side) * 11.1, s)
+        return Perforation.Hole(index: hole.index, side: hole.side, local: local, t: t,
+                                distance: kind.distance(local: local, t: t) - grow + rough)
     }
 
-    /// Signed distance to the filed carrier opening (> 0 where the carrier blocks light), fixed to
-    /// the canvas: the film can tilt inside it.
+    /// Signed distance to the carrier/holder opening (> 0 where it blocks light), fixed to the
+    /// canvas: the film can tilt inside it.
     func carrierDistance(x: Int, y: Int) -> Double {
         let (cx, cy) = canvas(Double(x) + 0.5, Double(y) + 0.5)
-        let hx = Double(width) * millimetersPerPixel / 2, hy = Double(height) * millimetersPerPixel / 2
+        let (hx, hy) = portrait ? (carrierHalf.across, carrierHalf.along) : (carrierHalf.along, carrierHalf.across)
         let base = FilmEdgeNoise.box(cx, cy, hx, hy, 0)
         let amplitude = distress.carrierRoughness
-        guard amplitude > 0, base > -(amplitude * 1.6 + pixelRadius) else { return base }
+        guard amplitude > 0, base > -(amplitude * 1.6 + pixelRadius + distress.carrierBlur) else { return base }
         let (a, t) = strip(cx, cy)
         let scale = distress.carrierScale
         // Mostly smooth filing with a little file-tooth texture and a few sparse nicks.
@@ -533,9 +576,23 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let notch = min(max((n - 0.6) / 0.3, 0), 1)
         return base + amplitude * (broad + 0.5 * notch * notch * (3 - 2 * notch))
     }
+    /// Light passed by the holder: a defocused edge, plus specks of light through an abraded edge.
     func carrierCoverage(x: Int, y: Int) -> Double {
-        guard distress.carrierRoughness > 0 else { return 1 }
-        return FilmEdgeNoise.penumbra(carrierDistance(x: x, y: y), pixelRadius)
+        let d = carrierDistance(x: x, y: y)
+        let r = max(distress.carrierBlur, pixelRadius)
+        if d < -r { return 1 }
+        let open = FilmEdgeNoise.penumbra(d, r)
+        let detail = distress.carrierDetail
+        guard detail > 0, d < r + 0.45 else { return open }
+        let (cx, cy) = canvas(Double(x) + 0.5, Double(y) + 0.5)
+        let (a, t) = strip(cx, cy)
+        // Organic abrasion: two octaves, a soft threshold, patchy along the edge, densest at it.
+        let n = 0.6 * FilmEdgeNoise.value(a / 0.05, t / 0.05, seed(49)) + 0.4 * FilmEdgeNoise.value(a / 0.15, t / 0.15, seed(51))
+        let u = min(max((n - 0.15) / 0.55, 0), 1)
+        let patch = 0.5 + 0.5 * FilmEdgeNoise.value(a / 0.6, t / 0.6, seed(50))
+        let speck = u * u * (3 - 2 * u) * patch * patch
+        let gaps = detail * 0.5 * speck * exp(-max(d - r * 0.5, 0) / 0.12)
+        return open + (1 - open) * gaps
     }
     /// Enlarger light glancing off a bare-metal carrier edge lands just inside the opening without
     /// passing through the negative's mask, so on RA-4 it prints as a darker, coloured band.
@@ -548,41 +605,6 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let (a, t) = strip(cx, cy)
         let n = FilmEdgeNoise.value(a / 4, t / 4, seed(43))
         return 0.4 * r * exp(d / 0.45) * (0.7 + 0.3 * n)
-    }
-    /// Tape holding the strip in its holder: up to two pieces along the long edges, fixed to the
-    /// film. Frosted tape passes ~85 %; ageing yellows it (absorbs blue). Per-channel transmission.
-    func tapeTransmission(x: Int, y: Int) -> SIMD3<Double> {
-        let amount = distress.tape
-        guard amount > 0 else { return .one }
-        let (fx, fy) = film(Double(x) + 0.5, Double(y) + 0.5)
-        let (a, t) = strip(fx, fy)
-        var cover = 0.0
-        for piece in tapePieces {
-            let opacity = min(max(amount * 2 - piece.order, 0), 1)
-            if opacity <= 0 || (t < 0) != (piece.side < 0) { continue }
-            let wobble = 0.03 * FilmEdgeNoise.value(a / 1.5, piece.side * 5, seed(44))
-            let edge = piece.inner - abs(t) + wobble          // > 0 outside the tape
-            let ends = max(piece.start - a + 0.08 * t, a - piece.end - 0.06 * t)
-            cover = max(cover, opacity * FilmEdgeNoise.penumbra(max(edge, ends), 0.02 + pixelRadius))
-        }
-        if cover <= 0 { return .one }
-        let frost = 0.85 - 0.025 * FilmEdgeNoise.value(a / 0.3, t / 0.3, seed(45))
-        let age = distress.tapeAge
-        let tint = SIMD3(frost, frost * (1 - 0.1 * age), frost * (1 - 0.38 * age))
-        return 1 - cover * (1 - tint)
-    }
-    struct TapePiece: Sendable { let side, inner, start, end, order: Double }
-    static func tapePieces(_ d: FilmEdgeDistress, halfAlong ha: Double, halfAcross ht: Double, gateAcross: Double) -> [TapePiece] {
-        var h = streamSeed(d.seed, 46)
-        func next() -> Double { h = FilmEdgeNoise.hash(h); return FilmEdgeNoise.unit(h) }
-        let first: Double = next() < 0.5 ? -1 : 1
-        let reach = max(0.2, ht - gateAcross - 0.08)
-        return (0..<2).map { i in
-            let side = i == 0 ? first : -first
-            let inner = ht - (0.35 + 0.65 * next()) * reach
-            let start = -ha - 2 + next() * ha * 0.9, end = ha + 2 - next() * ha * 0.9
-            return TapePiece(side: side, inner: inner, start: start, end: end, order: Double(i))
-        }
     }
 
     /// Opaque particles on the developed film: specks and fibres, in film millimetres.
@@ -627,23 +649,32 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// Seeded scratch candidates; Strength activates them in order so none jumps.
     /// `depth` > 0 is an emulsion scratch cutting that fraction of the dye stack from the top;
     /// `depth` < 0 is a scatter scratch (base side or a light scuff) of strength |depth|.
-    struct Scratch: Sendable { let across, slope, wander, wavelength, phase, start, end, width, depth: Double }
+    /// Like real rail and sprocket wear they are long, thin, near-parallel and clustered in a few
+    /// bands, mostly faint with an occasional strong one, and often broken into dashes.
+    struct Scratch: Sendable { let across, slope, wander, wavelength, phase, start, end, width, depth, dash, bias: Double }
     static func scratches(_ d: FilmEdgeDistress, halfAlong ha: Double, halfAcross ht: Double, gateAcross: Double) -> [Scratch] {
-        (0..<scratchCount).map { k in
+        var b = streamSeed(d.seed, 19)
+        func band() -> Double { b = FilmEdgeNoise.hash(b); return FilmEdgeNoise.unit(b) }
+        let inner = gateAcross + 0.05, outer = max(inner + 0.05, ht - 0.03)
+        let bands = (0..<4).map { _ in inner + (outer - inner) * band() }
+        return (0..<scratchCount).map { k in
             var h = streamSeed(d.seed, UInt32(20 + k))
             func next() -> Double { h = FilmEdgeNoise.hash(h); return FilmEdgeNoise.unit(h) }
-            // Transport scratches from rails, sprockets and gate debris: long, nearly straight.
             let side: Double = next() < 0.5 ? -1 : 1
-            let inner = gateAcross + 0.12, outer = max(inner + 0.05, ht - 0.03)
-            let across = d.scratchesInImage ? (next() * 2 - 1) * ht : side * (inner + (outer - inner) * next())
-            let slope = (next() * 2 - 1) * 0.0015
-            let wander = 0.002 + 0.018 * next(), wavelength = 40 + 120 * next(), phase = next() * 6.2832
-            let span = ha * (0.9 + 1.3 * next()), center = (next() * 2 - 1) * ha
-            let width = 0.005 + 0.014 * next()
-            let emulsion = next() < 0.4
-            let depth = emulsion ? 0.05 + 0.95 * pow(next(), 1.6) : -(0.25 + 0.45 * next())
+            let center = bands[Int(next() * 3.999)]
+            let clustered = min(max(center + (next() * 2 - 1) * 0.15, inner), outer)
+            // Draw both positions every time so toggling the clamp never shifts other features.
+            let free = next(), anywhere = (next() * 2 - 1) * ht
+            let across = d.scratchesInImage && free < 0.6 ? anywhere : side * clustered
+            let slope = (next() * 2 - 1) * 0.0008
+            let wander = 0.001 + 0.008 * next(), wavelength = 60 + 140 * next(), phase = next() * 6.2832
+            let span = ha * (0.5 + 1.7 * next()), mid = (next() * 2 - 1) * ha
+            let width = 0.004 + 0.016 * pow(next(), 1.3)
+            let emulsion = next() < 0.25
+            let depth = emulsion ? 0.05 + 0.6 * pow(next(), 2) : -(0.18 + 0.8 * pow(next(), 1.4))
+            let dash = 0.6 + 6 * next(), bias = next() * 0.9 - 0.2
             return Scratch(across: across, slope: slope, wander: wander, wavelength: wavelength, phase: phase,
-                           start: center - span, end: center + span, width: width, depth: depth)
+                           start: mid - span, end: mid + span, width: width, depth: depth, dash: dash, bias: bias)
         }
     }
     /// Dye removed by emulsion scratches, top layer first. Colour film (still, cine and reversal)
@@ -660,8 +691,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let pr = pixelRadius
         var outside = 1.0
         if !distress.scratchesInImage {
-            let (hx, hy) = gateHalf
-            outside = 1 - FilmEdgeNoise.penumbra(FilmEdgeNoise.box(fx, fy, hx, hy, Self.gateCorner), pr)
+            outside = 1 - FilmEdgeNoise.penumbra(gateDistance(fx, fy), pr)
             if outside <= 0 { return result }
         }
         for (k, s) in scratchCandidates.enumerated() {
@@ -673,8 +703,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             let rr = max(s.width, pr * 0.9)
             if abs(t - line) > rr + pr { continue }
             // Pressure varies along the run: the scratch breaks up and fades rather than drawing a ruler line.
-            let pressure = FilmEdgeNoise.value(a / 2.5, Double(k) * 7.31, seed(30))
-            let broken = min(max((pressure + 0.45) / 0.5, 0), 1)
+            let pressure = FilmEdgeNoise.value(a / s.dash, Double(k) * 7.31, seed(30))
+            let broken = min(max((pressure + s.bias) / 0.35, 0), 1)
             let cover = (s.width / rr) * FilmEdgeNoise.penumbra(abs(t - line) - rr, pr) * ends * active * broken * outside
             if s.depth > 0 {
                 let d = s.depth * 3
@@ -687,26 +717,22 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         return result
     }
     /// Scattering removes more short-wavelength light from the transmitted beam; per output channel.
-    static let scatterWeights = SIMD3<Double>(0.55, 0.75, 1.0)
+    /// Rayleigh-like λ⁻⁴ relative to 450 nm: ≈0.23 at 650 nm, ≈0.45 at 550 nm.
+    static let scatterWeights = SIMD3<Double>(0.23, 0.45, 1.0)
     var hasEmulsionScratches: Bool { distress.scratches > 0 && scratchCandidates.contains { $0.depth > 0 } }
 
     /// Combine intact film and clear light in transmission; never average densities with air.
     func transmit(_ film: SIMD3<Double>, clear: SIMD3<Double>, x: Int, y: Int, mode: Transmission) -> SIMD3<Double> {
         let support = supportCoverage(x: x, y: y, destination: mode.contains(.destination))
         let carrier = mode.contains(.carrier) ? carrierCoverage(x: x, y: y) : 1
-        let tape = mode.contains(.carrier) ? tapeTransmission(x: x, y: y) : .one
-        if mode.contains(.endpoint) {
-            // Clear openings are the black reference, except where tape covers them.
-            let taped = 1 - (tape.x + tape.y + tape.z) / 3 / 0.85
-            return film * (1 - carrier * (1 - support) * (1 - min(max(taped, 0), 1)))
-        }
+        // Clear openings are the black reference wherever the carrier passes light.
+        if mode.contains(.endpoint) { return film * (1 - carrier * (1 - support)) }
         var occlusion = SIMD3<Double>.zero
         if mode.contains(.damage) {
             let dust = dustOcclusion(x: x, y: y), scatter = scratchFields(x: x, y: y).scatter
-            let shoulder = perforationShoulder(x: x, y: y)
-            occlusion = 1 - (1 - dust) * (1 - shoulder) * (1 - scatter * Self.scatterWeights)
+            occlusion = 1 - (1 - dust) * (1 - scatter * Self.scatterWeights)
         }
-        var light = (film * support + clear * (1 - support)) * (1 - occlusion * support) * tape * carrier
+        var light = (film * support + clear * (1 - support)) * (1 - occlusion * support) * carrier
         if mode.contains(.reflection) { light += clear * carrierReflection(x: x, y: y) * carrier }
         return light
     }
@@ -718,35 +744,31 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// Matches the Metal edge kernels. No full-frame mask bitmap is allocated.
     func uniforms(light: SIMD3<Double> = .zero, fogLight: SIMD3<Double> = .zero) -> [SIMD4<Float>] {
         let d = distress
-        let ha = Double(portrait ? height : width) * millimetersPerPixel / 2
-        let ht = Double(portrait ? width : height) * millimetersPerPixel / 2
         let (gx, gy) = gateHalf
         let leak = leakFrame
         var values: [SIMD4<Float>] = [
             SIMD4(Float(width), Float(height), Float(millimetersPerPixel), portrait ? 1 : 0),
-            SIMD4(Float(gx), Float(gy), Float(Self.gateCorner), Float(d.gateSoftness)),
+            SIMD4(Float(gx), Float(gy), Float(gateShape == .rounded ? Self.roundedGateCorner : Self.gateCorner), Float(d.gateSoftness)),
             SIMD4(format == .film35 ? 1 : 0, Float(Self.holeCenter), Float(Self.holeRadius), d.scratchesInImage ? 1 : 0),
-            SIMD4(0, 0, Float(cos(tiltRadians)), Float(sin(tiltRadians))),
+            SIMD4(Float(FilmEdgeLayout.GateShape.allCases.firstIndex(of: gateShape)!), erodesGate ? 1 : 0,
+                  Float(cos(tiltRadians)), Float(sin(tiltRadians))),
             SIMD4(Float(d.seed & 0xffff), Float(d.seed >> 16), Float(stockHalf), Float(d.gateWear)),
-            SIMD4(Float(d.carrierRoughness), Float(d.carrierScale), Float(ha), Float(ht)),
+            SIMD4(Float(d.carrierRoughness), Float(d.carrierScale), Float(carrierHalf.along), Float(carrierHalf.across)),
             SIMD4(Float(d.edgeFog), Float(d.fogDepth), Float(d.leak), Float(d.leakSize)),
             SIMD4(Float(leak.point.0), Float(leak.point.1), Float(leak.normal.0), Float(leak.normal.1)),
             SIMD4(Float(leak.offset), Float(leak.weight), Float(d.dust), Float(d.scratches)),
             SIMD4(Float(light.x), Float(light.y), Float(light.z), 0),
             SIMD4(Float(perforation.rawValue), Float(perforation.pitch), Float(perforation.halfAlong), Float(perforation.halfAcross)),
             SIMD4(0, Float(Perforation.ks1870.pitch), Float(Perforation.ks1870.halfAlong), Float(Perforation.ks1870.halfAcross)),
-            SIMD4(Float(d.perforationWear), Float(d.perforationLeak), d.leakKind == .front ? 1 : 0,
+            SIMD4(Float(d.holeVariation), Float(d.perforationLeak), d.leakKind == .front ? 1 : 0,
                   Float(FilmEdgeDistress.LeakShape.allCases.firstIndex(of: d.leakShape)!)),
             SIMD4(Float(fogLight.x), Float(fogLight.y), Float(fogLight.z), Float(d.carrierReflection)),
-            SIMD4(Float(d.tape), Float(d.tapeAge), Float(leak.direction.0), Float(leak.direction.1)),
+            SIMD4(Float(d.carrierBlur), Float(d.carrierDetail), Float(leak.direction.0), Float(leak.direction.1)),
         ]
-        for piece in tapePieces {
-            values.append(SIMD4(Float(piece.side), Float(piece.inner), Float(piece.start), Float(piece.end)))
-        }
         for s in scratchCandidates {
             values.append(SIMD4(Float(s.across), Float(s.wander), Float(s.wavelength), Float(s.phase)))
             values.append(SIMD4(Float(s.start), Float(s.end), Float(s.width), Float(s.depth)))
-            values.append(SIMD4(Float(s.slope), 0, 0, 0))
+            values.append(SIMD4(Float(s.slope), Float(s.dash), Float(s.bias), 0))
         }
         return values
     }
@@ -760,7 +782,10 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     func leakLight(neutral: SIMD3<Double>) -> SIMD3<Double> { Self.light(neutral: neutral, warmth: distress.warmth) }
     /// Edge piping and perforation fog travel in the base.
     func fogLight(neutral: SIMD3<Double>) -> SIMD3<Double> { Self.light(neutral: neutral, warmth: 0.7) }
-    var hasExposureNoise: Bool { distress.edgeFog > 0 || distress.leak > 0 || (distress.perforationLeak > 0 && format == .film35) }
+    var hasExposureNoise: Bool {
+        distress.edgeFog > 0 || distress.leak > 0
+            || (format == .film35 && (distress.perforationLeak > 0 || distress.holeVariation > 0))
+    }
 }
 
 extension EditRecipe {

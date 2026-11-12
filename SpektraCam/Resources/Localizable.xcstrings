@@ -3309,24 +3309,6 @@
         }
       }
     },
-    "darkroom.distress.filed" : {
-      "comment" : "Darkroom distress copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filed carrier"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "锉边片夹"
-          }
-        }
-      }
-    },
     "darkroom.distress.fine_tune" : {
       "comment" : "Darkroom distress copy; human editorial review pending.",
       "extractionState" : "manual",
@@ -3669,24 +3651,6 @@
         }
       }
     },
-    "darkroom.distress.perforation_wear" : {
-      "comment" : "Darkroom distress copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hole wear"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "齿孔磨损"
-          }
-        }
-      }
-    },
     "darkroom.distress.scratches" : {
       "comment" : "Darkroom distress copy; human editorial review pending.",
       "extractionState" : "manual",
@@ -3809,42 +3773,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "齿孔"
-          }
-        }
-      }
-    },
-    "darkroom.distress.tape" : {
-      "comment" : "Darkroom distress copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tape"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "胶带"
-          }
-        }
-      }
-    },
-    "darkroom.distress.tape_age" : {
-      "comment" : "Darkroom distress copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tape age"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "胶带老化"
           }
         }
       }
@@ -10331,6 +10259,168 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法渲染图像调整。"
+          }
+        }
+      }
+    },
+    "darkroom.distress.carrier_blur" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Holder blur"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "片夹虚化"
+          }
+        }
+      }
+    },
+    "darkroom.distress.carrier_detail" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Holder edge detail"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "片夹边缘细节"
+          }
+        }
+      }
+    },
+    "darkroom.distress.hole_variation" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hole variation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "齿孔差异"
+          }
+        }
+      }
+    },
+    "darkroom.gate" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gate"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "片门"
+          }
+        }
+      }
+    },
+    "darkroom.gate.bowed" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Film bulge"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "胶片外凸"
+          }
+        }
+      }
+    },
+    "darkroom.gate.keystone" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilted plane"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "片面倾斜"
+          }
+        }
+      }
+    },
+    "darkroom.gate.pinched" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Film dip"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "胶片内凹"
+          }
+        }
+      }
+    },
+    "darkroom.gate.rounded" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rounded corners"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圆角"
+          }
+        }
+      }
+    },
+    "darkroom.gate.standard" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标准"
           }
         }
       }
