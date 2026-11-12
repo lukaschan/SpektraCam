@@ -546,7 +546,7 @@ actor PhotoRenderer {
         let material = FilmEdgeRenderer.materialRecipe(recipe)
         // Holes follow the source stock: cine camera negatives are BH-1866, still film KS-1870.
         guard let geometry = FilmEdgeGeometry(imageSize: crop.size, layout: layout, longEdge: long,
-                                              perforation: .source(filmID: material.filmID))
+                                              perforation: layout.cinePerforations ? .bh1866 : .source(filmID: material.filmID))
         else { throw PhotoExporter.Failure.render }
         let originalLong = max(dimensions.width, dimensions.height)
         let decodeMaximum = min(Int(originalLong), max(1, Int(ceil(originalLong * max(geometry.gate.width, geometry.gate.height) / Double(nativeLong)))))

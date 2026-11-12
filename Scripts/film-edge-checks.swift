@@ -23,7 +23,9 @@ import UniformTypeIdentifiers
         recipe.filmEdgeLayout = FilmEdgeLayout()
         var selection = FilmEdgeSelection()
         selection.mode = .manual
-        let geometry = FilmEdgeGeometry(imageSize: CGSize(width: 600, height: 400), layout: FilmEdgeLayout(), longEdge: 256)!
+        // Exact geometry assertions use the Precise gate (no tilt or bulge); gate types are checked separately.
+        var exact = FilmEdgeLayout(); exact.gate = FilmEdgeGate(.precise)
+        let geometry = FilmEdgeGeometry(imageSize: CGSize(width: 600, height: 400), layout: exact, longEdge: 256)!
         precondition(abs(FilmEdgeGeometry.holeCenter - 14.0805) < 1e-9)
         precondition(abs(FilmEdgeGeometry.holeCenter - FilmEdgeGeometry.holeAcross / 2 - 12 - 0.6835) < 1e-9,
             "The nominal stock-edge gap was mistaken for a hole-center inset")
@@ -134,15 +136,17 @@ import UniformTypeIdentifiers
     static func checkDistress(library: ModelLibrary, gpu: MetalFilmPipeline, recipe base: EditRecipe,
                               input: [SIMD4<Float>]) async throws {
         let size = CGSize(width: 600, height: 400)
+        // Precise gate by default (no tilt or bulge), so geometric assertions stay exact.
         func geometry(_ distress: FilmEdgeDistress, longEdge: Int = 256, format: FilmEdgeLayout.Format = .film35,
-                      perforation: FilmEdgeGeometry.Perforation = .ks1870) -> FilmEdgeGeometry {
-            var layout = FilmEdgeLayout(); layout.format = format; layout.distress = distress
+                      perforation: FilmEdgeGeometry.Perforation = .ks1870,
+                      gate: FilmEdgeGate = FilmEdgeGate(.precise)) -> FilmEdgeGeometry {
+            var layout = FilmEdgeLayout(); layout.format = format; layout.distress = distress; layout.gate = gate
             let image = format == .film35 ? size : CGSize(width: 600, height: 600)
             return FilmEdgeGeometry(imageSize: image, layout: layout, longEdge: longEdge, perforation: perforation)!
         }
         var all = FilmEdgeDistress.Preset.worn.values
         all.seed = 0xC0FFEE; all.carrierRoughness = 0.3; all.leak = 0.5; all.dust = 0.8; all.scratches = 0.9
-        all.holeVariation = 1; all.perforationLeak = 0.8; all.carrierReflection = 0.8; all.carrierDetail = 1
+        all.holeVariation = 1; all.edgeFog = 1; all.carrierReflection = 0.8
         let rgb = input.map { RGB(Double($0.x), Double($0.y), Double($0.z)) }
         var selection = FilmEdgeSelection(); selection.mode = .manual
         var maxError = 0.0
@@ -155,7 +159,7 @@ import UniformTypeIdentifiers
             selection.manualType = type
             var recipe = base; recipe.filmEdgeSelection = selection
             let pipeline = try FilmPipeline(library: library, recipe: FilmEdgeRenderer.materialRecipe(recipe))
-            let g = geometry(distress, perforation: perforation)
+            let g = geometry(distress, perforation: perforation, gate: { var r = FilmEdgeGate(.rough); r.holderDetail = 1; return r }())
             let cpu = try pipeline.process(rgb, width: g.width, height: g.height, stochastic: false, edge: g, autoExposureEV: 0)
             let metal = try await gpu.process(input, width: g.width, height: g.height, pipeline: pipeline,
                 stochastic: false, autoExposureEV: 0, edge: g)
@@ -169,8 +173,8 @@ import UniformTypeIdentifiers
         }
         // Amount 0 is exactly the clean edge; positions do not move with strength.
         var muted = all; muted.amount = 0
-        var soft = FilmEdgeDistress(); soft.gateSoftness = all.gateSoftness  // physics, not scaled by Amount
-        soft.holeVariation = all.holeVariation; soft.carrierDetail = all.carrierDetail; soft.carrierBlur = all.carrierBlur; soft.seed = all.seed
+        // Gate optics and hole variation are not scaled by Amount.
+        var soft = FilmEdgeDistress(); soft.holeVariation = all.holeVariation; soft.seed = all.seed
         let clean = geometry(FilmEdgeDistress()), zero = geometry(muted), softClean = geometry(soft)
         for y in 0..<clean.height { for x in 0..<clean.width {
             precondition(softClean.gateCoverage(x: x, y: y) == zero.gateCoverage(x: x, y: y)
@@ -315,11 +319,12 @@ import UniformTypeIdentifiers
             "Hole variation: \(changed) px changed, area ratio \(holeArea / cleanArea), \(runs) holes")
         precondition(rimNear > 0.05 && rimFar == 0, "Hole rim misplaced: near \(rimNear), far \(rimFar)")
         // Sprockets stay pure clear/black whatever the leaks and fog do to the film around them.
-        var stormy = FilmEdgeDistress.Preset.leaky.values; stormy.leak = 1; stormy.leakKind = .back; stormy.perforationLeak = 1
+        var stormy = FilmEdgeDistress.Preset.leaky.values; stormy.leak = 1; stormy.leakKind = .back
         stormy.edgeFog = 1; stormy.holeVariation = 1
-        stormy.carrierBlur = 0; stormy.carrierDetail = 0  // isolate the leak question from the holder edge
-        var quietLight = stormy; quietLight.leak = 0; quietLight.perforationLeak = 0; quietLight.edgeFog = 0
-        let gs = geometry(stormy, longEdge: 768), calm = geometry(quietLight, longEdge: 768)
+        var quietLight = stormy; quietLight.leak = 0; quietLight.edgeFog = 0
+        // Isolate the leak question from the holder edge.
+        var bare = FilmEdgeGate(.precise); bare.holderBlur = 0; bare.holderDetail = 0
+        let gs = geometry(stormy, longEdge: 768, gate: bare), calm = geometry(quietLight, longEdge: 768, gate: bare)
         let flatInput = Array(repeating: RGB(repeating: 0.1), count: gs.width * gs.height)
         for type in [FilmEdgeType.reversalScan, .cinemaPrint, .negativePrint, .negativeScan] {
             selection.manualType = type
@@ -342,15 +347,15 @@ import UniformTypeIdentifiers
             precondition(checked > 10, "No interior sprocket pixels checked for \(type)")
         }
         // Perforation fog is hole-shaped exposure next to the holes, 135 only, never in the middle of the picture.
-        var perfFog = FilmEdgeDistress(); perfFog.perforationLeak = 1; perfFog.seed = 9
+        var perfFog = FilmEdgeDistress(); perfFog.edgeFog = 1; perfFog.seed = 9  // edge fog drives perforation fog
         let pf = geometry(perfFog)
         var nearHoles = 0.0, middle = 0.0
         for y in 0..<pf.height { for x in 0..<pf.width {
-            let v = pf.exposureFields(x: x, y: y).fog
+            let v = pf.perforationFogExposure(x: x, y: y)
             if abs(Double(y) - Double(pf.height) / 2) < Double(pf.height) * 0.2 { middle = max(middle, v) } else { nearHoles = max(nearHoles, v) }
         }}
         precondition(nearHoles > 0.05 && middle == 0, "Perforation fog misplaced: edge \(nearHoles), middle \(middle)")
-        precondition(geometry(perfFog, format: .roll120).exposureFields(x: 3, y: 3).fog == 0, "120 grew perforation fog")
+        precondition(geometry(perfFog, format: .roll120).perforationFogExposure(x: 3, y: 3) == 0, "120 grew perforation fog")
         // Front (through-the-lens) light is gated with the scene; a back leak reaches the rebate.
         var frontLeak = FilmEdgeDistress(); frontLeak.leak = 0.8; frontLeak.leakKind = .front; frontLeak.leakPosition = 0.125
         var backLeak = frontLeak; backLeak.leakKind = .back
@@ -382,8 +387,8 @@ import UniformTypeIdentifiers
         let (gr, reflectedPrint) = try printed(reflective)
         let endPixel = (gr.height / 2) * gr.width + Int(gr.gate.minX) - 2
         precondition((reflectedPrint[endPixel] - plainPrint[endPixel]).sum() < -0.002, "Carrier reflection did not darken the print edge")
-        var blurred = FilmEdgeDistress(); blurred.carrierBlur = 0.3; blurred.carrierDetail = 0
-        let gb = geometry(blurred, longEdge: 1024)
+        var blurGate = FilmEdgeGate(.precise); blurGate.holderBlur = 0.3; blurGate.holderDetail = 0
+        let gb = geometry(FilmEdgeDistress(), longEdge: 1024, gate: blurGate)
         let column = gb.width / 2
         var previous = 1.0, partial = 0
         for y in 0..<Int(gb.gate.minY) {
@@ -393,18 +398,59 @@ import UniformTypeIdentifiers
             previous = c
         }
         precondition(partial > 8, "Holder edge is not visibly out of focus: \(partial) px")
-        var detailed = blurred; detailed.carrierDetail = 1
-        let gd = geometry(detailed, longEdge: 1024)
+        // Crisp core plus a faint tail: a few percent of light 0.3 mm past the opening, never a long ramp.
+        var crisp = FilmEdgeGate(.precise); crisp.holderDetail = 0
+        let gc = geometry(FilmEdgeDistress(), longEdge: 1024, gate: crisp)
+        let tailRow = Int((Double(gc.height) / 2 - (gc.carrierHalf.across + 0.3) / gc.millimetersPerPixel).rounded())
+        let tail = gc.carrierCoverage(x: gc.width / 2, y: tailRow)
+        precondition(tail > 0.003 && tail < 0.03, "Holder tail out of range: \(tail)")
+        var detailGate = blurGate; detailGate.holderDetail = 1
+        let gd = geometry(FilmEdgeDistress(), longEdge: 1024, gate: detailGate)
         var specks = 0
         for y in 0..<Int(gd.gate.minY) { for x in 0..<gd.width where gd.carrierCoverage(x: x, y: y) > gb.carrierCoverage(x: x, y: y) + 0.05 { specks += 1 } }
         precondition(specks > 20, "Holder edge detail produced no light specks")
+        // Gate types: values as specified; tilt direction from the seed; bulge bows the outline.
+        let natural = FilmEdgeGate(), loose = FilmEdgeGate(.loose), rough = FilmEdgeGate(.rough)
+        precondition(natural.kind == .natural && FilmEdgeGate(.precise).tilt == 0 && FilmEdgeGate(.precise).bulge == 0
+            && natural.softness == 0.03 && natural.wear == 0.02 && loose.softness == 0.05 && loose.wear == 0.04
+            && loose.tilt == 0.5 && rough.tilt == 0.8 && rough.bulge == 1 && rough.holderBlur > loose.holderBlur
+            && loose.holderBlur > natural.holderBlur && natural.holderBlur > FilmEdgeGate(.precise).holderBlur, "Gate type values")
+        var crooked = FilmEdgeDistress(); crooked.tilt = 1
+        let tilted = geometry(crooked, gate: rough)
+        precondition(abs(abs(tilted.distress.tilt) - 1.8) < 1e-9 || abs(abs(tilted.distress.tilt) - 0.2) < 1e-9,
+            "Gate tilt did not add to handling tilt: \(tilted.distress.tilt)")
+        let flatGate = FilmEdgeGate(.precise)
+        var bulged = flatGate; bulged.bulge = 1
+        let level = geometry(FilmEdgeDistress(), longEdge: 1024, gate: flatGate), round = geometry(FilmEdgeDistress(), longEdge: 1024, gate: bulged)
+        let probeX = Double(level.width) / 2 + 0.5, probeY = level.gate.minY - 0.15 / level.millimetersPerPixel
+        let (fx0, fy0) = level.film(probeX, probeY), (fx1, fy1) = round.film(probeX, probeY)
+        precondition(level.gateDistance(fx0, fy0) > 0.1 && round.gateDistance(fx1, fy1) < 0, "Bulge did not bow the gate outline")
+        // Enlarger print: the filed carrier stops before the holes, so no sprocket shows on the print.
+        var hand = FilmEdgeDistress.Preset.handPrint.values
+        hand.seed = 3
+        let gh = geometry(hand, longEdge: 1024, gate: FilmEdgeGate(.natural))  // a strongly tilted strip may legitimately show slivers
+        var visibleHoles = 0
+        for y in 0..<gh.height { for x in 0..<gh.width where gh.supportCoverage(x: x, y: y) < 1 && gh.carrierCoverage(x: x, y: y) > 0.5 { visibleHoles += 1 } }
+        precondition(visibleHoles == 0 && gh.distress.carrierDetail == 0 && gh.distress.carrierBlur < 0.05,
+            "Enlarger print showed \(visibleHoles) sprocket pixels or kept the scan holder")
+        // Hole rim: the yellow core and strongest halo face the picture.
+        var rimmed = FilmEdgeDistress(); rimmed.holeVariation = 1; rimmed.seed = 21
+        let gRim = geometry(rimmed, longEdge: 2048)
+        var inner = 0.0, outer = 0.0
+        for y in 0..<gRim.height { for x in stride(from: 0, to: gRim.width, by: 2) {
+            let rim = gRim.holeRimExposure(x: x, y: y)
+            guard rim.core > 0 || rim.warm > 0 else { continue }
+            let (_, fy) = gRim.film(Double(x) + 0.5, Double(y) + 0.5)
+            if abs(fy) < FilmEdgeGeometry.holeCenter { inner = max(inner, rim.core) } else { outer = max(outer, rim.core) }
+        }}
+        precondition(inner > 1 && outer < inner * 0.1, "Hole rim core not on the picture side: inner \(inner), outer \(outer)")
         // Leak light enters as exposure: a negative print darkens nothing it should brighten, and
         // the warm path reaches the red-sensitive layer more than the blue.
         let neutral = RGB(1, 1, 1)
         var warm = FilmEdgeDistress(); warm.warmth = 1
         let light = geometry(warm).leakLight(neutral: neutral)
         precondition(light.x > 5 * light.z, "Base-path light did not favour the red-sensitive layer")
-        print("PASS: distress CPU/Metal agreement incl. BH/released scratches (max \(maxError)), BH-1866 vs KS-1870 geometry, hole variation and rim, sprockets untouched by leaks, perforation fog, gated front vs back leaks, carrier reflection, holder blur and detail, rebate-clamped scratches, depth/route scratch colour, Amount 0 identity, stable seeded features, physical-size dust/carrier (\(dustSmall)/\(dustLarge) mm²), intact KS holes, 120 without sprockets, route-dependent dust polarity")
+        print("PASS: distress CPU/Metal agreement incl. BH/released scratches (max \(maxError)), BH-1866 vs KS-1870 geometry, hole variation and rim, sprockets untouched by leaks, perforation fog, gated front vs back leaks, carrier reflection, holder core/tail/detail, gate types/tilt/bulge, enlarger print hides holes, picture-side rim core, rebate-clamped scratches, depth/route scratch colour, Amount 0 identity, stable seeded features, physical-size dust/carrier (\(dustSmall)/\(dustLarge) mm²), intact KS holes, 120 without sprockets, route-dependent dust polarity")
     }
 
     static func checkWorkflow(root: URL, recipe initial: EditRecipe) async throws {
@@ -452,7 +498,7 @@ import UniformTypeIdentifiers
             var creative = recipe
             var selection = FilmEdgeSelection(); selection.mode = .manual; selection.manualType = type
             creative.filmEdgeSelection = selection; creative.look.enabled = false
-            creative.filmEdgeLayout?.distress.gateSoftness = 0.1
+            creative.filmEdgeLayout?.gate.softness = 0.1
             let image = try await renderer.renderFilmEdge(creative, maximum: 1080)
             let pixels = try PhotoColorBridge.decode(image)
             let crop = creative.filmEdgeLayout!.constrainedCrop(CropSelection(), imageSize: CGSize(width: 900, height: 600))

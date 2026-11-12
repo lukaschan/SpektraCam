@@ -3,10 +3,10 @@
 // Nominal KS-1870 geometry from SMPTE ST 139:2003. Geometry is shared with the CPU oracle.
 // Distress fields mirror FilmEdgeGeometry (Models/FilmEdgeLayout.swift) hash-for-hash.
 // e[0] size/pitch/portrait, e[1] gate, e[2] holes (perforated, centre, KS radius, scratches-in-image),
-// e[3] gate shape/erosion + tilt, e[4] seed/stock/wear, e[5] carrier (roughness, scale, open half along/across),
+// e[3] bulge/erosion + tilt, e[4] seed/stock/wear, e[5] carrier (roughness, tail, open half along/across),
 // e[6] fog/leak, e[7..8] leak frame + dust/scratches, e[9] leak light, e[10] source holes, e[11] destination KS,
 // e[12] hole variation/perforation leak + leak kind/shape, e[13] fog light + carrier reflection,
-// e[14] carrier blur/detail + streak direction, e[15..] 16 scratches (3 each).
+// e[14] carrier blur/detail + streak direction, e[15] rim core light + carrier tail width, e[16..] 16 scratches.
 inline uint fe_hash(uint x){x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;x^=x>>16;return x;}
 inline uint fe_hash2(int i,int j,uint s){return fe_hash((as_type<uint>(i)*0x8da6b343u)^fe_hash((as_type<uint>(j)*0xd8163841u)^s));}
 inline float fe_unit(uint h){return float(h>>8)*(1.0f/16777216.0f);}
@@ -59,19 +59,24 @@ inline float edge_support(float2 origin, constant float4 *e, bool destination=fa
     return covered/16;
 }
 // Light piped in through the cut hole wall: a thin, streaky rim of base-path fog around each hole.
-inline float edge_hole_rim(float a,float t,constant float4 *e){
+// Light piped in at the cut hole wall: (warm halo + sparkle, yellow core); strongest facing the picture.
+inline float2 edge_hole_rim(float a,float t,constant float4 *e){
     FeHole h=fe_jitter(fe_hole(float2(a,t),e,e[10]),e,e[10]);
-    if(!(h.distance>-0.004f&&h.distance<0.2f))return 0;
-    float strength=0.35f+0.65f*fe_unit(fe_hash2(h.index,h.side,fe_seed(e,47)));
-    float streak=clamp(0.3f+0.7f*fe_value(h.local/0.05f,h.t/0.05f+float(h.index)*5.3f,fe_seed(e,48)),0.0f,1.0f);
-    return 2.0f*e[12].x*strength*streak*exp(-max(h.distance,0.0f)/0.03f);
+    if(!(h.distance>-0.004f&&h.distance<0.2f))return float2(0);
+    float v=e[12].x,strength=0.35f+0.65f*fe_unit(fe_hash2(h.index,h.side,fe_seed(e,47)));
+    float d=max(h.distance,0.0f);
+    float t0=clamp((-h.t/e[10].w-0.55f)/0.35f,0.0f,1.0f),toward=t0*t0*(3-2*t0),side=0.45f+1.55f*toward;
+    float streak=clamp(0.25f+0.75f*fe_value(h.local/0.12f,h.t/0.025f+float(h.index)*5.3f,fe_seed(e,48)),0.0f,1.0f);
+    float halo=3*v*strength*side*streak*exp(-d/0.03f);
+    float core=10*v*strength*toward*(0.55f+0.45f*streak)*exp(-d/0.014f);
+    float s0=clamp((fe_value(h.local/0.012f,h.t/0.012f,fe_seed(e,52))-0.35f)/0.4f,0.0f,1.0f);
+    float sparkle=1.5f*v*toward*s0*s0*(3-2*s0)*exp(-d/0.05f)*min(d/0.01f,1.0f);
+    return float2(halo+sparkle,core);
 }
-// Gate outline: 0 standard, 1 rounded corners (radius in e[1].z), 2 bulge, 3 dip, 4 keystone.
+// Gate outline; film bulge (> 0) or dip (< 0) bows the edges up to ~0.22/0.15 mm.
 inline float fe_gate_distance(float2 f,constant float4 *e){
-    float hx=e[1].x,hy=e[1].y,ux=clamp(f.x/hx,-1.0f,1.0f),uy=clamp(f.y/hy,-1.0f,1.0f);int shape=int(e[3].x);
-    if(shape==2){hx+=0.035f*(1-uy*uy);hy+=0.05f*(1-ux*ux);}
-    else if(shape==3){hx-=0.035f*(1-uy*uy);hy-=0.05f*(1-ux*ux);}
-    else if(shape==4){hy*=1+0.0035f*ux;hx+=0.03f*uy;}
+    float hx=e[1].x,hy=e[1].y,ux=clamp(f.x/hx,-1.0f,1.0f),uy=clamp(f.y/hy,-1.0f,1.0f),b=e[3].x;
+    hx+=0.15f*b*(1-uy*uy);hy+=0.22f*b*(1-ux*ux);
     return fe_box(f,float2(hx,hy),e[1].z);
 }
 inline float edge_gate(float2 px,constant float4 *e){
@@ -117,15 +122,16 @@ inline float edge_perforation_fog(float a,float t,constant float4 *e){
     return 1.5f*leak*leak*total;
 }
 // (front, back, fog) exposure relative to mid grey.
-inline float3 edge_exposure(float2 px,constant float4 *e){
-    float2 f=fe_film(px,e),s=fe_strip(f,e);float3 ex=float3(0);
+// (front, back, fog, rim core) exposure relative to mid grey.
+inline float4 edge_exposure(float2 px,constant float4 *e){
+    float2 f=fe_film(px,e),s=fe_strip(f,e);float4 ex=float4(0);
     if(e[6].x>0){
         float distance=max(0.0f,e[4].z-abs(s.y));
         float n=fe_value(s.x/6,s.y>0?3.5f:-3.5f,fe_seed(e,3));
         ex.z+=6*e[6].x*e[6].x*exp(-distance/e[6].y)*(0.6f+0.4f*n);
     }
     if(e[12].y>0&&e[2].x!=0)ex.z+=edge_perforation_fog(s.x,s.y,e);
-    if(e[12].x>0&&e[2].x!=0)ex.z+=edge_hole_rim(s.x,s.y,e);
+    if(e[12].x>0&&e[2].x!=0){float2 rim=edge_hole_rim(s.x,s.y,e);ex.z+=rim.x;ex.w+=rim.y;}
     if(e[6].z>0){float v=6*e[6].z*e[6].z*edge_leak_field(f,e);if(e[12].z!=0)ex.x=v;else ex.y=v;}
     return ex;
 }
@@ -134,24 +140,26 @@ inline float edge_carrier_distance(float2 px,constant float4 *e){
     float2 opening=e[0].w!=0?e[5].wz:e[5].zw;
     float base=fe_box(c,opening,0);float amplitude=e[5].x;
     if(amplitude<=0||base<= -(amplitude*1.6f+pr+e[14].x))return base;
-    float2 s=fe_strip(c,e);float scale=e[5].y;
+    float2 s=fe_strip(c,e);float scale=1.2f;
     float broad=0.5f+0.5f*(0.85f*fe_value(s.x/scale,s.y/scale,fe_seed(e,6))+0.15f*fe_value(s.x/(0.2f*scale),s.y/(0.2f*scale),fe_seed(e,7)));
     float n=fe_value(s.x/(0.35f*scale),s.y/(0.35f*scale),fe_seed(e,8));
     float notch=clamp((n-0.6f)/0.3f,0.0f,1.0f);
     return base+amplitude*(broad+0.5f*notch*notch*(3-2*notch));
 }
 // Defocused holder edge plus specks of light through its abraded edge.
+// Holder: crisp defocused core, a faint wide tail of scattered light, and abraded-edge specks.
 inline float edge_carrier(float2 px,constant float4 *e){
     float d=edge_carrier_distance(px,e),r=max(e[14].x,fe_pixel_radius(e));
     if(d< -r)return 1;
     float open=fe_penumbra(d,r),detail=e[14].y;
-    if(detail<=0||d>=r+0.45f)return open;
+    float pass=open+(1-open)*e[5].y*exp(-max(d,0.0f)/e[15].w);
+    if(detail<=0||d>=r+0.45f)return pass;
     float2 s=fe_strip(fe_canvas(px,e),e);
     float n=0.6f*fe_value(s.x/0.05f,s.y/0.05f,fe_seed(e,49))+0.4f*fe_value(s.x/0.15f,s.y/0.15f,fe_seed(e,51));
     float u=clamp((n-0.15f)/0.55f,0.0f,1.0f);
     float patch=0.5f+0.5f*fe_value(s.x/0.6f,s.y/0.6f,fe_seed(e,50));
     float speck=u*u*(3-2*u)*patch*patch;
-    return open+(1-open)*detail*0.5f*speck*exp(-max(d-r*0.5f,0.0f)/0.12f);
+    return pass+(1-pass)*detail*0.5f*speck*exp(-max(d-r*0.5f,0.0f)/0.12f);
 }
 inline float edge_reflection(float2 px,constant float4 *e){
     float r=e[13].w;if(r<=0)return 0;
@@ -192,7 +200,7 @@ inline float4 edge_scratches(float2 px,constant float4 *e){
     if(e[2].w==0){outside=1-fe_penumbra(fe_gate_distance(f,e),pr);if(outside<=0)return result;}
     for(int k=0;k<16;++k){
         float active=clamp(amount*16-float(k),0.0f,1.0f);if(active<=0)continue;
-        float4 a=e[15+3*k],b=e[16+3*k],c=e[17+3*k];
+        float4 a=e[16+3*k],b=e[17+3*k],c=e[18+3*k];
         float ends=clamp((s.x-b.x)/2,0.0f,1.0f)*clamp((b.y-s.x)/2,0.0f,1.0f);if(ends<=0)continue;
         float line=a.x+c.x*s.x+a.y*sin(s.x/a.z*6.2832f+a.w),rr=max(b.z,pr*0.9f);
         if(abs(s.y-line)>rr+pr)continue;
@@ -209,8 +217,8 @@ kernel void film_edge_gate(device float4 *image [[buffer(0)]],constant float4 *e
                            uint i [[thread_position_in_grid]]) {
     if(i>=tile.x*tile.y)return;
     float2 p=float2(tile.z+i%tile.x,tile.w+i/tile.x)+0.5f;
-    float3 ex=edge_exposure(p,e);
-    image[i].xyz=(image[i].xyz+e[9].xyz*ex.x)*edge_gate(p,e)+e[9].xyz*ex.y+e[13].xyz*ex.z;
+    float4 ex=edge_exposure(p,e);
+    image[i].xyz=(image[i].xyz+e[9].xyz*ex.x)*edge_gate(p,e)+e[9].xyz*ex.y+e[13].xyz*ex.z+e[15].xyz*ex.w;
 }
 // clear.w: 1 source damage, 2 carrier/holder, 4 paper black endpoint, 8 destination KS holes, 16 carrier reflection.
 kernel void film_edge_transmission(device float4 *image [[buffer(0)]],constant float4 *e [[buffer(1)]],

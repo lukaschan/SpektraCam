@@ -55,20 +55,18 @@ struct EditorView: View {
                 openDarkroom: { setExpanded(false); cropReturnsToDarkroom = false; showDarkroom = true },
                 export: { showExport = true })
             ToolbarItem(placement: .topBarLeading) {
+                // Darkroom is the last step: back saves the edit and returns to the photo, like Close.
                 Button(
                     showDarkroom
-                        ? String(localized: "darkroom.back_to_editor", defaultValue: "Back to editor")
+                        ? String(localized: "darkroom.back_to_photo", defaultValue: "Back to photo")
                         : String(localized: "editor.close_editor", defaultValue: "Close Editor"),
                     systemImage: showDarkroom ? "chevron.left" : "xmark",
-                    action: {
-                        if showDarkroom { showDarkroom = false }
-                        else { finish() }
-                    }
+                    action: finish
                 )
                 .photoActionStyle()
                 .accessibilityLabel(
                     showDarkroom
-                        ? String(localized: "darkroom.back_to_editor", defaultValue: "Back to editor")
+                        ? String(localized: "darkroom.back_to_photo", defaultValue: "Back to photo")
                         : String(localized: "editor.close_editor", defaultValue: "Close Editor"))
                 .accessibilityIdentifier(showDarkroom ? "darkroom.back" : "editor.back")
             }

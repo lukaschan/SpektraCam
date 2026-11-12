@@ -10,6 +10,12 @@ struct DarkroomWorkspace: View {
     @State private var failure: String?
     @State private var retry = 0
     @State private var interacting = false
+    @State private var loupeImage: UIImage?
+    @State private var loupeKey: EditRecipe?
+    @State private var loupeRefining = false
+    @AppStorage("darkroom.loupe") private var showLoupe = true
+    /// Enough for 100 % at native resolution on most phones without an export-sized render.
+    private static let loupeMaximum = 4096
     private var renderKey: EditRecipe {
         var key = session.recipe
         key.printLayout = nil
@@ -50,7 +56,10 @@ struct DarkroomWorkspace: View {
             onEdgeEditingChanged: { active in
                 session.setPresentationInteraction(key: "darkroom.edge.layout", active: active)
                 interacting = active
-            })
+            },
+            loupeImage: loupeKey == renderKey ? loupeImage : nil,
+            loupeRefining: loupeRefining,
+            showLoupe: $showLoupe)
         .overlay(alignment: .top) {
             if pending { ProgressView().padding(12).glassEffect().accessibilityIdentifier("darkroom.edge.rendering") }
             if let failure {
@@ -81,6 +90,24 @@ struct DarkroomWorkspace: View {
                 if !Task.isCancelled { failure = error.localizedDescription; pending = false }
             }
         }
+        .task(id: LoupeRequest(recipe: renderKey, active: showLoupe && !suspended && !interacting)) {
+            guard showLoupe, !suspended, !interacting, loupeKey != renderKey else { return }
+            let recipe = renderKey
+            do {
+                // Let the regular preview finish first; the loupe is a refinement, never a race.
+                try await Task.sleep(for: .milliseconds(350))
+                while pending { try await Task.sleep(for: .milliseconds(150)) }
+                loupeRefining = true
+                defer { loupeRefining = false }
+                let frame = try await session.darkroomLoupe(recipe, maximum: Self.loupeMaximum)
+                try Task.checkCancellation()
+                loupeImage = UIImage(cgImage: frame)
+                loupeKey = recipe
+            } catch {
+                // Cancelled or over the memory budget: the loupe keeps magnifying the preview.
+            }
+        }
     }
     private struct Request: Equatable { let recipe: EditRecipe; let suspended: Bool; let retry: Int; let interacting: Bool }
+    private struct LoupeRequest: Equatable { let recipe: EditRecipe; let active: Bool }
 }

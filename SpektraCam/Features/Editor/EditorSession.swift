@@ -28,6 +28,7 @@ import SwiftUI
     @ObservationIgnored private let filmRenderer: PhotoRenderer
     @ObservationIgnored private var edgeTask: Task<CGImage, Error>?
     @ObservationIgnored private var edgeEpoch = UUID()
+    @ObservationIgnored private var loupeTask: Task<CGImage, Error>?
     @ObservationIgnored private var filmSource: CGImage
     @ObservationIgnored private var renderedSource: CGImage
     @ObservationIgnored private var filmTask: Task<Void, Never>?
@@ -209,7 +210,9 @@ import SwiftUI
     ) {
         let snapshot = recipe
         edgeTask?.cancel()
+        loupeTask?.cancel()
         _ = await edgeTask?.result
+        _ = await loupeTask?.result
         settleTask?.cancel()
         settleTask = nil
         waitingToRefine = false
@@ -236,6 +239,17 @@ import SwiftUI
         let job = Task { try await renderer.renderFilmEdge(snapshot, maximum: maximum) }
         edgeTask = job
         defer { if edgeEpoch == epoch { edgeTask = nil } }
+        return try await withTaskCancellationHandler { try await job.value } onCancel: { job.cancel() }
+    }
+    /// Full-resolution photograph (with its film edge, without paper) for the Darkroom loupe.
+    /// Separate from the preview task so the two never cancel each other.
+    func darkroomLoupe(_ snapshot: EditRecipe, maximum: Int) async throws -> CGImage {
+        loupeTask?.cancel()
+        var recipe = snapshot
+        recipe.printLayout = nil
+        let renderer = filmRenderer
+        let job = Task { try await renderer.renderPresentation(recipe, maximum: maximum) }
+        loupeTask = job
         return try await withTaskCancellationHandler { try await job.value } onCancel: { job.cancel() }
     }
     func discardExport() { Task { await filmRenderer.discardExport() } }
@@ -474,6 +488,8 @@ import SwiftUI
         edgeEpoch = UUID()
         edgeTask?.cancel()
         edgeTask = nil
+        loupeTask?.cancel()
+        loupeTask = nil
         settleTask?.cancel()
         settleTask = nil
         waitingToRefine = false

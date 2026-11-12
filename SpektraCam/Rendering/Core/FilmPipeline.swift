@@ -79,11 +79,12 @@ nonisolated struct FilmPipeline: Sendable {
             // Front (through-the-lens) light is gated with the scene; back leaks and base fog are not.
             let neutral = color.exposure.raw(RGB(repeating: 0.184))
             let light = edge.leakLight(neutral: neutral), fog = edge.fogLight(neutral: neutral)
+            let core = edge.coreLight(neutral: neutral)
             for i in raw.pixels.indices {
                 let x = i % width, y = i / width
                 let e = edge.hasExposureNoise ? edge.exposureFields(x: x, y: y) : FilmEdgeGeometry.Exposure()
                 raw.pixels[i] = (raw.pixels[i] + light * e.front) * edge.gateCoverage(x: x, y: y)
-                    + light * e.back + fog * e.fog
+                    + light * e.back + fog * e.fog + core * e.core
             }
         }
         raw = try HalationCore.apply(raw, parameters: halation, pixelSizeMicrometers: pitch)

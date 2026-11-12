@@ -2,6 +2,20 @@
 
 Updated 2026-11-10. This file is the repository handoff point; read it before continuing Darkroom work. Changes are local and uncommitted. Preserve the preexisting Xcode project version/signing edits.
 
+## Nov 12 — Gate types, RA-4 hand print, picture-side rim, loupe (distress revision 4)
+
+New reference: Runze's Kodak 5294 (Ektachrome 100D) slide scan, `IMG_0190 copy.jpg`, outside the repo.
+
+- **Gate is separate from distress.** `FilmEdgeLayout.gate` (`FilmEdgeGate`) describes the camera and holder. There are four pill types: **Precise**, **Natural** (default) and **Loose**/**Rough**. Precise has softness 30 µm, wear 20 µm and no tilt or bulge. Natural has the same with a crisper/stronger holder, 0.2° tilt and 25 % bulge. Loose and Rough have softness 50 µm, wear 40 µm, more holder blur, 0.5°/0.8° tilt and 60 %/100 % bulge. The last type chosen is remembered (`darkroom.gateKind`). The old gate shapes (rounded/bulge/dip/keystone) were removed.
+- **Tilt and bulge add up:** the gate gives the setup's inherent misalignment (direction from the seed), and distress "Handling" adds crooked loading (±3°) and film curl (±100 %). Bulge bows the gate outline up to ~0.22/0.15 mm.
+- **Distress presets:** Clean (30 % rebate scratches by default), Lab scan (50 %), Hand print, Old camera (100 % scratches, 1° crooked loading, curl, dust, fog, leak) and Light leak. Removed controls: roughness scale (fixed), fog depth (derived from edge fog), light through holes (driven by edge fog), and holder blur/detail (now in the gate).
+- **Hand print = enlarger RA-4 print** (`enlargerPrint`). The filed carrier sits in the negative plane: crisp edge (0.04 mm), no scan-holder specks or tail, opening stopped short of the holes (0.55 mm reveal), and edge reflection as the inward bleed. The result is a black filed border on white paper ([Photrio](https://www.photrio.com/forum/threads/black-frames-what-about-the-negative.55164)). A strongly tilted strip can still show slivers.
+- **Holder model:** a crisp defocused core plus a faint tail (8 % over 0.12 mm), with abrasion specks. The paper shoulder makes the tail visible on inverted negatives and invisible against a slide's black holder, as in the scans.
+- **Picture-side rim:** the hole-wall light-piping rim now has a bright yellow **core** (light reaching red and green layers; separate uniform `e[15]`) on the edge facing the picture. It sits under a warm streaky halo and sparkle points 0.05 mm into the rebate (P1485695). Slides reuse the same mechanism.
+- **Cine perforations:** the format pills are 35 mm · 35 mm cine · 120. "35 mm cine" forces BH-1866 (5294 is BH-1866 per Kodak's [sell sheet](https://www.kodak.com/content/products-brochures/Film/EKTACHROME-100D-sell-sheet-EN.pdf)); 35 mm still follows the stock (Vision3 → BH).
+- **UI:** manual scan method and format are pills. Darkroom Back saves and returns to the photo page. A **loupe** (`DarkroomLoupe`) sits at the upper right, can be dragged over the print, and shows 100 % of a full-resolution frame (≤ 4096 px, rendered after the preview settles); double-tap gives 200 %. It is toggled from the top-left button and the on/off state is remembered.
+- Tests: the exact-geometry fixtures use the Precise gate. There are new checks for gate types, tilt/bulge, the enlarger print hiding holes, the holder tail, and the picture-side rim core. UI tests were updated for pills and Back to photo.
+
 ## Nov 11 — Edge refinement from Runze's scans (distress revision 3)
 
 References: Runze's camera scans P1485659 (Gold 200), P1485695 and P1485707 (UltraMax 400), kept outside the repository. Edge cache key `v15`.

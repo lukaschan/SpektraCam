@@ -932,7 +932,8 @@ actor MetalFilmPipeline {
             dispatch(e, name)
         }
         let edgeNeutral = color.exposure.raw(RGB(repeating: 0.184))
-        let edgeValues = edge.map { $0.uniforms(light: $0.leakLight(neutral: edgeNeutral), fogLight: $0.fogLight(neutral: edgeNeutral)) } ?? []
+        let edgeValues = edge.map { $0.uniforms(light: $0.leakLight(neutral: edgeNeutral), fogLight: $0.fogLight(neutral: edgeNeutral),
+                                            coreLight: $0.coreLight(neutral: edgeNeutral)) } ?? []
         func edgeNode(_ name: String, _ image: MTLBuffer, clear: RGB = .zero,
                       mode: FilmEdgeGeometry.Transmission = []) throws {
             guard edge != nil else { return }

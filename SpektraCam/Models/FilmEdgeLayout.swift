@@ -2,33 +2,24 @@ import CoreGraphics
 import Foundation
 
 /// A saved capture-support presentation. Nil in EditRecipe means Clean print.
+/// `gate` describes the camera and holder (fixed per setup); `distress` how the film was handled.
 nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
     enum Format: String, Codable, CaseIterable, Sendable { case film35, roll120 }
     var format = Format.film35
+    /// Motion-picture stock respooled for a still camera keeps BH-1866 holes (e.g. Ektachrome 100D
+    /// 5294, Vision3). Off means the holes follow the chosen stock.
+    var cinePerforations = false
+    var gate = FilmEdgeGate()
     var distress = FilmEdgeDistress()
-    /// Subtle per-camera aperture outline and film-flatness variations; one is the default.
-    enum GateShape: String, Codable, CaseIterable, Sendable {
-        case standard, rounded, bowed, pinched, keystone
-        var title: String {
-            switch self {
-            case .standard: String(localized: "darkroom.gate.standard", defaultValue: "Standard")
-            case .rounded: String(localized: "darkroom.gate.rounded", defaultValue: "Rounded corners")
-            case .bowed: String(localized: "darkroom.gate.bowed", defaultValue: "Film bulge")
-            case .pinched: String(localized: "darkroom.gate.pinched", defaultValue: "Film dip")
-            case .keystone: String(localized: "darkroom.gate.keystone", defaultValue: "Tilted plane")
-            }
-        }
-    }
-    var gateShape = GateShape.standard
-    /// The last gate a person chose becomes the default for their next film edge.
-    static let gateShapeKey = "darkroom.gateShape"
-    static var preferredGateShape: GateShape {
-        get { UserDefaults.standard.string(forKey: gateShapeKey).flatMap(GateShape.init(rawValue:)) ?? .standard }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: gateShapeKey) }
+    /// The last gate type a person chose becomes the default for their next film edge.
+    static let gateKindKey = "darkroom.gateKind"
+    static var preferredGate: FilmEdgeGate.Kind {
+        get { UserDefaults.standard.string(forKey: gateKindKey).flatMap(FilmEdgeGate.Kind.init(rawValue:)) ?? .natural }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: gateKindKey) }
     }
     static func newDefault() -> Self {
         var layout = Self()
-        layout.gateShape = preferredGateShape
+        layout.gate = FilmEdgeGate(preferredGate)
         return layout
     }
     var gateSize: CGSize { format == .film35 ? CGSize(width: 36, height: 24) : CGSize(width: 56, height: 56) }
@@ -53,23 +44,82 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         return abs(max(imageSize.width, imageSize.height) - min(imageSize.width, imageSize.height) * ratio) <= ratio
     }
     init() {}
-    enum CodingKeys: String, CodingKey { case format, distress, gateShape }
+    enum CodingKeys: String, CodingKey { case format, cinePerforations, gate, distress }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         format = try values.decodeIfPresent(Format.self, forKey: .format) ?? .film35
+        cinePerforations = try values.decodeIfPresent(Bool.self, forKey: .cinePerforations) ?? false
+        gate = (try? values.decodeIfPresent(FilmEdgeGate.self, forKey: .gate)) ?? FilmEdgeGate()
         distress = try values.decodeIfPresent(FilmEdgeDistress.self, forKey: .distress) ?? FilmEdgeDistress()
-        gateShape = (try? values.decodeIfPresent(GateShape.self, forKey: .gateShape)) ?? .standard
     }
 }
 
-/// Procedural, seeded imperfections in physical film millimetres. Every field is placed at
-/// the stage where its mechanism acts (see Research/Darkroom-v0.3/DISTRESS-AND-LEAKS.md):
-/// camera gate, leaks and perforation fog are exposure before development; scratches thin the
-/// developed dye or scatter light; dust and the carrier/holder act where the film is printed or
-/// scanned. `amount` scales only intensities, so beginners can dial a preset while geeks edit
-/// fields. These ranges are engineering choices, not calibrated measurements.
+/// The camera aperture and the scanner holder: properties of the equipment, not of handling.
+/// Softness is the gate penumbra (≈ gap / 2N); wear roughens the aperture edge; the holder edge is
+/// out of focus (crisp core plus a faint tail) with abraded specks; tilt and bulge are the
+/// setup's inherent misalignment and film flatness. Engineering values, not camera measurements.
+nonisolated struct FilmEdgeGate: Codable, Equatable, Sendable {
+    enum Kind: String, Codable, CaseIterable, Sendable {
+        case precise, natural, loose, rough
+        var title: String {
+            switch self {
+            case .precise: String(localized: "darkroom.gate.precise", defaultValue: "Precise")
+            case .natural: String(localized: "darkroom.gate.natural", defaultValue: "Natural")
+            case .loose: String(localized: "darkroom.gate.loose", defaultValue: "Loose")
+            case .rough: String(localized: "darkroom.gate.rough", defaultValue: "Rough")
+            }
+        }
+    }
+    var softness = 0.03
+    var wear = 0.02
+    var holderBlur = 0.1
+    var holderDetail = 0.35
+    /// Degrees; the direction comes from the edit's seed.
+    var tilt = 0.2
+    /// −1 film dip … +1 strong bulge (edges bow up to ~0.2 mm).
+    var bulge = 0.25
+
+    init() {}
+    init(_ kind: Kind) {
+        switch kind {
+        case .precise: softness = 0.03; wear = 0.02; holderBlur = 0.06; holderDetail = 0.2; tilt = 0; bulge = 0
+        case .natural: break
+        case .loose: softness = 0.05; wear = 0.04; holderBlur = 0.16; holderDetail = 0.5; tilt = 0.5; bulge = 0.6
+        case .rough: softness = 0.05; wear = 0.04; holderBlur = 0.22; holderDetail = 0.65; tilt = 0.8; bulge = 1
+        }
+    }
+    var kind: Kind? { Kind.allCases.first { Self($0) == self } }
+    static let ranges: [WritableKeyPath<Self, Double>: ClosedRange<Double>] = [
+        \.softness: 0...0.12, \.wear: 0...0.12, \.holderBlur: 0...0.6, \.holderDetail: 0...1,
+        \.tilt: 0...1.5, \.bulge: -1...1,
+    ]
+    enum CodingKeys: String, CodingKey { case softness, wear, holderBlur, holderDetail, tilt, bulge }
+    init(from decoder: Decoder) throws {
+        let v = try decoder.container(keyedBy: CodingKeys.self)
+        let base = Self()
+        func n(_ key: CodingKeys, _ path: WritableKeyPath<Self, Double>) throws -> Double {
+            let value = try v.decodeIfPresent(Double.self, forKey: key) ?? base[keyPath: path]
+            guard value.isFinite else { return base[keyPath: path] }
+            let range = Self.ranges[path] ?? (-Double.infinity...Double.infinity)
+            return min(max(value, range.lowerBound), range.upperBound)
+        }
+        softness = try n(.softness, \.softness); wear = try n(.wear, \.wear)
+        holderBlur = try n(.holderBlur, \.holderBlur); holderDetail = try n(.holderDetail, \.holderDetail)
+        tilt = try n(.tilt, \.tilt); bulge = try n(.bulge, \.bulge)
+    }
+}
+
+/// Procedural, seeded imperfections from handling, in physical film millimetres. Every field is
+/// placed at the stage where its mechanism acts (see Research/Darkroom-v0.3/DISTRESS-AND-LEAKS.md):
+/// leaks and fog are exposure before development; scratches thin the developed dye or scatter
+/// light; dust and the carrier act where the film is printed or scanned. `amount` scales only
+/// intensities. These ranges are engineering choices, not calibrated measurements.
+///
+/// The optics fields below (`gateSoftness`, `gateWear`, `carrierBlur`, `carrierDetail`,
+/// `carrierTail`, `fogDepth`, `perforationLeak`) are not saved: `FilmEdgeGeometry` resolves them
+/// from the gate and from edge fog, so one parameter set feeds the CPU reference and Metal.
 nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
-    static let algorithmRevision = 3
+    static let algorithmRevision = 4
     /// Through the lens (front) light is gated with the scene and reaches the top, blue-sensitive
     /// layer first; a back/door-seal leak bypasses the gate and enters through the base.
     enum LeakKind: String, Codable, CaseIterable, Sendable { case back, front }
@@ -77,25 +127,19 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     var revision = Self.algorithmRevision
     var seed: UInt32 = 1
     var amount = 1.0
-    /// Gate-to-emulsion penumbra radius (≈ gap / 2N). Physics, not damage: on by default.
-    var gateSoftness = 0.02
-    var gateWear = 0.0
+    /// Handling adds to the gate's own tilt and bulge: film loaded crooked, curled in the holder.
     var tilt = 0.0
-    /// Natural, always-present hole differences: punch tolerance between holes and the thin rim
-    /// where light piped in through the cut hole wall fogged the bottom (red-sensitive) layer.
+    var bulge = 0.0
+    /// Natural, always-present hole differences: punch tolerance between holes and the rim where
+    /// light piped in through the cut hole wall — a bright streak on the picture side.
     var holeVariation = 0.5
-    /// Light through the holes of the outer wrap fogs the next one.
-    var perforationLeak = 0.0
     var carrierRoughness = 0.0
-    var carrierScale = 1.2
-    /// The holder/carrier is not in the film plane, so its edge is out of focus (penumbra radius, mm).
-    var carrierBlur = 0.35
-    /// An abraded holder edge lets specks of light through near the edge.
-    var carrierDetail = 0.3
     /// Unmasked enlarger light reflected by a bare-metal carrier edge onto the paper (prints only).
     var carrierReflection = 0.0
+    /// Printed on an enlarger (RA-4) rather than scanned: the filed carrier sits in the negative
+    /// plane, so its edge is crisp with a faint flare halo, and the opening stops short of the holes.
+    var enlargerPrint = false
     var edgeFog = 0.0
-    var fogDepth = 2.0
     var leak = 0.0
     var leakKind = LeakKind.back
     var leakShape = LeakShape.glow
@@ -104,16 +148,24 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     /// −1 cool (front, blue layer first) … 0 neutral … +1 warm (base, red layer first).
     var warmth = 0.6
     var dust = 0.0
-    var scratches = 0.0
+    var scratches = 0.3
     /// Rails and sprockets touch only the rebate, so scratches stay there by default.
     /// Releasing the clamp lets gate debris drag scratches across the picture as well.
     var scratchesInImage = false
 
+    // Resolved by FilmEdgeGeometry; not saved and not shown as distress controls.
+    var gateSoftness = 0.03
+    var gateWear = 0.02
+    var carrierBlur = 0.1
+    var carrierDetail = 0.35
+    var carrierTail = 0.05
+    var carrierScale = 1.2
+    var fogDepth = 1.5
+    var perforationLeak = 0.0
+
     static let ranges: [WritableKeyPath<Self, Double>: ClosedRange<Double>] = [
-        \.amount: 0...2, \.gateSoftness: 0...0.12, \.gateWear: 0...0.12, \.tilt: -1...1,
-        \.holeVariation: 0...1, \.perforationLeak: 0...1,
-        \.carrierRoughness: 0...0.5, \.carrierScale: 0.2...4, \.carrierBlur: 0...1, \.carrierDetail: 0...1,
-        \.carrierReflection: 0...1, \.edgeFog: 0...1, \.fogDepth: 0.3...8,
+        \.amount: 0...2, \.tilt: -3...3, \.bulge: -1...1, \.holeVariation: 0...1,
+        \.carrierRoughness: 0...0.5, \.carrierReflection: 0...1, \.edgeFog: 0...1,
         \.leak: 0...1, \.leakSize: 2...30, \.leakPosition: 0...1, \.warmth: -1...1,
         \.dust: 0...1, \.scratches: 0...1,
     ]
@@ -130,23 +182,22 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
             case .leaky: String(localized: "darkroom.distress.leaky", defaultValue: "Light leak")
             }
         }
-        /// Only Old camera carries dirt; the others stay clean apart from natural hole variation.
+        /// Every preset keeps natural hole variation and light rail scratches (30 %); only Old
+        /// camera adds dust, full scratches, a crooked load and curl.
         var values: FilmEdgeDistress {
             var d = FilmEdgeDistress()
             switch self {
             case .clean: break
             case .lab:
-                d.gateWear = 0.012; d.tilt = 0.12; d.edgeFog = 0.06; d.fogDepth = 1.5
+                d.scratches = 0.5; d.edgeFog = 0.06
             case .handPrint:
-                d.gateWear = 0.015; d.tilt = 0.18; d.carrierRoughness = 0.05; d.carrierReflection = 0.45
+                d.enlargerPrint = true; d.carrierRoughness = 0.1; d.carrierReflection = 0.35
             case .worn:
-                d.gateSoftness = 0.035; d.gateWear = 0.05; d.tilt = 0.3; d.carrierRoughness = 0.08
-                d.holeVariation = 0.8; d.perforationLeak = 0.25
-                d.edgeFog = 0.3; d.fogDepth = 3; d.leak = 0.3; d.leakSize = 10; d.warmth = 0.7
-                d.dust = 0.4; d.scratches = 0.65
+                d.tilt = 1; d.bulge = 0.3; d.carrierRoughness = 0.08; d.holeVariation = 0.8
+                d.edgeFog = 0.3; d.leak = 0.3; d.leakSize = 10; d.warmth = 0.7
+                d.dust = 0.4; d.scratches = 1
             case .leaky:
-                d.gateWear = 0.015; d.tilt = 0.1; d.edgeFog = 0.35; d.fogDepth = 4.5; d.perforationLeak = 0.35
-                d.leak = 0.5; d.leakShape = .flare; d.leakSize = 14; d.warmth = 0.8
+                d.edgeFog = 0.35; d.leak = 0.5; d.leakShape = .flare; d.leakSize = 14; d.warmth = 0.8
             }
             return d
         }
@@ -166,13 +217,11 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
         self = preset.values
         (seed, amount, leakPosition, scratchesInImage) = keep
     }
-    /// Intensities after the global Amount. Natural properties (softness, hole variation, carrier
-    /// blur and detail), sizes, depth and colour are unchanged.
+    /// Intensities after the global Amount. Hole variation, sizes and colour are unchanged.
     var effective: Self {
         var e = self
         let a = max(0, amount)
-        e.gateWear *= a; e.tilt *= a; e.carrierRoughness *= a
-        e.perforationLeak = min(1, perforationLeak * a)
+        e.tilt *= a; e.bulge *= a; e.carrierRoughness *= a
         e.carrierReflection = min(1, carrierReflection * a)
         e.edgeFog = min(1, edgeFog * a); e.leak = min(1, leak * a)
         e.dust = min(1, dust * a); e.scratches = min(1, scratches * a)
@@ -181,9 +230,20 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
 
     init() {}
     enum CodingKeys: String, CodingKey {
-        case revision, seed, amount, gateSoftness, gateWear, tilt, holeVariation, perforationLeak,
-            carrierRoughness, carrierScale, carrierBlur, carrierDetail, carrierReflection,
-            edgeFog, fogDepth, leak, leakKind, leakShape, leakSize, leakPosition, warmth, dust, scratches, scratchesInImage
+        case revision, seed, amount, tilt, bulge, holeVariation, carrierRoughness, carrierReflection, enlargerPrint,
+            edgeFog, leak, leakKind, leakShape, leakSize, leakPosition, warmth, dust, scratches, scratchesInImage
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(revision, forKey: .revision); try c.encode(seed, forKey: .seed); try c.encode(amount, forKey: .amount)
+        try c.encode(tilt, forKey: .tilt); try c.encode(bulge, forKey: .bulge)
+        try c.encode(holeVariation, forKey: .holeVariation)
+        try c.encode(carrierRoughness, forKey: .carrierRoughness); try c.encode(carrierReflection, forKey: .carrierReflection)
+        try c.encode(enlargerPrint, forKey: .enlargerPrint); try c.encode(edgeFog, forKey: .edgeFog)
+        try c.encode(leak, forKey: .leak); try c.encode(leakKind, forKey: .leakKind); try c.encode(leakShape, forKey: .leakShape)
+        try c.encode(leakSize, forKey: .leakSize); try c.encode(leakPosition, forKey: .leakPosition)
+        try c.encode(warmth, forKey: .warmth); try c.encode(dust, forKey: .dust); try c.encode(scratches, forKey: .scratches)
+        try c.encode(scratchesInImage, forKey: .scratchesInImage)
     }
     init(from decoder: Decoder) throws {
         let v = try decoder.container(keyedBy: CodingKeys.self)
@@ -197,18 +257,13 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
         revision = try v.decodeIfPresent(Int.self, forKey: .revision) ?? Self.algorithmRevision
         seed = try v.decodeIfPresent(UInt32.self, forKey: .seed) ?? 1
         amount = try n(.amount, \.amount)
-        gateSoftness = try n(.gateSoftness, \.gateSoftness)
-        gateWear = try n(.gateWear, \.gateWear)
         tilt = try n(.tilt, \.tilt)
+        bulge = try n(.bulge, \.bulge)
         holeVariation = try n(.holeVariation, \.holeVariation)
-        perforationLeak = try n(.perforationLeak, \.perforationLeak)
         carrierRoughness = try n(.carrierRoughness, \.carrierRoughness)
-        carrierScale = try n(.carrierScale, \.carrierScale)
-        carrierBlur = try n(.carrierBlur, \.carrierBlur)
-        carrierDetail = try n(.carrierDetail, \.carrierDetail)
         carrierReflection = try n(.carrierReflection, \.carrierReflection)
+        enlargerPrint = try v.decodeIfPresent(Bool.self, forKey: .enlargerPrint) ?? false
         edgeFog = try n(.edgeFog, \.edgeFog)
-        fogDepth = try n(.fogDepth, \.fogDepth)
         leak = try n(.leak, \.leak)
         leakKind = (try? v.decodeIfPresent(LeakKind.self, forKey: .leakKind)) ?? .back
         leakShape = (try? v.decodeIfPresent(LeakShape.self, forKey: .leakShape)) ?? .glow
@@ -270,7 +325,6 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// Seeded, resolution-independent features, computed once per geometry.
     let leakFrame: LeakFrame
     let scratchCandidates: [Scratch]
-    let gateShape: FilmEdgeLayout.GateShape
     /// Carrier opening half sizes in transport/across axes (mm); the canvas extends past them so
     /// the out-of-focus holder edge is visible.
     let carrierHalf: (along: Double, across: Double)
@@ -320,7 +374,6 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     let perforation: Perforation
     /// Provisional rounded gate corner; replace with measurements of real camera strips.
     static let gateCorner = 0.15
-    static let roundedGateCorner = 0.45
     static let rollStockWidth = 61.0
     static let scratchCount = 16
 
@@ -342,15 +395,17 @@ nonisolated struct FilmEdgeGeometry: Sendable {
               longEdge > 0, longEdge <= 65_536, layout.matchesGate(imageSize) else { return nil }
         format = layout.format
         self.perforation = perforation
-        distress = layout.distress.effective
+        distress = Self.resolve(layout)
         portrait = imageSize.height > imageSize.width
         let short = layout.gateSize.height
         let long = layout.gateSize.width
-        gateShape = layout.gateShape
-        // Carrier opening (as before) plus room for the defocused holder edge beyond it.
-        let alongOpen = 0.8, acrossOpen = format == .film35 ? 1.2 : 0.8, holder = 0.5
+        // Scan holder opening (or, for an enlarger print, a filed carrier that stops short of the
+        // holes) plus room for the holder edge beyond it. The canvas size never changes.
+        let alongReveal = 0.8, acrossReveal = format == .film35 ? 1.2 : 0.8, holder = 0.5
+        let alongOpen = distress.enlargerPrint ? 0.6 : alongReveal
+        let acrossOpen = distress.enlargerPrint ? (format == .film35 ? 0.55 : 0.6) : acrossReveal
         carrierHalf = (long / 2 + alongOpen, short / 2 + acrossOpen)
-        let extent = CGSize(width: long + 2 * (alongOpen + holder), height: short + 2 * (acrossOpen + holder))
+        let extent = CGSize(width: long + 2 * (alongReveal + holder), height: short + 2 * (acrossReveal + holder))
         let factor = Double(longEdge) / max(extent.width, extent.height)
         let landscapeSize = CGSize(width: max(1, (extent.width * factor).rounded()),
                                    height: max(1, (extent.height * factor).rounded()))
@@ -369,6 +424,25 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     }
 
     var pixelPitchMicrometers: Double { millimetersPerPixel * 1000 }
+    /// One resolved parameter set: handling distress (after Amount) plus the gate's optics. Gate
+    /// tilt and bulge add to handling; the gate tilt's direction comes from the seed.
+    static func resolve(_ layout: FilmEdgeLayout) -> FilmEdgeDistress {
+        var d = layout.distress.effective
+        let g = layout.gate
+        d.gateSoftness = g.softness
+        d.gateWear = g.wear
+        d.carrierBlur = d.enlargerPrint ? 0.04 : g.holderBlur
+        d.carrierDetail = d.enlargerPrint ? 0 : g.holderDetail
+        // An enlarger carrier blocks light completely; a defocused scan holder scatters a faint tail.
+        d.carrierTail = d.enlargerPrint ? 0 : 0.08
+        let sign: Double = streamSeed(d.seed, 60) & 1 == 0 ? 1 : -1
+        d.tilt = min(max(g.tilt * sign + d.tilt, -3), 3)
+        d.bulge = min(max(g.bulge + d.bulge, -1.5), 1.5)
+        // Edge fog also pipes in through the perforations of the wrap above, and reaches deeper.
+        d.perforationLeak = min(1, 0.8 * d.edgeFog)
+        d.fogDepth = 1.5 + 3 * d.edgeFog
+        return d
+    }
     private var tiltRadians: Double { distress.tilt * .pi / 180 }
     private var stockHalf: Double { (format == .film35 ? Self.stockWidth : Self.rollStockWidth) / 2 }
     /// Canvas millimetres from the centre, in canvas x/y (y down).
@@ -389,21 +463,16 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     private var pixelRadius: Double { 0.56 * millimetersPerPixel }
     private func seed(_ stream: UInt32) -> UInt32 { Self.streamSeed(distress.seed, stream) }
 
-    /// Signed distance to the camera aperture in film x/y (> 0 outside), including the subtle
-    /// outline of the chosen gate: rounded corners, film bulge/dip (edges bow ~35–50 µm) or a
-    /// slightly tilted film plane (keystone ~40 µm). Engineering values, not camera measurements.
+    /// Signed distance to the camera aperture in film x/y (> 0 outside). Film that is not flat
+    /// (bulge > 0) or dips (< 0) bows the outline: up to ~0.22 mm on the long edges and
+    /// ~0.15 mm on the short ones at full bulge.
     func gateDistance(_ fx: Double, _ fy: Double) -> Double {
         var (hx, hy) = gateHalf
         let ux = min(max(fx / hx, -1), 1), uy = min(max(fy / hy, -1), 1)
-        var corner = Self.gateCorner
-        switch gateShape {
-        case .standard: break
-        case .rounded: corner = Self.roundedGateCorner
-        case .bowed: hx += 0.035 * (1 - uy * uy); hy += 0.05 * (1 - ux * ux)
-        case .pinched: hx -= 0.035 * (1 - uy * uy); hy -= 0.05 * (1 - ux * ux)
-        case .keystone: hy *= 1 + 0.0035 * ux; hx += 0.03 * uy
-        }
-        return FilmEdgeNoise.box(fx, fy, hx, hy, corner)
+        let b = distress.bulge
+        hx += 0.15 * b * (1 - uy * uy)
+        hy += 0.22 * b * (1 - ux * ux)
+        return FilmEdgeNoise.box(fx, fy, hx, hy, Self.gateCorner)
     }
     /// Camera-gate exposure coverage: penumbra, pixel area and seeded wear of the aperture edge.
     func gateCoverage(x: Int, y: Int) -> Double {
@@ -428,7 +497,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// lens and is gated with the scene; `back` (door/seal) light bypasses the gate; `fog` is
     /// base-path light: edge piping from the long film edges and perforation-shaped fog where
     /// light shone through the holes of the outer wrap onto the next one.
-    struct Exposure: Sendable { var front = 0.0, back = 0.0, fog = 0.0 }
+    struct Exposure: Sendable { var front = 0.0, back = 0.0, fog = 0.0, core = 0.0 }
     func exposureFields(x: Int, y: Int) -> Exposure {
         let (fx, fy) = film(Double(x) + 0.5, Double(y) + 0.5)
         let (a, t) = strip(fx, fy)
@@ -439,7 +508,11 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             e.fog += 6 * distress.edgeFog * distress.edgeFog * exp(-distance / distress.fogDepth) * (0.6 + 0.4 * n)
         }
         if distress.perforationLeak > 0 && format == .film35 { e.fog += perforationFog(a, t) }
-        if distress.holeVariation > 0 && format == .film35 { e.fog += holeRim(a, t) }
+        if distress.holeVariation > 0 && format == .film35 {
+            let rim = holeRim(a, t)
+            e.fog += rim.warm
+            e.core += rim.core
+        }
         if distress.leak > 0 {
             let value = 6 * distress.leak * distress.leak * leakField(fx, fy)
             if distress.leakKind == .front { e.front = value } else { e.back = value }
@@ -471,16 +544,40 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             return exp(-depth / (2.2 * size)) * broad * band
         }
     }
-    /// Light piped in through the cut hole wall fogs a thin rim around each hole — strongest on
-    /// the bottom, red-sensitive layer, so an orange, streaky rim on a print or inverted scan.
-    private func holeRim(_ a: Double, _ t: Double) -> Double {
+    /// Light piped in through the cut hole wall fogs a rim around each hole, from the base side:
+    /// red-sensitive layer first (orange on a print or inverted scan), and right at the wall it
+    /// reaches the green layer too (a bright yellow core). The flat edge facing the picture
+    /// catches the most light, as a streak along the edge with sparkle where the emulsion broke.
+    private func holeRim(_ a: Double, _ t: Double) -> (warm: Double, core: Double) {
         let hole = jittered(perforation.hole(along: a, across: t), perforation)
-        guard hole.distance > -0.004, hole.distance < 0.2 else { return 0 }
+        guard hole.distance > -0.004, hole.distance < 0.2 else { return (0, 0) }
         let v = distress.holeVariation
         let h = FilmEdgeNoise.hash(hole.index, hole.side, seed(47))
         let strength = 0.35 + 0.65 * FilmEdgeNoise.unit(h)
-        let streak = min(max(0.3 + 0.7 * FilmEdgeNoise.value(hole.local / 0.05, hole.t / 0.05 + Double(hole.index) * 5.3, seed(48)), 0), 1)
-        return 2 * v * strength * streak * exp(-max(hole.distance, 0) / 0.03)
+        let d = max(hole.distance, 0)
+        let toward0 = min(max((-hole.t / perforation.halfAcross - 0.55) / 0.35, 0), 1)
+        let toward = toward0 * toward0 * (3 - 2 * toward0)
+        let side = 0.45 + 1.55 * toward
+        let streak = min(max(0.25 + 0.75 * FilmEdgeNoise.value(hole.local / 0.12, hole.t / 0.025 + Double(hole.index) * 5.3, seed(48)), 0), 1)
+        let halo = 3 * v * strength * side * streak * exp(-d / 0.03)
+        let core = 10 * v * strength * toward * (0.55 + 0.45 * streak) * exp(-d / 0.014)
+        let spark0 = min(max((FilmEdgeNoise.value(hole.local / 0.012, hole.t / 0.012, seed(52)) - 0.35) / 0.4, 0), 1)
+        let sparkle = 1.5 * v * toward * spark0 * spark0 * (3 - 2 * spark0) * exp(-d / 0.05) * min(d / 0.01, 1)
+        return (halo + sparkle, core)
+    }
+    /// The perforation-shaped part of edge fog alone, for checks.
+    func perforationFogExposure(x: Int, y: Int) -> Double {
+        guard distress.perforationLeak > 0, format == .film35 else { return 0 }
+        let (fx, fy) = film(Double(x) + 0.5, Double(y) + 0.5)
+        let (a, t) = strip(fx, fy)
+        return perforationFog(a, t)
+    }
+    /// The hole-wall rim alone (base-path halo, yellow core), for checks.
+    func holeRimExposure(x: Int, y: Int) -> (warm: Double, core: Double) {
+        guard distress.holeVariation > 0, format == .film35 else { return (0, 0) }
+        let (fx, fy) = film(Double(x) + 0.5, Double(y) + 0.5)
+        let (a, t) = strip(fx, fy)
+        return holeRim(a, t)
     }
     /// Light through a hole of the wrap above: a softened image of the hole, displaced toward the
     /// picture, on a seeded subset of holes. Very small exposures; through the base (warm).
@@ -576,14 +673,18 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let notch = min(max((n - 0.6) / 0.3, 0), 1)
         return base + amplitude * (broad + 0.5 * notch * notch * (3 - 2 * notch))
     }
-    /// Light passed by the holder: a defocused edge, plus specks of light through an abraded edge.
+    /// Light passed by the holder: a crisp core (its defocus) plus a faint wide tail of scattered
+    /// light, and specks of light through an abraded edge. On an inverted negative the faint tail
+    /// prints as a visible band; on a slide it disappears into black, as in real scans.
     func carrierCoverage(x: Int, y: Int) -> Double {
         let d = carrierDistance(x: x, y: y)
         let r = max(distress.carrierBlur, pixelRadius)
         if d < -r { return 1 }
         let open = FilmEdgeNoise.penumbra(d, r)
+        let tailWidth = 0.12
+        var pass = open + (1 - open) * distress.carrierTail * exp(-max(d, 0) / tailWidth)
         let detail = distress.carrierDetail
-        guard detail > 0, d < r + 0.45 else { return open }
+        guard detail > 0, d < r + 0.45 else { return pass }
         let (cx, cy) = canvas(Double(x) + 0.5, Double(y) + 0.5)
         let (a, t) = strip(cx, cy)
         // Organic abrasion: two octaves, a soft threshold, patchy along the edge, densest at it.
@@ -591,8 +692,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let u = min(max((n - 0.15) / 0.55, 0), 1)
         let patch = 0.5 + 0.5 * FilmEdgeNoise.value(a / 0.6, t / 0.6, seed(50))
         let speck = u * u * (3 - 2 * u) * patch * patch
-        let gaps = detail * 0.5 * speck * exp(-max(d - r * 0.5, 0) / 0.12)
-        return open + (1 - open) * gaps
+        pass += (1 - pass) * detail * 0.5 * speck * exp(-max(d - r * 0.5, 0) / 0.12)
+        return pass
     }
     /// Enlarger light glancing off a bare-metal carrier edge lands just inside the opening without
     /// passing through the negative's mask, so on RA-4 it prints as a darker, coloured band.
@@ -742,18 +843,17 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     }
 
     /// Matches the Metal edge kernels. No full-frame mask bitmap is allocated.
-    func uniforms(light: SIMD3<Double> = .zero, fogLight: SIMD3<Double> = .zero) -> [SIMD4<Float>] {
+    func uniforms(light: SIMD3<Double> = .zero, fogLight: SIMD3<Double> = .zero, coreLight: SIMD3<Double> = .zero) -> [SIMD4<Float>] {
         let d = distress
         let (gx, gy) = gateHalf
         let leak = leakFrame
         var values: [SIMD4<Float>] = [
             SIMD4(Float(width), Float(height), Float(millimetersPerPixel), portrait ? 1 : 0),
-            SIMD4(Float(gx), Float(gy), Float(gateShape == .rounded ? Self.roundedGateCorner : Self.gateCorner), Float(d.gateSoftness)),
+            SIMD4(Float(gx), Float(gy), Float(Self.gateCorner), Float(d.gateSoftness)),
             SIMD4(format == .film35 ? 1 : 0, Float(Self.holeCenter), Float(Self.holeRadius), d.scratchesInImage ? 1 : 0),
-            SIMD4(Float(FilmEdgeLayout.GateShape.allCases.firstIndex(of: gateShape)!), erodesGate ? 1 : 0,
-                  Float(cos(tiltRadians)), Float(sin(tiltRadians))),
+            SIMD4(Float(d.bulge), erodesGate ? 1 : 0, Float(cos(tiltRadians)), Float(sin(tiltRadians))),
             SIMD4(Float(d.seed & 0xffff), Float(d.seed >> 16), Float(stockHalf), Float(d.gateWear)),
-            SIMD4(Float(d.carrierRoughness), Float(d.carrierScale), Float(carrierHalf.along), Float(carrierHalf.across)),
+            SIMD4(Float(d.carrierRoughness), Float(d.carrierTail), Float(carrierHalf.along), Float(carrierHalf.across)),
             SIMD4(Float(d.edgeFog), Float(d.fogDepth), Float(d.leak), Float(d.leakSize)),
             SIMD4(Float(leak.point.0), Float(leak.point.1), Float(leak.normal.0), Float(leak.normal.1)),
             SIMD4(Float(leak.offset), Float(leak.weight), Float(d.dust), Float(d.scratches)),
@@ -764,6 +864,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
                   Float(FilmEdgeDistress.LeakShape.allCases.firstIndex(of: d.leakShape)!)),
             SIMD4(Float(fogLight.x), Float(fogLight.y), Float(fogLight.z), Float(d.carrierReflection)),
             SIMD4(Float(d.carrierBlur), Float(d.carrierDetail), Float(leak.direction.0), Float(leak.direction.1)),
+            SIMD4(Float(coreLight.x), Float(coreLight.y), Float(coreLight.z), 0.12),
         ]
         for s in scratchCandidates {
             values.append(SIMD4(Float(s.across), Float(s.wander), Float(s.wavelength), Float(s.phase)))
@@ -782,6 +883,9 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     func leakLight(neutral: SIMD3<Double>) -> SIMD3<Double> { Self.light(neutral: neutral, warmth: distress.warmth) }
     /// Edge piping and perforation fog travel in the base.
     func fogLight(neutral: SIMD3<Double>) -> SIMD3<Double> { Self.light(neutral: neutral, warmth: 0.7) }
+    /// Right at the cut wall the piped light reaches the green layer as well, but not the blue
+    /// top layer: a yellow core on a print or inverted scan.
+    func coreLight(neutral: SIMD3<Double>) -> SIMD3<Double> { SIMD3(neutral.x, neutral.y * 0.75, neutral.z * 0.08) }
     var hasExposureNoise: Bool {
         distress.edgeFog > 0 || distress.leak > 0
             || (format == .film35 && (distress.perforationLeak > 0 || distress.holeVariation > 0))
