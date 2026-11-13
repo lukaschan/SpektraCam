@@ -334,7 +334,8 @@ actor PhotoRenderer {
 
     private func frame(
         _ input: SourceImageRenderer.Input, recipe: EditRecipe,
-        library: ModelLibrary, gpu: MetalFilmPipeline, preview: Bool, state: PreviewState? = nil
+        library: ModelLibrary, gpu: MetalFilmPipeline, preview: Bool, state: PreviewState? = nil,
+        framing: (recipe: EditRecipe, size: CGSize, maximum: Int)? = nil
     ) async throws -> CGImage {
         let cache = state ?? PreviewState(maximum: previewMaximum)
         var recipe = recipe
@@ -383,7 +384,12 @@ actor PhotoRenderer {
             {
                 neutral = cached
             } else {
-                let developed = try SourceImageRenderer.prepare(
+                let developed = try framing.map {
+                    // A film-edge centre keeps its framed decode across handling changes.
+                    try edgeSource(
+                        recipe, framing: $0.recipe, maximum: $0.maximum, intent: .developedPhoto,
+                        size: $0.size)
+                } ?? SourceImageRenderer.prepare(
                     data: data, fallback: source, recipe: recipe,
                     maximum: max(input.width, input.height), sourceType: sourceType,
                     intent: .developedPhoto, description: sourceDescription,
@@ -528,6 +534,36 @@ actor PhotoRenderer {
         return photograph
     }
 
+    /// The framed source of a film-edge render. Handling and gate sliders re-render the support
+    /// many times without touching the photograph, so its decode is kept between frames.
+    private struct EdgeSourceKey: Equatable {
+        let source: EditRecipe.Source, temperature: Double?, crop: CropSelection
+        let geometry: ImageGeometry, maximum: Int, size: CGSize
+        let intent: SourceImageRenderer.Intent
+    }
+    private var edgeSources: [(key: EdgeSourceKey, input: SourceImageRenderer.Input)] = []
+    private var edgeCentres: [(key: EditRecipe, size: CGSize, image: CGImage)] = []
+    private func edgeSource(
+        _ recipe: EditRecipe, framing: EditRecipe, maximum: Int,
+        intent: SourceImageRenderer.Intent, size: CGSize
+    ) throws -> SourceImageRenderer.Input {
+        let key = EdgeSourceKey(
+            source: recipe.source, temperature: recipe.temperature, crop: framing.crop,
+            geometry: framing.geometry, maximum: maximum, size: size, intent: intent)
+        if let index = edgeSources.firstIndex(where: { $0.key == key }) {
+            let hit = edgeSources.remove(at: index)
+            edgeSources.append(hit)
+            return hit.input
+        }
+        let input = try SourceImageRenderer.prepare(
+            data: data, fallback: source, recipe: recipe, maximum: maximum, sourceType: sourceType,
+            intent: intent, description: sourceDescription, framing: framing, targetSize: size,
+            allowsStore: true)
+        // The quick frame, the settled frame and the loupe each keep one size.
+        edgeSources.append((key, input))
+        if edgeSources.count > 4 { edgeSources.removeFirst() }
+        return input
+    }
     /// Complete capture-support presentation, before paper placement and final file encoding.
     /// The final long edge includes the rebate; native export never grows the canvas silently.
     func renderFilmEdge(_ original: EditRecipe, maximum: Int?, allowOvercommit: Bool = false) async throws -> CGImage {
@@ -558,11 +594,9 @@ actor PhotoRenderer {
             recipe: material, allowOvercommit: allowOvercommit, pixelPitchMicrometers: geometry.pixelPitchMicrometers)
         let (library, gpu) = try await renderResources.load()
         let autoEV = try exposure(material, library: library, state: edgeMetering)
-        let input = try SourceImageRenderer.prepare(data: data, fallback: source, recipe: material,
-            maximum: decodeMaximum, sourceType: sourceType, intent: .sceneLinear,
-            description: sourceDescription, framing: recipe,
-            targetSize: CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded())),
-            allowsStore: true)
+        let input = try edgeSource(
+            material, framing: recipe, maximum: decodeMaximum, intent: .sceneLinear,
+            size: CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded())))
         let pipeline = try await renderResources.pipeline(material)
         let composes = material.processingRecipe != recipe.processingRecipe
         // A composed centre fades through the soft gate itself, so the material graph's scene must
@@ -578,14 +612,28 @@ actor PhotoRenderer {
             // Keep LUTs, disabled Develop and every manual cross-family choice exactly as selected.
             // Release FFT work before the second graph; the completed support bitmap is retained.
             await gpu.releaseWorkingCaches()
-            let centerInput = try SourceImageRenderer.prepare(data: data, fallback: source, recipe: recipe,
-                maximum: decodeMaximum, sourceType: sourceType, description: sourceDescription, allowsStore: true)
-            let graded = recipe.look.enabled
-                ? try await frame(centerInput, recipe: recipe, library: library, gpu: gpu, preview: false)
+            // Framed like the support (one pixel per gate position), so leak and fog light can be
+            // added as exposure before the LUT or tone, exactly where the film graph adds it.
+            let gateSize = CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded()))
+            // The developed centre depends on handling only through leak and fog exposure.
+            var centreKey = recipe
+            if layout.distress.leak <= 0 && layout.distress.edgeFog <= 0 { centreKey.filmEdgeLayout = nil }
+            let center: CGImage
+            if let hit = edgeCentres.first(where: { $0.key == centreKey && $0.size == gateSize }) {
+                center = hit.image
+            } else {
+            let centerInput = try FilmEdgeRenderer.exposeCenter(
+                edgeSource(
+                    recipe, framing: recipe, maximum: decodeMaximum,
+                    intent: recipe.inputMode == .spektrafilm ? .sceneLinear : .developedPhoto, size: gateSize),
+                geometry: geometry)
+            center = recipe.look.enabled
+                ? try await frame(centerInput, recipe: recipe, library: library, gpu: gpu, preview: false,
+                                  framing: (recipe, gateSize, decodeMaximum))
                 : try neutralFrame(centerInput, recipe: recipe)
-            guard let transformed = GeometryRenderer.render(graded, geometry: recipe.geometry),
-                  let center = transformed.cropping(to: recipe.crop.pixelRect(in: CGSize(width: transformed.width, height: transformed.height)))
-            else { throw PhotoExporter.Failure.render }
+            edgeCentres.append((centreKey, gateSize, center))
+            if edgeCentres.count > 3 { edgeCentres.removeFirst() }
+            }
             let paperPrint = !material.bypassesPrint && FilmStock.prints.first { $0.id == material.printID }?.support != "film"
             image = try FilmEdgeRenderer.replacingCenter(image, with: center, geometry: geometry, paperPrint: paperPrint)
         }
@@ -710,6 +758,8 @@ actor PhotoRenderer {
         preview = next
         edgeMetering = nextEdge
         alternatePreview = nil
+        edgeSources = []
+        edgeCentres = []
     }
     private static func resize(_ image: CGImage, maximum: Int?) throws -> CGImage {
         guard let maximum, max(image.width, image.height) > maximum else { return image }

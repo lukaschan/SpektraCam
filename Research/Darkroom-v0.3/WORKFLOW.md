@@ -2,6 +2,18 @@
 
 Updated 2026-11-10. This file is the repository handoff point; read it before continuing Darkroom work. Changes are local and uncommitted. Preserve the preexisting Xcode project version/signing edits.
 
+## Nov 12 (later) — LUT / creative route fixed; test charts
+
+Runze reported that the edge looks wrong with a LUT. Any recipe whose Develop differs from the edge material uses the creative composite: a LUT, Develop off, a cross-family stock, and also every scan or cinema type with the default Portra recipe. A probe rendered all four types through Spektrafilm, a LUT and Develop off and found three faults:
+
+1. **Dashed black and white seam at the gate.** Rebate-only scratches were also applied to the composited centre wherever the gate mask was above zero. They now stay in the material render; only crossing scratches and dust are drawn over the centre.
+2. **Darker 1 px border.** The centre image ended at the nominal gate, but the soft, worn or bulged gate opens past it, so its transparent border blended in. It is now clamped to its extent before placing.
+3. **Leaks and fog stopped at the gate.** The centre is now prepared framed at gate size (the same framing as the support), and front/back leak and fog are added to it as exposure before the LUT or tone (`FilmEdgeRenderer.exposeCenter`, in the film graph's mid-grey units, linear up to 0.5 then a soft shoulder). With Mix below 100 % the developed endpoint uses the same framing.
+
+New regression checks cover Develop off and a real LUT on all four types: no bright rim, dark seams in fewer than 2 % of columns, and a front leak brightens the LUT picture.
+
+**Test charts:** `swift Scripts/make-test-images.swift [folder]` writes eight synthetic charts: gate edges, step wedge with colour patches, night, overcast, portrait grid, square 120, flat grey and fine detail. Each answers one question about the edge, LUT or loupe. Copies are in the vault (`Claude/Test-images/`, with a README), so they can be imported on the phone via Files. No real photos are in the repo.
+
 ## Nov 12 — Gate types, RA-4 hand print, picture-side rim, loupe (distress revision 4)
 
 New reference: Runze's Kodak 5294 (Ektachrome 100D) slide scan, `IMG_0190 copy.jpg`, outside the repo.

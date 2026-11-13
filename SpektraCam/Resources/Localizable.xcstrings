@@ -17,6 +17,12 @@
       },
       "shouldTranslate" : false
     },
+    "100 %" : {
+
+    },
+    "200 %" : {
+
+    },
     "about.about" : {
       "comment" : "About interface text.",
       "extractionState" : "manual",
@@ -1977,6 +1983,17 @@
         }
       }
     },
+    "common.off" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Off"
+          }
+        }
+      }
+    },
     "common.ok" : {
       "comment" : "Common interface text.",
       "extractionState" : "manual",
@@ -1991,6 +2008,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "好"
+          }
+        }
+      }
+    },
+    "common.on" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "On"
           }
         }
       }
@@ -3057,6 +3085,24 @@
         }
       }
     },
+    "darkroom.back_to_photo" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to photo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回照片"
+          }
+        }
+      }
+    },
     "darkroom.clean_print" : {
       "comment" : "Darkroom print layout interface. New copy; human editorial review pending.",
       "extractionState" : "manual",
@@ -3129,6 +3175,24 @@
         }
       }
     },
+    "darkroom.distress.bulge" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Film bulge"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "胶片凸起"
+          }
+        }
+      }
+    },
     "darkroom.distress.carrier" : {
       "comment" : "Darkroom distress copy; human editorial review pending.",
       "extractionState" : "manual",
@@ -3143,6 +3207,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "片夹与固定"
+          }
+        }
+      }
+    },
+    "darkroom.distress.carrier_blur" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Holder blur"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "片夹虚化"
+          }
+        }
+      }
+    },
+    "darkroom.distress.carrier_detail" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Holder edge detail"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "片夹边缘细节"
           }
         }
       }
@@ -3197,6 +3297,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "干净"
+          }
+        }
+      }
+    },
+    "darkroom.distress.curl" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Film curl"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "胶片卷曲"
           }
         }
       }
@@ -3273,6 +3391,42 @@
         }
       }
     },
+    "darkroom.distress.enlarger_print" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enlarger print (RA-4)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放大机印相（RA-4）"
+          }
+        }
+      }
+    },
+    "darkroom.distress.extra_tilt" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crooked loading"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "装片歪斜"
+          }
+        }
+      }
+    },
     "darkroom.distress.fine_tune" : {
       "comment" : "Darkroom distress copy; human editorial review pending.",
       "extractionState" : "manual",
@@ -3341,6 +3495,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "手放相纸"
+          }
+        }
+      }
+    },
+    "darkroom.distress.handling" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Handling"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作痕迹"
+          }
+        }
+      }
+    },
+    "darkroom.distress.hole_variation" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hole variation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "齿孔差异"
           }
         }
       }
@@ -3758,6 +3948,24 @@
         }
       }
     },
+    "darkroom.edge.cine35" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "35 mm cine"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "35 mm 电影卷"
+          }
+        }
+      }
+    },
     "darkroom.edge.cinema_print" : {
       "comment" : "Darkroom copy; human editorial review pending.",
       "localizations" : {
@@ -3947,6 +4155,114 @@
         }
       }
     },
+    "darkroom.gate" : {
+      "comment" : "Darkroom distress copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gate"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "片门"
+          }
+        }
+      }
+    },
+    "darkroom.gate.loose" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loose"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "松动"
+          }
+        }
+      }
+    },
+    "darkroom.gate.natural" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Natural"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自然"
+          }
+        }
+      }
+    },
+    "darkroom.gate.precise" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precise"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "精准"
+          }
+        }
+      }
+    },
+    "darkroom.gate.rough" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rough"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粗犷"
+          }
+        }
+      }
+    },
+    "darkroom.hide_loupe" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide loupe"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏放大镜"
+          }
+        }
+      }
+    },
     "darkroom.image_scale" : {
       "comment" : "Darkroom print layout interface. New copy; human editorial review pending.",
       "extractionState" : "manual",
@@ -3961,6 +4277,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "影像比例"
+          }
+        }
+      }
+    },
+    "darkroom.light_table" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light table"
+          }
+        }
+      }
+    },
+    "darkroom.loupe" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loupe"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放大镜"
+          }
+        }
+      }
+    },
+    "darkroom.loupe_hint" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag over the print to inspect it. Double-tap to change magnification."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在相片上拖动查看细节。轻点两下切换放大倍率。"
+          }
+        }
+      }
+    },
+    "darkroom.loupe_zoom" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change magnification"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换放大倍率"
           }
         }
       }
@@ -4069,6 +4450,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "旋转相纸"
+          }
+        }
+      }
+    },
+    "darkroom.show_loupe" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show loupe"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示放大镜"
           }
         }
       }
@@ -10118,366 +10517,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法渲染图像调整。"
-          }
-        }
-      }
-    },
-    "darkroom.distress.carrier_blur" : {
-      "comment" : "Darkroom distress copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Holder blur"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "片夹虚化"
-          }
-        }
-      }
-    },
-    "darkroom.distress.carrier_detail" : {
-      "comment" : "Darkroom distress copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Holder edge detail"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "片夹边缘细节"
-          }
-        }
-      }
-    },
-    "darkroom.distress.hole_variation" : {
-      "comment" : "Darkroom distress copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hole variation"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "齿孔差异"
-          }
-        }
-      }
-    },
-    "darkroom.gate" : {
-      "comment" : "Darkroom distress copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gate"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "片门"
-          }
-        }
-      }
-    },
-    "darkroom.gate.precise" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Precise"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "精准"
-          }
-        }
-      }
-    },
-    "darkroom.gate.natural" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Natural"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自然"
-          }
-        }
-      }
-    },
-    "darkroom.gate.loose" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loose"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "松动"
-          }
-        }
-      }
-    },
-    "darkroom.gate.rough" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rough"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "粗犷"
-          }
-        }
-      }
-    },
-    "darkroom.distress.bulge" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Film bulge"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "胶片凸起"
-          }
-        }
-      }
-    },
-    "darkroom.distress.handling" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Handling"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "操作痕迹"
-          }
-        }
-      }
-    },
-    "darkroom.distress.extra_tilt" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Crooked loading"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "装片歪斜"
-          }
-        }
-      }
-    },
-    "darkroom.distress.curl" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Film curl"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "胶片卷曲"
-          }
-        }
-      }
-    },
-    "darkroom.distress.enlarger_print" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enlarger print (RA-4)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放大机印相（RA-4）"
-          }
-        }
-      }
-    },
-    "darkroom.edge.cine35" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "35 mm cine"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "35 mm 电影卷"
-          }
-        }
-      }
-    },
-    "darkroom.back_to_photo" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Back to photo"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "返回照片"
-          }
-        }
-      }
-    },
-    "darkroom.loupe" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loupe"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放大镜"
-          }
-        }
-      }
-    },
-    "darkroom.loupe_hint" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drag over the print to inspect it. Double-tap to change magnification."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在相片上拖动查看细节。轻点两下切换放大倍率。"
-          }
-        }
-      }
-    },
-    "darkroom.loupe_zoom" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Change magnification"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切换放大倍率"
-          }
-        }
-      }
-    },
-    "darkroom.show_loupe" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show loupe"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示放大镜"
-          }
-        }
-      }
-    },
-    "darkroom.hide_loupe" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide loupe"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隐藏放大镜"
           }
         }
       }

@@ -500,6 +500,10 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     struct Exposure: Sendable { var front = 0.0, back = 0.0, fog = 0.0, core = 0.0 }
     func exposureFields(x: Int, y: Int) -> Exposure {
         let (fx, fy) = film(Double(x) + 0.5, Double(y) + 0.5)
+        return exposureFields(filmX: fx, filmY: fy)
+    }
+    /// The same fields at a point in film millimetres (origin at the frame centre).
+    func exposureFields(filmX fx: Double, filmY fy: Double) -> Exposure {
         let (a, t) = strip(fx, fy)
         var e = Exposure()
         if distress.edgeFog > 0 {

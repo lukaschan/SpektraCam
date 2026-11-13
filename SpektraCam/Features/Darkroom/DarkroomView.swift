@@ -16,8 +16,10 @@ struct DarkroomView: View {
     /// Full-resolution pixels for the loupe, when the workspace has rendered them.
     var loupeImage: UIImage? = nil
     var loupeRefining = false
+    var loupeWidth: CGFloat? = nil
     @Binding var showLoupe: Bool
     @State private var loupeCenter: CGPoint?
+    @AppStorage("darkroom.light.on") private var tableLit = true
     @State private var expanded = false
     @State private var fineTune = false
     @State private var gateFineTune = false
@@ -32,9 +34,10 @@ struct DarkroomView: View {
         GeometryReader { workspace in
             VStack(spacing: 12) {
                 PrintPreview(image: imageReady ? image : nil, imageSize: sourceSize, layout: current,
-                             loupeImage: loupeImage, loupeRefining: loupeRefining,
-                             showLoupe: showLoupe, loupeCenter: $loupeCenter)
+                             loupeImage: loupeImage, loupeRefining: loupeRefining, loupeWidth: loupeWidth,
+                             showLoupe: showLoupe, tableLit: tableLit, loupeCenter: $loupeCenter)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .bottomLeading) { LightTableSwitch(lit: $tableLit) }
                     .overlay(alignment: .topLeading) {
                         Button(showLoupe ? String(localized: "darkroom.hide_loupe", defaultValue: "Hide loupe")
                                          : String(localized: "darkroom.show_loupe", defaultValue: "Show loupe"),
@@ -48,7 +51,7 @@ struct DarkroomView: View {
             }
             .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background { LightTableBackdrop() }
+            .background { LightTableBackdrop(lit: tableLit) }
         }
         .onDisappear { onEditingChanged(false) }
     }
@@ -406,7 +409,10 @@ private struct PrintPreview: View {
     let layout: PrintLayout
     var loupeImage: UIImage? = nil
     var loupeRefining = false
+    /// Pixel width the loupe's full-resolution frame will have, known before it is rendered.
+    var loupeWidth: CGFloat? = nil
     var showLoupe = false
+    var tableLit = true
     @Binding var loupeCenter: CGPoint?
     var body: some View {
         GeometryReader { viewport in
@@ -438,7 +444,9 @@ private struct PrintPreview: View {
                                                      y: paperFrame.minY + geometry.imageRect.minY * fit,
                                                      width: geometry.imageRect.width * fit, height: geometry.imageRect.height * fit),
                                   paperFrame: paperFrame, bounds: viewport.size,
-                                  refining: loupeRefining || loupeImage == nil, center: $loupeCenter)
+                                  refining: loupeRefining || loupeImage == nil,
+                                  surround: LightTableBackdrop.surround(lit: tableLit),
+                                  fullWidth: loupeWidth, center: $loupeCenter)
                 }
             }
         }

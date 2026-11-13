@@ -11,7 +11,13 @@ struct DarkroomLoupe: View {
     let paperFrame: CGRect
     let bounds: CGSize
     var refining = false
+    /// The table beside the print, so the lens shows what is really under it.
+    var surround = Color(white: 0.86)
+    /// Pixel width of the full-resolution frame. Magnification is fixed to it, so the view
+    /// only sharpens when that frame replaces the preview; it never changes scale.
+    var fullWidth: CGFloat? = nil
     @Binding var center: CGPoint?
+    @State private var widest: CGFloat = 0
     @State private var doubled = false
     @State private var dragOrigin: CGPoint?
     @Environment(\.displayScale) private var displayScale
@@ -25,10 +31,12 @@ struct DarkroomLoupe: View {
         let c = center ?? fallback
         return CGPoint(x: min(max(c.x, r), max(r, bounds.width - r)), y: min(max(c.y, r), max(r, bounds.height - r)))
     }
+    private var pixelWidth: CGFloat {
+        CGFloat(image.cgImage?.width ?? Int(image.size.width * image.scale))
+    }
     /// Loupe points per screen point, so one rendered pixel covers one device pixel at 100 %.
     private var zoom: CGFloat {
-        let pixels = CGFloat(image.cgImage?.width ?? Int(image.size.width * image.scale))
-        let native = pixels / max(imageFrame.width, 1) / displayScale
+        let native = max(fullWidth ?? 0, widest, pixelWidth) / max(imageFrame.width, 1) / displayScale
         return max(native, 1.5) * (doubled ? 2 : 1)
     }
 
@@ -38,7 +46,7 @@ struct DarkroomLoupe: View {
         let paperOrigin = offset(paperFrame.origin), imageOrigin = offset(imageFrame.origin)
         ZStack {
             ZStack(alignment: .topLeading) {
-                Color(white: 0.86)
+                surround
                 Rectangle().fill(.white)
                     .frame(width: paperFrame.width * z, height: paperFrame.height * z)
                     .offset(x: paperOrigin.x, y: paperOrigin.y)
@@ -51,10 +59,12 @@ struct DarkroomLoupe: View {
             // Lens: a soft vignette toward the barrel and a glancing highlight on the glass.
             Circle().fill(RadialGradient(colors: [.clear, .clear, .black.opacity(0.28)],
                                          center: .center, startRadius: 0, endRadius: d / 2))
-            Ellipse().fill(LinearGradient(colors: [.white.opacity(0.32), .white.opacity(0)],
+            // The reflection of an overhead lamp: centred on the glass and held inside the barrel.
+            Ellipse().fill(LinearGradient(colors: [.white.opacity(0.30), .white.opacity(0)],
                                           startPoint: .top, endPoint: .bottom))
-                .frame(width: d * 0.62, height: d * 0.32).offset(x: -d * 0.12, y: -d * 0.26)
+                .frame(width: d * 0.66, height: d * 0.34).offset(y: -d * 0.24)
                 .blendMode(.screen)
+                .mask(Circle().inset(by: rim))
             // Barrel: brushed dark metal with a bright bevel.
             Circle().strokeBorder(AngularGradient(colors: [Color(white: 0.16), Color(white: 0.55), Color(white: 0.2),
                                                            Color(white: 0.42), Color(white: 0.14), Color(white: 0.16)],
@@ -78,6 +88,8 @@ struct DarkroomLoupe: View {
         .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 6)
         .contentShape(Circle())
         .position(c)
+        .onChange(of: pixelWidth, initial: true) { _, width in widest = max(widest, width) }
+        .onChange(of: imageFrame.width / max(imageFrame.height, 1)) { widest = pixelWidth }
         .gesture(DragGesture(minimumDistance: 1).onChanged { value in
             let start = dragOrigin ?? c
             if dragOrigin == nil { dragOrigin = start }

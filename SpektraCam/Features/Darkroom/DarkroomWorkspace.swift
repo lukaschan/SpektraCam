@@ -32,6 +32,21 @@ struct DarkroomWorkspace: View {
         }
         return crop
     }
+    /// Width of the frame `darkroomLoupe` will return, so the loupe can hold its magnification
+    /// while that frame is still rendering. A film edge renders up to the loupe maximum; a clean
+    /// print is limited by the editor preview.
+    private var loupeWidth: CGFloat? {
+        let upright = session.recipe.geometry.quarterTurns % 2 == 0
+            ? CGSize(width: session.photo.width, height: session.photo.height)
+            : CGSize(width: session.photo.height, height: session.photo.width)
+        let crop = session.recipe.crop.pixelRect(in: upright).size
+        guard crop.width > 0, crop.height > 0, expectedSize.width > 0, expectedSize.height > 0 else { return nil }
+        let limit = session.recipe.filmEdgeLayout == nil
+            ? CGFloat(PreviewQuality.editorMaximum) * max(crop.width, crop.height) / max(upright.width, upright.height)
+            : CGFloat(Self.loupeMaximum)
+        let long = min(max(crop.width, crop.height), limit)
+        return (long * expectedSize.width / max(expectedSize.width, expectedSize.height)).rounded()
+    }
     private var displayedImage: UIImage { session.recipe.filmEdgeLayout == nil ? session.displayImage : image ?? session.displayImage }
     private var imageMatchesOrientation: Bool {
         abs(log((displayedImage.size.width / displayedImage.size.height) / (expectedSize.width / expectedSize.height))) < 0.015
@@ -59,6 +74,7 @@ struct DarkroomWorkspace: View {
             },
             loupeImage: loupeKey == renderKey ? loupeImage : nil,
             loupeRefining: loupeRefining,
+            loupeWidth: loupeWidth,
             showLoupe: $showLoupe)
         .overlay(alignment: .top) {
             if pending { ProgressView().padding(12).glassEffect().accessibilityIdentifier("darkroom.edge.rendering") }

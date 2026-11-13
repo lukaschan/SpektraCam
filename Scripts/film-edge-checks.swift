@@ -494,22 +494,56 @@ import UniformTypeIdentifiers
         var tilted = recipe
         tilted.filmEdgeLayout?.distress.apply(.worn); tilted.look.enabled = false
         _ = try await renderer.renderFilmEdge(tilted, maximum: 512)  // creative centre + tilted gate mask
-        for type in [FilmEdgeType.reversalScan, .cinemaPrint, .negativePrint] {
-            var creative = recipe
-            var selection = FilmEdgeSelection(); selection.mode = .manual; selection.manualType = type
-            creative.filmEdgeSelection = selection; creative.look.enabled = false
-            creative.filmEdgeLayout?.gate.softness = 0.1
-            let image = try await renderer.renderFilmEdge(creative, maximum: 1080)
-            let pixels = try PhotoColorBridge.decode(image)
-            let crop = creative.filmEdgeLayout!.constrainedCrop(CropSelection(), imageSize: CGSize(width: 900, height: 600))
-            let g = FilmEdgeGeometry(imageSize: crop.pixelRect(in: CGSize(width: 900, height: 600)).size,
-                                     layout: creative.filmEdgeLayout!, longEdge: max(image.width, image.height))!
-            precondition(g.width == image.width && g.height == image.height)
-            let x = image.width / 2 + 7, top = Int(g.gate.minY)
-            func luma(_ y: Int) -> Double { let v = pixels[y * image.width + x]; return Double(v.x + v.y + v.z) / 3 }
-            let interior = luma(top + 40)
-            let peak = (top - 4...top + 12).map(luma).max()!
-            precondition(peak < interior + 0.02, "Creative \(type) gate edge has a bright rim: peak \(peak) vs interior \(interior)")
+        // Creative centres (Develop off, LUT) blend through the gate: no bright rim, no dark seam,
+        // and leak light reaches the picture as exposure.
+        var cube = "LUT_3D_SIZE 9\n"
+        for b in 0..<9 { for g in 0..<9 { for r in 0..<9 {
+            cube += String(format: "%.4f %.4f %.4f\n", 0.06 + 0.9 * Double(r) / 8, 0.05 + 0.9 * Double(g) / 8, 0.04 + 0.92 * Double(b) / 8)
+        }}}
+        let cubeData = Data(cube.utf8), lutID = CubeLUT.hash(cubeData)
+        try cubeData.write(to: folder.appendingPathComponent(lutID + ".cube"))
+        let lutRenderer = PhotoRenderer(source: source, directory: root.appendingPathComponent("SpektraCam/Resources/ModelData"),
+                                        data: encoded as Data, lutDirectory: folder)
+        for type in [FilmEdgeType.reversalScan, .cinemaPrint, .negativePrint, .negativeScan] {
+            for lut in [false, true] {
+                var creative = recipe
+                var selection = FilmEdgeSelection(); selection.mode = .manual; selection.manualType = type
+                creative.filmEdgeSelection = selection
+                if lut { creative.look.mode = .lut; creative.look.first.id = lutID } else { creative.look.enabled = false }
+                creative.filmEdgeLayout?.gate.softness = 0.1
+                let image = try await lutRenderer.renderFilmEdge(creative, maximum: 1080)
+                let pixels = try PhotoColorBridge.decode(image)
+                let crop = creative.filmEdgeLayout!.constrainedCrop(CropSelection(), imageSize: CGSize(width: 900, height: 600))
+                let g = FilmEdgeGeometry(imageSize: crop.pixelRect(in: CGSize(width: 900, height: 600)).size,
+                                         layout: creative.filmEdgeLayout!, longEdge: max(image.width, image.height))!
+                precondition(g.width == image.width && g.height == image.height)
+                let top = Int(g.gate.minY), bottom = Int(g.gate.maxY)
+                func luma(_ x: Int, _ y: Int) -> Double { let v = pixels[y * image.width + x]; return Double(v.x + v.y + v.z) / 3 }
+                var seams = 0, columns = 0
+                for x in stride(from: image.width / 5, to: image.width * 4 / 5, by: 3) {
+                    for (edge, inward) in [(top, 1), (bottom, -1)] {
+                        let interior = luma(x, edge + 40 * inward), rebate = luma(x, edge - 10 * inward)
+                        let band = (-4...12).map { luma(x, edge + $0 * inward) }
+                        precondition(band.max()! < max(interior, rebate) + 0.03,
+                            "Creative \(type) LUT \(lut) gate edge has a bright rim at x \(x): \(band.max()!) vs \(interior)")
+                        if band.min()! < min(interior, rebate) - 0.05 { seams += 1 }
+                        columns += 1
+                    }
+                }
+                precondition(seams * 50 < columns, "Creative \(type) LUT \(lut) gate edge has a dark seam in \(seams)/\(columns) columns")
+                if lut {
+                    var leaky = creative
+                    leaky.filmEdgeLayout?.distress.apply(.leaky); leaky.filmEdgeLayout?.distress.leakKind = .front
+                    leaky.filmEdgeLayout?.distress.edgeFog = 0
+                    let lit = try PhotoColorBridge.decode(try await lutRenderer.renderFilmEdge(leaky, maximum: 1080))
+                    var gain = 0.0
+                    for y in stride(from: top + 30, to: bottom - 30, by: 4) { for x in stride(from: Int(g.gate.minX) + 30, to: Int(g.gate.maxX) - 30, by: 4) {
+                        let a = lit[y * image.width + x], b = pixels[y * image.width + x]
+                        gain = max(gain, Double(a.x + a.y + a.z - b.x - b.y - b.z) / 3)
+                    }}
+                    precondition(gain > 0.05, "Front leak did not reach the \(type) LUT picture: \(gain)")
+                }
+            }
         }
         recipe.filmEdgeSelection = nil
         recipe.flags["camera.auto_exposure"] = true
@@ -586,6 +620,6 @@ import UniformTypeIdentifiers
             preconditionFailure("Edge export silently substituted a preview when original bytes were missing")
         } catch PhotoExporter.Failure.decode {}
         print("PASS: grain-enabled 720→2160 full-support refinement. Quick ms \(quickMS), settled ms \(refineMS); no silent resolution reduction")
-        print("PASS: real source → four families → saved recipe → paper/B&W → matching PNG export; cancellation recovery; native output bounded. Workflow \((ProcessInfo.processInfo.systemUptime - started) * 1000) ms; proof PNGs \(folder.path)")
+        print("PASS: real source → four families → saved recipe → paper/B&W → matching PNG export; creative/LUT gate without rim or seam, leaks through LUT pictures; cancellation recovery; native output bounded. Workflow \((ProcessInfo.processInfo.systemUptime - started) * 1000) ms; proof PNGs \(folder.path)")
     }
 }
