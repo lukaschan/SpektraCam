@@ -632,19 +632,22 @@ actor MetalFilmPipeline {
     struct RegionKey: Equatable, Sendable {
         let recipe: EditRecipe, width: Int, height: Int, factor: Int, autoExposureEV: Double
         let seed: UInt64
+        /// The film-edge presentation, when the image is a strip canvas rather than a bare frame.
+        var edge: FilmEdgeLayout? = nil
     }
-    private var regionCache: (key: RegionKey, run: Run, halo: Int)?
+    private var regionCache: (key: RegionKey, run: Run, halo: Int, edge: FilmEdgeGeometry?)?
 
     /// Prepare region rendering of a `width` x `height` image for one edit. Returns the halo, in
     /// pixels, that source rectangles must include, or nil when `proxy` (the whole image at
     /// 1/`factor` scale, rows of ceil(width / factor)) is required and was not supplied.
     func prepareRegion(
         width: Int, height: Int, factor: Int, pipeline: FilmPipeline, seed: UInt64 = 0,
-        autoExposureEV: Double, tiling: Tiling = Tiling(), proxy: [SIMD4<Float>]?
+        autoExposureEV: Double, tiling: Tiling = Tiling(), edge: FilmEdgeGeometry? = nil,
+        layout: FilmEdgeLayout? = nil, proxy: [SIMD4<Float>]?
     ) async throws -> Int? {
         let key = RegionKey(
             recipe: pipeline.recipe, width: width, height: height, factor: factor,
-            autoExposureEV: autoExposureEV, seed: seed)
+            autoExposureEV: autoExposureEV, seed: seed, edge: layout)
         if let cached = regionCache, cached.key == key { return cached.halo }
         guard let proxy else { return nil }
         try await beginFrame()
@@ -658,9 +661,10 @@ actor MetalFilmPipeline {
         guard run.factor == factor, proxy.count == run.proxyWidth * run.proxyHeight else {
             throw Failure.invalidShape
         }
+        let coarseEdge = edge?.coarser(by: factor)
         let coarse = try makeSetup(
             pipeline: pipeline, width: run.proxyWidth, height: run.proxyHeight,
-            autoExposureEV: autoExposureEV, edge: nil)
+            autoExposureEV: autoExposureEV, edge: coarseEdge)
         let proxyPool = FilmFrameBuffers(
             device: device, length: run.paddedWidth * run.paddedHeight * 16)
         run.capture = true
@@ -677,7 +681,7 @@ actor MetalFilmPipeline {
             _ = try encodeGraph(
                 source: source, width: run.proxyWidth, height: run.proxyHeight,
                 pipeline: pipeline, setup: coarse, stochastic: true, seed: seed,
-                opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: nil,
+                opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: coarseEdge,
                 command: command, pool: pool, scratch: scratch, invalid: invalid,
                 tile: Tile(x: 0, y: 0, run: run, probe: false, state: TileState()))
         } catch {
@@ -705,17 +709,17 @@ actor MetalFilmPipeline {
         // A one-pixel request reveals the halo the graph needs around any region.
         let detail = try makeSetup(
             pipeline: pipeline, width: width, height: height, autoExposureEV: autoExposureEV,
-            edge: nil)
+            edge: edge)
         var halo = 0
         _ = try await renderTiles(
             run: run, setup: detail, pipeline: pipeline, stochastic: true, seed: seed,
-            opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: nil,
+            opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: edge,
             format: .float, region: (0, 0, 1, 1), proxyPool: nil
         ) { _, _, w, h in
             halo = max(w, h) - 1
             return (try PixelStore(width: w, height: h, format: .float), 0, 0)
         }
-        regionCache = (key, run, halo)
+        regionCache = (key, run, halo, edge)
         return halo
     }
     /// Render `region` of a prepared image. `source` holds scene-linear pixels whose top-left
@@ -729,10 +733,10 @@ actor MetalFilmPipeline {
         guard let cached = regionCache, cached.key == key else { throw Failure.invalidShape }
         let setup = try makeSetup(
             pipeline: pipeline, width: key.width, height: key.height,
-            autoExposureEV: key.autoExposureEV, edge: nil)
+            autoExposureEV: key.autoExposureEV, edge: cached.edge)
         return try await renderTiles(
             run: cached.run, setup: setup, pipeline: pipeline, stochastic: true, seed: key.seed,
-            opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: nil,
+            opticsOnly: false, grainMean: false, grainDensityOnly: false, edge: cached.edge,
             format: .float, region: region, proxyPool: nil
         ) { _, _, _, _ in (source, origin.x, origin.y) }
     }
@@ -1513,6 +1517,17 @@ actor MetalFilmPipeline {
                 // Destination holes are openings, distinct from the printed source-hole image.
                 try edgeNode("film_edge_transmission", density, clear: clear,
                              mode: destinationFilm ? [.carrier, .destination] : [.damage, .carrier])
+                if edge != nil {
+                    // Scanner veiling glare: clear holes and bright areas glow into their surround.
+                    let flare = try blurs(
+                        branch + 16, density,
+                        [(RGB(repeating: FilmEdgeGeometry.scanFlareMicrometers / pitch), true)], glow: true)[0]
+                    try mix(
+                        density, flare, into: density,
+                        aWeight: RGB(repeating: 1 - FilmEdgeGeometry.scanFlare),
+                        bWeight: RGB(repeating: FilmEdgeGeometry.scanFlare))
+                    pool.release(flare)
+                }
             }
             try node("compress_image_gamut", density, density)
             let scanBlur = recipe.number("scanner.lens_blur")

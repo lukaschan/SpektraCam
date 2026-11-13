@@ -29,6 +29,7 @@ import SwiftUI
     @ObservationIgnored private var edgeTask: Task<CGImage, Error>?
     @ObservationIgnored private var edgeEpoch = UUID()
     @ObservationIgnored private var loupeTask: Task<CGImage, Error>?
+    @ObservationIgnored private var patchTask: Task<PhotoRenderer.Detail?, Never>?
     @ObservationIgnored private var filmSource: CGImage
     @ObservationIgnored private var renderedSource: CGImage
     @ObservationIgnored private var filmTask: Task<Void, Never>?
@@ -240,6 +241,20 @@ import SwiftUI
         edgeTask = job
         defer { if edgeEpoch == epoch { edgeTask = nil } }
         return try await withTaskCancellationHandler { try await job.value } onCancel: { job.cancel() }
+    }
+    /// Native-resolution pixels for the part of the photograph under the Darkroom loupe. Nil when
+    /// the edit's route can only be rendered as a whole frame.
+    func loupePatch(_ snapshot: EditRecipe, visible: CGRect) async -> PhotoRenderer.Detail? {
+        patchTask?.cancel()
+        var recipe = snapshot
+        recipe.printLayout = nil
+        let renderer = filmRenderer
+        let job = Task { () -> PhotoRenderer.Detail? in
+            if recipe.filmEdgeLayout != nil { return try? await renderer.renderEdgeDetail(recipe, visible: visible) }
+            return try? await renderer.renderDetail(recipe, visible: visible, longEdge: 1_000_000)
+        }
+        patchTask = job
+        return await withTaskCancellationHandler { await job.value } onCancel: { job.cancel() }
     }
     /// Full-resolution photograph (with its film edge, without paper) for the Darkroom loupe.
     /// Separate from the preview task so the two never cancel each other.

@@ -9,6 +9,31 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
     /// Motion-picture stock respooled for a still camera keeps BH-1866 holes (e.g. Ektachrome 100D
     /// 5294, Vision3). Off means the holes follow the chosen stock.
     var cinePerforations = false
+    /// 120 frame sizes (nominal name, actual gate in mm). The 56 mm side always spans the film.
+    enum RollFrame: String, Codable, CaseIterable, Sendable {
+        case six45, six6, six7, six9
+        var title: String {
+            switch self { case .six45: "6 × 4.5"; case .six6: "6 × 6"; case .six7: "6 × 7"; case .six9: "6 × 9" }
+        }
+        /// Gate length along the film.
+        var along: Double {
+            switch self { case .six45: 41.5; case .six6: 56; case .six7: 69.5; case .six9: 84 }
+        }
+    }
+    var rollFrame = RollFrame.six6
+    /// The camera body's gate. Hasselblad V magazines cut two small V notches into the left edge,
+    /// which print as ticks of picture in the rebate; a toy camera's moulded mask is soft and round.
+    enum RollGate: String, Codable, CaseIterable, Sendable {
+        case plain, hasselblad, toy
+        var title: String {
+            switch self {
+            case .plain: String(localized: "darkroom.rollgate.plain", defaultValue: "Plain")
+            case .hasselblad: "Hasselblad V"
+            case .toy: String(localized: "darkroom.rollgate.toy", defaultValue: "Toy camera")
+            }
+        }
+    }
+    var rollGate = RollGate.hasselblad
     var gate = FilmEdgeGate()
     var distress = FilmEdgeDistress()
     /// The last gate type a person chose becomes the default for their next film edge.
@@ -22,17 +47,26 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         layout.gate = FilmEdgeGate(preferredGate)
         return layout
     }
-    var gateSize: CGSize { format == .film35 ? CGSize(width: 36, height: 24) : CGSize(width: 56, height: 56) }
-    var cropAspect: CropAspect { format == .film35 ? .threeTwo : .rollSquare }
+    /// Gate along and across the film, in mm.
+    var gateAlong: Double { format == .film35 ? 36 : rollFrame.along }
+    var gateAcross: Double { format == .film35 ? 24 : 56 }
+    /// Long × short.
+    var gateSize: CGSize { CGSize(width: max(gateAlong, gateAcross), height: min(gateAlong, gateAcross)) }
+    var isSquare: Bool { gateAlong == gateAcross }
+    var cropAspect: CropAspect {
+        guard format == .roll120 else { return .threeTwo }
+        switch rollFrame { case .six45: return .roll645; case .six6: return .rollSquare; case .six7: return .roll67; case .six9: return .threeTwo }
+    }
     func gateTitle(portrait: Bool) -> String {
-        if format == .roll120 { return "56 × 56 mm · 1:1" }
-        return portrait ? "24 × 36 mm · 2:3" : "36 × 24 mm · 3:2"
+        func mm(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(v) }
+        let long = mm(gateSize.width), short = mm(gateSize.height)
+        return isSquare ? "\(long) × \(short) mm" : portrait ? "\(short) × \(long) mm" : "\(long) × \(short) mm"
     }
     func constrainedCrop(_ crop: CropSelection, imageSize: CGSize) -> CropSelection {
         guard imageSize.width > 0, imageSize.height > 0 else { return crop }
         var result = crop
         let current = crop.normalizedRect
-        let portrait = format == .film35 && current.width * imageSize.width < current.height * imageSize.height
+        let portrait = !isSquare && current.width * imageSize.width < current.height * imageSize.height
         result.constrain(to: cropAspect, orientation: portrait ? .portrait : .landscape,
                          imageAspect: imageSize.width / imageSize.height)
         return result
@@ -44,11 +78,13 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         return abs(max(imageSize.width, imageSize.height) - min(imageSize.width, imageSize.height) * ratio) <= ratio
     }
     init() {}
-    enum CodingKeys: String, CodingKey { case format, cinePerforations, gate, distress }
+    enum CodingKeys: String, CodingKey { case format, cinePerforations, rollFrame, rollGate, gate, distress }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         format = try values.decodeIfPresent(Format.self, forKey: .format) ?? .film35
         cinePerforations = try values.decodeIfPresent(Bool.self, forKey: .cinePerforations) ?? false
+        rollFrame = try values.decodeIfPresent(RollFrame.self, forKey: .rollFrame) ?? .six6
+        rollGate = try values.decodeIfPresent(RollGate.self, forKey: .rollGate) ?? .hasselblad
         gate = (try? values.decodeIfPresent(FilmEdgeGate.self, forKey: .gate)) ?? FilmEdgeGate()
         distress = try values.decodeIfPresent(FilmEdgeDistress.self, forKey: .distress) ?? FilmEdgeDistress()
     }
@@ -89,23 +125,16 @@ nonisolated struct FilmEdgeGate: Codable, Equatable, Sendable {
         }
     }
     var kind: Kind? { Kind.allCases.first { Self($0) == self } }
-    static let ranges: [WritableKeyPath<Self, Double>: ClosedRange<Double>] = [
-        \.softness: 0...0.12, \.wear: 0...0.12, \.holderBlur: 0...0.6, \.holderDetail: 0...1,
-        \.tilt: 0...1.5, \.bulge: -1...1,
-    ]
     enum CodingKeys: String, CodingKey { case softness, wear, holderBlur, holderDetail, tilt, bulge }
     init(from decoder: Decoder) throws {
         let v = try decoder.container(keyedBy: CodingKeys.self)
         let base = Self()
-        func n(_ key: CodingKeys, _ path: WritableKeyPath<Self, Double>) throws -> Double {
-            let value = try v.decodeIfPresent(Double.self, forKey: key) ?? base[keyPath: path]
-            guard value.isFinite else { return base[keyPath: path] }
-            let range = Self.ranges[path] ?? (-Double.infinity...Double.infinity)
-            return min(max(value, range.lowerBound), range.upperBound)
-        }
-        softness = try n(.softness, \.softness); wear = try n(.wear, \.wear)
-        holderBlur = try n(.holderBlur, \.holderBlur); holderDetail = try n(.holderDetail, \.holderDetail)
-        tilt = try n(.tilt, \.tilt); bulge = try n(.bulge, \.bulge)
+        softness = try v.decodeIfPresent(Double.self, forKey: .softness) ?? base.softness
+        wear = try v.decodeIfPresent(Double.self, forKey: .wear) ?? base.wear
+        holderBlur = try v.decodeIfPresent(Double.self, forKey: .holderBlur) ?? base.holderBlur
+        holderDetail = try v.decodeIfPresent(Double.self, forKey: .holderDetail) ?? base.holderDetail
+        tilt = try v.decodeIfPresent(Double.self, forKey: .tilt) ?? base.tilt
+        bulge = try v.decodeIfPresent(Double.self, forKey: .bulge) ?? base.bulge
     }
 }
 
@@ -123,7 +152,8 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     /// Through the lens (front) light is gated with the scene and reaches the top, blue-sensitive
     /// layer first; a back/door-seal leak bypasses the gate and enters through the base.
     enum LeakKind: String, Codable, CaseIterable, Sendable { case back, front }
-    enum LeakShape: String, Codable, CaseIterable, Sendable { case glow, streak, flare }
+    /// Burn: the fogged start of a roll, exposed past saturation, with a narrow wavy boundary.
+    enum LeakShape: String, Codable, CaseIterable, Sendable { case glow, streak, flare, burn }
     var revision = Self.algorithmRevision
     var seed: UInt32 = 1
     var amount = 1.0
@@ -159,7 +189,13 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     var carrierBlur = 0.1
     var carrierDetail = 0.35
     var carrierTail = 0.05
+    var carrierTailWidth = 0.12
     var carrierScale = 1.2
+    /// Inside corner of the opening: a milled holder is tight, a hand-filed carrier rounder.
+    var carrierCorner = 0.2
+    /// Slow wander of the outline around the frame (mm): no hand-filed side is straight or
+    /// parallel, so the black border changes width along its length.
+    var carrierWave = 0.02
     var fogDepth = 1.5
     var perforationLeak = 0.0
 
@@ -191,7 +227,7 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
             case .lab:
                 d.scratches = 0.5; d.edgeFog = 0.06
             case .handPrint:
-                d.enlargerPrint = true; d.carrierRoughness = 0.1; d.carrierReflection = 0.35
+                d.enlargerPrint = true; d.carrierRoughness = 0.14; d.carrierReflection = 0.35
             case .worn:
                 d.tilt = 1; d.bulge = 0.3; d.carrierRoughness = 0.08; d.holeVariation = 0.8
                 d.edgeFog = 0.3; d.leak = 0.3; d.leakSize = 10; d.warmth = 0.7
@@ -248,11 +284,8 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     init(from decoder: Decoder) throws {
         let v = try decoder.container(keyedBy: CodingKeys.self)
         let base = Self()
-        func n(_ key: CodingKeys, _ path: WritableKeyPath<Self, Double>) throws -> Double {
-            let value = try v.decodeIfPresent(Double.self, forKey: key) ?? base[keyPath: path]
-            guard value.isFinite else { return base[keyPath: path] }
-            let range = Self.ranges[path] ?? (-Double.infinity...Double.infinity)
-            return min(max(value, range.lowerBound), range.upperBound)
+        func n(_ key: CodingKeys, _ path: KeyPath<Self, Double>) throws -> Double {
+            try v.decodeIfPresent(Double.self, forKey: key) ?? base[keyPath: path]
         }
         revision = try v.decodeIfPresent(Int.self, forKey: .revision) ?? Self.algorithmRevision
         seed = try v.decodeIfPresent(UInt32.self, forKey: .seed) ?? 1
@@ -316,11 +349,11 @@ nonisolated enum FilmEdgeNoise {
 /// KS-1870: SMPTE ST 139:2003, Fig. 1/Table 1. E is an OUTER-edge gap, not a center inset.
 /// The physical gate never adapts to an arbitrary photo ratio. Callers must crop first.
 nonisolated struct FilmEdgeGeometry: Sendable {
-    let width: Int, height: Int
-    let gate: CGRect
+    private(set) var width: Int, height: Int
+    private(set) var gate: CGRect
     let format: FilmEdgeLayout.Format
     let portrait: Bool
-    let millimetersPerPixel: Double
+    private(set) var millimetersPerPixel: Double
     let distress: FilmEdgeDistress
     /// Seeded, resolution-independent features, computed once per geometry.
     let leakFrame: LeakFrame
@@ -332,6 +365,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// separately developed centre can fade straight into rebate without a rim of the material image.
     var erodesGate = false
     static let stockWidth = 34.975
+    /// Veiling glare of a scan: fraction of light spread, and the spread's scale on the film.
+    static let scanFlare = 0.035, scanFlareMicrometers = 220.0
     static let holeAcross = 2.794, holeAlong = 1.981, holeRadius = 0.51
     static let holePitch = 4.750, holeOuterGap = 2.01
     static let holeCenter = stockWidth / 2 - holeOuterGap - holeAcross / 2
@@ -372,8 +407,14 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     }
     /// The source film's holes; a cinema print's own holes are always KS-1870.
     let perforation: Perforation
-    /// Provisional rounded gate corner; replace with measurements of real camera strips.
-    static let gateCorner = 0.15
+    /// Gate corner radius, from prints: a 35 mm camera gate is clearly rounded (about 0.4 mm);
+    /// a Hasselblad magazine's is nearly square, a moulded toy-camera mask very round.
+    let gateCorner: Double
+    /// Hasselblad V notches: centres along the left edge (mm from the frame centre), depth and
+    /// half width of a blunt triangle, measured from two full-resolution frames (about 51 px/mm).
+    /// Estimates, not factory drawings.
+    let notched: Bool
+    static let notchCentres = (-2.7, 2.4), notchDepth = 0.34, notchHalfWidth = 0.42, notchTip = 0.26
     static let rollStockWidth = 61.0
     static let scratchCount = 16
 
@@ -394,14 +435,19 @@ nonisolated struct FilmEdgeGeometry: Sendable {
               imageSize.width.isFinite, imageSize.height.isFinite,
               longEdge > 0, longEdge <= 65_536, layout.matchesGate(imageSize) else { return nil }
         format = layout.format
+        let roll = layout.format == .roll120
+        gateCorner = !roll ? 0.4 : layout.rollGate == .toy ? 1.6 : 0.12
+        notched = roll && layout.rollGate == .hasselblad
         self.perforation = perforation
         distress = Self.resolve(layout)
-        portrait = imageSize.height > imageSize.width
-        let short = layout.gateSize.height
-        let long = layout.gateSize.width
+        // `portrait` means the film runs vertically on the canvas. 6 × 4.5 frames lie across the
+        // film, so a landscape 645 picture sits on a vertical strip.
+        portrait = (imageSize.height > imageSize.width) == (layout.gateAlong >= layout.gateAcross)
+        let short = layout.gateAcross
+        let long = layout.gateAlong
         // Scan holder opening (or, for an enlarger print, a filed carrier that stops short of the
         // holes) plus room for the holder edge beyond it. The canvas size never changes.
-        let alongReveal = 0.8, acrossReveal = format == .film35 ? 1.2 : 0.8, holder = 0.5
+        let alongReveal = 0.8, acrossReveal = format == .film35 ? 1.1 : 0.8, holder = 0.4
         let alongOpen = distress.enlargerPrint ? 0.6 : alongReveal
         let acrossOpen = distress.enlargerPrint ? (format == .film35 ? 0.55 : 0.6) : acrossReveal
         carrierHalf = (long / 2 + alongOpen, short / 2 + acrossOpen)
@@ -424,17 +470,34 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     }
 
     var pixelPitchMicrometers: Double { millimetersPerPixel * 1000 }
+    /// The same strip, carrier and seeded features on a canvas `factor` times coarser: the
+    /// low-resolution proxy of a region render. Everything else is defined in millimetres.
+    func coarser(by factor: Int) -> FilmEdgeGeometry {
+        var copy = self
+        let f = Double(factor)
+        copy.width = (width + factor - 1) / factor
+        copy.height = (height + factor - 1) / factor
+        copy.millimetersPerPixel = millimetersPerPixel * f
+        copy.gate = CGRect(x: gate.minX / f, y: gate.minY / f, width: gate.width / f, height: gate.height / f)
+        return copy
+    }
     /// One resolved parameter set: handling distress (after Amount) plus the gate's optics. Gate
     /// tilt and bulge add to handling; the gate tilt's direction comes from the seed.
     static func resolve(_ layout: FilmEdgeLayout) -> FilmEdgeDistress {
         var d = layout.distress.effective
         let g = layout.gate
-        d.gateSoftness = g.softness
-        d.gateWear = g.wear
-        d.carrierBlur = d.enlargerPrint ? 0.04 : g.holderBlur
+        let toy = layout.format == .roll120 && layout.rollGate == .toy
+        d.gateSoftness = toy ? max(g.softness, 0.22) : g.softness
+        d.gateWear = toy ? max(g.wear, 0.1) : g.wear
+        // A filed carrier sits a film-thickness from the negative: its edge prints slightly soft,
+        // and light scattered by the bare filed metal spills a faint halo onto the paper beyond
+        // it. A scan holder is further out of focus and scatters a short tail.
+        d.carrierBlur = d.enlargerPrint ? 0.07 : g.holderBlur
         d.carrierDetail = d.enlargerPrint ? 0 : g.holderDetail
-        // An enlarger carrier blocks light completely; a defocused scan holder scatters a faint tail.
-        d.carrierTail = d.enlargerPrint ? 0 : 0.08
+        d.carrierTail = d.enlargerPrint ? 0.02 + 0.1 * d.carrierReflection : 0.08
+        d.carrierTailWidth = d.enlargerPrint ? 0.1 : 0.12
+        d.carrierCorner = d.enlargerPrint ? 0.35 : 0.2
+        d.carrierWave = d.enlargerPrint ? 0.05 + 0.8 * d.carrierRoughness : 0.02
         let sign: Double = streamSeed(d.seed, 60) & 1 == 0 ? 1 : -1
         d.tilt = min(max(g.tilt * sign + d.tilt, -3), 3)
         d.bulge = min(max(g.bulge + d.bulge, -1.5), 1.5)
@@ -472,7 +535,17 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let b = distress.bulge
         hx += 0.15 * b * (1 - uy * uy)
         hy += 0.22 * b * (1 - ux * ux)
-        return FilmEdgeNoise.box(fx, fy, hx, hy, Self.gateCorner)
+        var d = FilmEdgeNoise.box(fx, fy, hx, hy, gateCorner)
+        if notched {
+            // Each notch is a small triangle of open gate pointing out of the left edge.
+            let u = -(fx + hx), slope = (Self.notchDepth * Self.notchDepth + Self.notchHalfWidth * Self.notchHalfWidth).squareRoot()
+            for centre in [Self.notchCentres.0, Self.notchCentres.1] {
+                let v = abs(fy - centre)
+                let side = (v * Self.notchDepth + u * Self.notchHalfWidth - Self.notchHalfWidth * Self.notchDepth) / slope
+                d = min(d, max(side, max(-u - 0.3, u - Self.notchTip)))
+            }
+        }
+        return d
     }
     /// Camera-gate exposure coverage: penumbra, pixel area and seeded wear of the aperture edge.
     func gateCoverage(x: Int, y: Int) -> Double {
@@ -542,6 +615,11 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             let shifted = across - leak.offset * 0.9 * size
             let echo = leak.weight * 0.5 * exp(-shifted * shifted / (2 * pow(0.12 * size, 2)))
             return exp(-along / (3.5 * size)) * (core + echo) * (0.7 + 0.3 * n)
+        case .burn:
+            // Saturating exposure up to a wavy front `size` mm in; the fall-off is a fraction of that.
+            let front = size * (1 + 0.14 * FilmEdgeNoise.value(lateral / (0.5 * size), 0.5, seed(4))
+                + 0.04 * FilmEdgeNoise.value(lateral / (0.08 * size), 1.5, seed(4)))
+            return 60 / (1 + exp(min((depth - front) / (0.045 * size + 0.12), 40)))
         case .flare:
             let broad = exp(-lateral * lateral / (2 * pow(3 * size, 2)))
             let band = 0.8 + 0.2 * FilmEdgeNoise.value(lateral / (1.5 * size), 0.5, seed(4))
@@ -665,10 +743,11 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     func carrierDistance(x: Int, y: Int) -> Double {
         let (cx, cy) = canvas(Double(x) + 0.5, Double(y) + 0.5)
         let (hx, hy) = portrait ? (carrierHalf.across, carrierHalf.along) : (carrierHalf.along, carrierHalf.across)
-        let base = FilmEdgeNoise.box(cx, cy, hx, hy, 0)
+        let (a, t) = strip(cx, cy)
+        let base = FilmEdgeNoise.box(cx, cy, hx, hy, distress.carrierCorner)
+            + distress.carrierWave * FilmEdgeNoise.value(a / 11, t / 11, seed(52))
         let amplitude = distress.carrierRoughness
         guard amplitude > 0, base > -(amplitude * 1.6 + pixelRadius + distress.carrierBlur) else { return base }
-        let (a, t) = strip(cx, cy)
         let scale = distress.carrierScale
         // Mostly smooth filing with a little file-tooth texture and a few sparse nicks.
         let broad = 0.5 + 0.5 * (0.85 * FilmEdgeNoise.value(a / scale, t / scale, seed(6))
@@ -685,11 +764,14 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let r = max(distress.carrierBlur, pixelRadius)
         if d < -r { return 1 }
         let open = FilmEdgeNoise.penumbra(d, r)
-        let tailWidth = 0.12
-        var pass = open + (1 - open) * distress.carrierTail * exp(-max(d, 0) / tailWidth)
+        // An enlarger carrier is opaque; its scattered light carries no image (see `carrierHalo`).
+        if distress.enlargerPrint { return open }
+        var pass = open + (1 - open) * distress.carrierTail * exp(-max(d, 0) / distress.carrierTailWidth)
         let detail = distress.carrierDetail
-        guard detail > 0, d < r + 0.45 else { return pass }
+        guard detail > 0 else { return pass }
         let (cx, cy) = canvas(Double(x) + 0.5, Double(y) + 0.5)
+        if d > -2.6 { pass *= 1 - holderFibres(cx, cy) }
+        guard d < r + 0.45 else { return pass }
         let (a, t) = strip(cx, cy)
         // Organic abrasion: two octaves, a soft threshold, patchy along the edge, densest at it.
         let n = 0.6 * FilmEdgeNoise.value(a / 0.05, t / 0.05, seed(49)) + 0.4 * FilmEdgeNoise.value(a / 0.15, t / 0.15, seed(51))
@@ -698,6 +780,58 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let speck = u * u * (3 - 2 * u) * patch * patch
         pass += (1 - pass) * detail * 0.5 * speck * exp(-max(d - r * 0.5, 0) / 0.12)
         return pass
+    }
+    /// Lint caught on the holder edge, in silhouette: a few hairs reach into the opening, rooted
+    /// under the holder and as far out of focus as its edge. Canvas millimetres.
+    static let fibreCount = 6
+    func holderFibres(_ cx: Double, _ cy: Double) -> Double {
+        let (hx, hy) = portrait ? (carrierHalf.across, carrierHalf.along) : (carrierHalf.along, carrierHalf.across)
+        let detail = distress.carrierDetail, blur = max(pixelRadius, 0.5 * distress.carrierBlur)
+        var clear = 1.0
+        for k in 0..<Self.fibreCount {
+            let h0 = FilmEdgeNoise.hash(Int32(k), 0, seed(53))
+            guard FilmEdgeNoise.unit(h0) < 0.15 + 0.85 * detail else { continue }
+            let h1 = FilmEdgeNoise.hash(h0), h2 = FilmEdgeNoise.hash(h1), h3 = FilmEdgeNoise.hash(h2)
+            let h4 = FilmEdgeNoise.hash(h3), h5 = FilmEdgeNoise.hash(h4), h6 = FilmEdgeNoise.hash(h5)
+            let u = FilmEdgeNoise.unit(h2) * 2 - 1
+            var px = 0.0, py = 0.0, nx = 0.0, ny = 0.0
+            switch h1 & 3 {
+            case 0: px = u * hx; py = -hy; ny = 1
+            case 1: px = u * hx; py = hy; ny = -1
+            case 2: px = -hx; py = u * hy; nx = 1
+            default: px = hx; py = u * hy; nx = -1
+            }
+            let size = FilmEdgeNoise.unit(h3), length = 0.3 + 1.8 * size * size
+            let angle = (FilmEdgeNoise.unit(h4) - 0.5) * 2, curl = (FilmEdgeNoise.unit(h5) - 0.5) * 1.6
+            let c = cos(angle), s = sin(angle)
+            let dx = c * nx - s * ny, dy = s * nx + c * ny
+            px -= 0.15 * nx; py -= 0.15 * ny
+            // Cheap reject before walking the hair.
+            guard abs(cx - px) < length + 0.3, abs(cy - py) < length + 0.3 else { continue }
+            var nearest = Double.infinity
+            var ax = px, ay = py
+            for i in 1...8 {
+                let q = Double(i) / 8
+                let bx = px + (dx * q - dy * curl * q * q) * length
+                let by = py + (dy * q + dx * curl * q * q) * length
+                let ex = bx - ax, ey = by - ay
+                let w = min(max(((cx - ax) * ex + (cy - ay) * ey) / max(ex * ex + ey * ey, 1e-12), 0), 1)
+                nearest = min(nearest, hypot(cx - ax - w * ex, cy - ay - w * ey))
+                ax = bx; ay = by
+            }
+            let width = 0.008 + 0.012 * FilmEdgeNoise.unit(h6), rr = max(width, 0.9 * blur)
+            clear *= 1 - 0.85 * (width / rr) * FilmEdgeNoise.penumbra(nearest - rr, blur)
+        }
+        return 1 - clear
+    }
+    /// Light scattered by a filed carrier's bare edge falls on the paper just outside the
+    /// opening: an imageless glow that fades the black border into the white margin.
+    func carrierHalo(x: Int, y: Int) -> Double {
+        guard distress.enlargerPrint else { return 0 }
+        let d = carrierDistance(x: x, y: y)
+        let r = max(distress.carrierBlur, pixelRadius)
+        guard d > -r else { return 0 }
+        return (1 - FilmEdgeNoise.penumbra(d, r)) * distress.carrierTail * exp(-max(d, 0) / distress.carrierTailWidth)
     }
     /// Enlarger light glancing off a bare-metal carrier edge lands just inside the opening without
     /// passing through the negative's mask, so on RA-4 it prints as a darker, coloured band.
@@ -838,7 +972,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             occlusion = 1 - (1 - dust) * (1 - scatter * Self.scatterWeights)
         }
         var light = (film * support + clear * (1 - support)) * (1 - occlusion * support) * carrier
-        if mode.contains(.reflection) { light += clear * carrierReflection(x: x, y: y) * carrier }
+        if mode.contains(.reflection) { light += clear * (carrierReflection(x: x, y: y) * carrier + carrierHalo(x: x, y: y)) }
         return light
     }
     /// Emulsion scratches thin the developed dye before printing or scanning.
@@ -853,7 +987,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let leak = leakFrame
         var values: [SIMD4<Float>] = [
             SIMD4(Float(width), Float(height), Float(millimetersPerPixel), portrait ? 1 : 0),
-            SIMD4(Float(gx), Float(gy), Float(Self.gateCorner), Float(d.gateSoftness)),
+            SIMD4(Float(gx), Float(gy), Float(notched ? -gateCorner : gateCorner), Float(d.gateSoftness)),
             SIMD4(format == .film35 ? 1 : 0, Float(Self.holeCenter), Float(Self.holeRadius), d.scratchesInImage ? 1 : 0),
             SIMD4(Float(d.bulge), erodesGate ? 1 : 0, Float(cos(tiltRadians)), Float(sin(tiltRadians))),
             SIMD4(Float(d.seed & 0xffff), Float(d.seed >> 16), Float(stockHalf), Float(d.gateWear)),
@@ -861,14 +995,14 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             SIMD4(Float(d.edgeFog), Float(d.fogDepth), Float(d.leak), Float(d.leakSize)),
             SIMD4(Float(leak.point.0), Float(leak.point.1), Float(leak.normal.0), Float(leak.normal.1)),
             SIMD4(Float(leak.offset), Float(leak.weight), Float(d.dust), Float(d.scratches)),
-            SIMD4(Float(light.x), Float(light.y), Float(light.z), 0),
+            SIMD4(Float(light.x), Float(light.y), Float(light.z), Float(d.carrierWave)),
             SIMD4(Float(perforation.rawValue), Float(perforation.pitch), Float(perforation.halfAlong), Float(perforation.halfAcross)),
-            SIMD4(0, Float(Perforation.ks1870.pitch), Float(Perforation.ks1870.halfAlong), Float(Perforation.ks1870.halfAcross)),
+            SIMD4(Float(d.carrierCorner), Float(Perforation.ks1870.pitch), Float(Perforation.ks1870.halfAlong), Float(Perforation.ks1870.halfAcross)),
             SIMD4(Float(d.holeVariation), Float(d.perforationLeak), d.leakKind == .front ? 1 : 0,
                   Float(FilmEdgeDistress.LeakShape.allCases.firstIndex(of: d.leakShape)!)),
             SIMD4(Float(fogLight.x), Float(fogLight.y), Float(fogLight.z), Float(d.carrierReflection)),
             SIMD4(Float(d.carrierBlur), Float(d.carrierDetail), Float(leak.direction.0), Float(leak.direction.1)),
-            SIMD4(Float(coreLight.x), Float(coreLight.y), Float(coreLight.z), 0.12),
+            SIMD4(Float(coreLight.x), Float(coreLight.y), Float(coreLight.z), Float(d.enlargerPrint ? -d.carrierTailWidth : d.carrierTailWidth)),
         ]
         for s in scratchCandidates {
             values.append(SIMD4(Float(s.across), Float(s.wander), Float(s.wavelength), Float(s.phase)))

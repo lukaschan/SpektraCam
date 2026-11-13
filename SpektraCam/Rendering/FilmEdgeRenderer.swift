@@ -41,22 +41,25 @@ nonisolated enum FilmEdgeRenderer {
     /// It does not claim to recover the original scene outside an imported photograph.
     /// The scene is sampled in film coordinates, so a tilted strip carries its picture with it.
     /// A full-size canvas is written to file-backed storage and rendered in tiles.
-    static func padded(_ input: SourceImageRenderer.Input, geometry: FilmEdgeGeometry) throws
-        -> SourceImageRenderer.Input
-    {
-        let width = geometry.width, height = geometry.height
-        let store = PixelStore.isLarge(width: width, height: height)
+    /// `region` limits the result to a rectangle of the canvas (for the loupe), always in a store.
+    static func padded(
+        _ input: SourceImageRenderer.Input, geometry: FilmEdgeGeometry,
+        region: (x: Int, y: Int, w: Int, h: Int)? = nil
+    ) throws -> SourceImageRenderer.Input {
+        let width = region?.w ?? geometry.width, height = region?.h ?? geometry.height
+        let left = Double(region?.x ?? 0), top = Double(region?.y ?? 0)
+        let store = region != nil || PixelStore.isLarge(width: width, height: height)
             ? try PixelStore(width: width, height: height, format: .float) : nil
         var pixels = Array(repeating: SIMD4<Float>.zero, count: store == nil ? width * height : 0)
         func fill(_ source: UnsafePointer<SIMD4<Float>>, _ target: UnsafeMutablePointer<SIMD4<Float>>) throws {
             let mm = geometry.millimetersPerPixel
-            let cx = Double(width) / 2, cy = Double(height) / 2
+            let cx = Double(geometry.width) / 2, cy = Double(geometry.height) / 2
             let bands = max(1, min(height / 32, ProcessInfo.processInfo.activeProcessorCount * 4))
             nonisolated(unsafe) let source = source, target = target
             DispatchQueue.concurrentPerform(iterations: bands) { band in
                 for y in (band * height / bands)..<((band + 1) * height / bands) {
                     for x in 0..<width {
-                        let (fx, fy) = geometry.film(Double(x) + 0.5, Double(y) + 0.5)
+                        let (fx, fy) = geometry.film(left + Double(x) + 0.5, top + Double(y) + 0.5)
                         let px = cx + fx / mm, py = cy + fy / mm
                         let sx = min(max((px - geometry.gate.minX) / geometry.gate.width * Double(input.width) - 0.5, 0), Double(input.width - 1))
                         let sy = min(max((py - geometry.gate.minY) / geometry.gate.height * Double(input.height) - 0.5, 0), Double(input.height - 1))

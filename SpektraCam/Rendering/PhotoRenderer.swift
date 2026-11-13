@@ -408,6 +408,11 @@ actor PhotoRenderer {
         return try ToneRenderer.render(mixed, tone: recipe.tone.outputStage)
     }
 
+    /// An enlarger print's margin is unexposed paper; the sheet around it is the same paper.
+    private static func paper(_ recipe: EditRecipe, _ image: CGImage) -> CGColor? {
+        recipe.filmEdgeLayout?.distress.enlargerPrint == true && recipe.resolvedFilmEdgeType == .negativePrint
+            ? PrintCompositor.paperTone(of: image) : nil
+    }
     /// Sharp pixels for the visible part of a zoomed preview.
     struct Detail: @unchecked Sendable {
         let image: CGImage
@@ -529,7 +534,7 @@ actor PhotoRenderer {
             photograph = cropped
         }
         if let layout = recipe.printLayout, !layout.isIdentity {
-            return try PrintCompositor.render(photograph, layout: layout, maximum: maximum)
+            return try PrintCompositor.render(photograph, layout: layout, maximum: maximum, paper: Self.paper(recipe, photograph))
         }
         return photograph
     }
@@ -564,6 +569,82 @@ actor PhotoRenderer {
         if edgeSources.count > 4 { edgeSources.removeFirst() }
         return input
     }
+    /// The patch of a film-edge presentation under the loupe, at the photo's native resolution.
+    /// `visible` is in unit coordinates of the strip canvas. Wide effects come from one
+    /// low-resolution pass over the whole canvas, kept per edit, so moving the loupe only
+    /// renders the patch. Nil when the route needs the whole-frame render (a separately
+    /// developed centre) or the preview already has every pixel.
+    func renderEdgeDetail(_ original: EditRecipe, visible: CGRect) async throws -> Detail? {
+        try Task.checkCancellation()
+        guard data != nil, let layout = original.filmEdgeLayout else { return nil }
+        let dimensions = sourceDescription.map { CGSize(width: $0.width, height: $0.height) }
+            ?? CGSize(width: source.width, height: source.height)
+        var recipe = original
+        recipe.constrainFilmEdgeCrop(imageSize: dimensions)
+        let oriented = original.geometry.quarterTurns % 2 == 0 ? dimensions
+            : CGSize(width: dimensions.height, height: dimensions.width)
+        let crop = recipe.crop.pixelRect(in: oriented)
+        let long = max(1, Int(max(crop.width, crop.height)))
+        guard long > previewMaximum * 5 / 4 else { return nil }
+        recipe.tone.monochrome = false
+        let material = FilmEdgeRenderer.materialRecipe(recipe)
+        guard material.processingRecipe == recipe.processingRecipe,
+            let geometry = FilmEdgeGeometry(
+                imageSize: crop.size, layout: layout, longEdge: long,
+                perforation: layout.cinePerforations ? .bh1866 : .source(filmID: material.filmID))
+        else { return nil }
+        let tiling = self.tiling
+        let factor = tiling.resolvedFactor(width: geometry.width, height: geometry.height)
+        let (library, gpu) = try await renderResources.load()
+        let autoEV = try exposure(material, library: library, state: edgeMetering)
+        let pipeline = try await renderResources.pipeline(material)
+        let originalLong = max(dimensions.width, dimensions.height)
+        func framed(_ geometry: FilmEdgeGeometry) throws -> SourceImageRenderer.Input {
+            let size = CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded()))
+            // The same decode size as `renderFilmEdge`, so both share one framed source.
+            let maximum = min(Int(originalLong), max(1, Int(ceil(originalLong * max(geometry.gate.width, geometry.gate.height) / Double(long)))))
+            return try edgeSource(material, framing: recipe, maximum: maximum, intent: .sceneLinear, size: size)
+        }
+        var prepared = try await gpu.prepareRegion(
+            width: geometry.width, height: geometry.height, factor: factor, pipeline: pipeline,
+            autoExposureEV: autoEV, tiling: tiling, edge: geometry, layout: layout, proxy: nil)
+        if prepared == nil {
+            let coarse = geometry.coarser(by: factor)
+            let canvas = try FilmEdgeRenderer.padded(framed(coarse), geometry: coarse)
+            try Task.checkCancellation()
+            prepared = try await gpu.prepareRegion(
+                width: geometry.width, height: geometry.height, factor: factor, pipeline: pipeline,
+                autoExposureEV: autoEV, tiling: tiling, edge: geometry, layout: layout,
+                proxy: canvas.pixels)
+        }
+        guard let halo = prepared else { throw PhotoExporter.Failure.render }
+        let shown = visible.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard !shown.isEmpty else { return nil }
+        let width = geometry.width, height = geometry.height
+        let x0 = min(max(Int(floor(shown.minX * Double(width))), 0), width - 1)
+        let y0 = min(max(Int(floor(shown.minY * Double(height))), 0), height - 1)
+        let x1 = min(max(Int(ceil(shown.maxX * Double(width))), x0 + 1), width)
+        let y1 = min(max(Int(ceil(shown.maxY * Double(height))), y0 + 1), height)
+        let sx0 = max(0, x0 - halo), sy0 = max(0, y0 - halo)
+        let sx1 = min(width, x1 + halo), sy1 = min(height, y1 + halo)
+        let part = try FilmEdgeRenderer.padded(
+            framed(geometry), geometry: geometry, region: (sx0, sy0, sx1 - sx0, sy1 - sy0))
+        guard let store = part.store else { throw PhotoExporter.Failure.render }
+        try Task.checkCancellation()
+        let key = MetalFilmPipeline.RegionKey(
+            recipe: pipeline.recipe, width: width, height: height, factor: factor,
+            autoExposureEV: autoEV, seed: 0, edge: layout)
+        let result = try await gpu.processRegion(
+            store, origin: (sx0, sy0), region: (x0, y0, x1 - x0, y1 - y0), key: key, pipeline: pipeline)
+        try Task.checkCancellation()
+        let film = try result.image(colorSpace: CGColorSpace(name: CGColorSpace.extendedSRGB)!)
+        return Detail(
+            image: try ToneRenderer.render(film, tone: original.tone.outputStage),
+            rect: CGRect(
+                x: Double(x0) / Double(width), y: Double(y0) / Double(height),
+                width: Double(x1 - x0) / Double(width), height: Double(y1 - y0) / Double(height)))
+    }
+
     /// Complete capture-support presentation, before paper placement and final file encoding.
     /// The final long edge includes the rebate; native export never grows the canvas silently.
     func renderFilmEdge(_ original: EditRecipe, maximum: Int?, allowOvercommit: Bool = false) async throws -> CGImage {
@@ -659,7 +740,9 @@ actor PhotoRenderer {
             await gpu.releaseWorkingCaches()
             do {
                 let edged = try await renderFilmEdge(recipe, maximum: size.maximum, allowOvercommit: allowOvercommit)
-                image = try recipe.printLayout.map { try PrintCompositor.render(edged, layout: $0, maximum: size.maximum) } ?? edged
+                image = try recipe.printLayout.map {
+                    try PrintCompositor.render(edged, layout: $0, maximum: size.maximum, paper: Self.paper(recipe, edged))
+                } ?? edged
             } catch {
                 await gpu.releaseWorkingCaches()
                 throw error

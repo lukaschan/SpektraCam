@@ -13,9 +13,14 @@ struct DarkroomLoupe: View {
     var refining = false
     /// The table beside the print, so the lens shows what is really under it.
     var surround = Color(white: 0.86)
+    var paper = Color.white
     /// Pixel width of the full-resolution frame. Magnification is fixed to it, so the view
     /// only sharpens when that frame replaces the preview; it never changes scale.
     var fullWidth: CGFloat? = nil
+    /// Native-resolution pixels for the area under the lens, when they have been rendered.
+    var patch: PhotoRenderer.Detail? = nil
+    /// Reports the part of the photograph under the lens (unit coordinates of `imageFrame`).
+    var onInspect: ((CGRect) -> Void)? = nil
     @Binding var center: CGPoint?
     @State private var widest: CGFloat = 0
     @State private var doubled = false
@@ -29,7 +34,13 @@ struct DarkroomLoupe: View {
         let r = Self.diameter / 2
         let fallback = CGPoint(x: bounds.width - r - 10, y: r + 10)
         let c = center ?? fallback
-        return CGPoint(x: min(max(c.x, r), max(r, bounds.width - r)), y: min(max(c.y, r), max(r, bounds.height - r)))
+        return CGPoint(x: min(max(c.x, 0), bounds.width), y: min(max(c.y, 0), bounds.height))
+    }
+    private var inspected: CGRect {
+        let c = resolvedCenter, half = Self.diameter / 2 / zoom
+        let w = max(imageFrame.width, 1), h = max(imageFrame.height, 1)
+        return CGRect(x: (c.x - half - imageFrame.minX) / w, y: (c.y - half - imageFrame.minY) / h,
+                      width: 2 * half / w, height: 2 * half / h)
     }
     private var pixelWidth: CGFloat {
         CGFloat(image.cgImage?.width ?? Int(image.size.width * image.scale))
@@ -47,12 +58,19 @@ struct DarkroomLoupe: View {
         ZStack {
             ZStack(alignment: .topLeading) {
                 surround
-                Rectangle().fill(.white)
+                Rectangle().fill(paper)
                     .frame(width: paperFrame.width * z, height: paperFrame.height * z)
                     .offset(x: paperOrigin.x, y: paperOrigin.y)
                 Image(uiImage: image).resizable().interpolation(.high)
                     .frame(width: imageFrame.width * z, height: imageFrame.height * z)
                     .offset(x: imageOrigin.x, y: imageOrigin.y)
+                if let patch {
+                    Image(decorative: patch.image, scale: 1).resizable().interpolation(.high)
+                        .frame(width: patch.rect.width * imageFrame.width * z,
+                               height: patch.rect.height * imageFrame.height * z)
+                        .offset(x: imageOrigin.x + patch.rect.minX * imageFrame.width * z,
+                                y: imageOrigin.y + patch.rect.minY * imageFrame.height * z)
+                }
             }
             .frame(width: d, height: d, alignment: .topLeading)
             .clipShape(Circle())
@@ -89,6 +107,7 @@ struct DarkroomLoupe: View {
         .contentShape(Circle())
         .position(c)
         .onChange(of: pixelWidth, initial: true) { _, width in widest = max(widest, width) }
+        .onChange(of: inspected, initial: true) { _, rect in onInspect?(rect) }
         .onChange(of: imageFrame.width / max(imageFrame.height, 1)) { widest = pixelWidth }
         .gesture(DragGesture(minimumDistance: 1).onChanged { value in
             let start = dragOrigin ?? c

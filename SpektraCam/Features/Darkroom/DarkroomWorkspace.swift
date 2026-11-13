@@ -13,6 +13,11 @@ struct DarkroomWorkspace: View {
     @State private var loupeImage: UIImage?
     @State private var loupeKey: EditRecipe?
     @State private var loupeRefining = false
+    @State private var loupeRect: CGRect?
+    @State private var loupePatch: PhotoRenderer.Detail?
+    @State private var loupePatchKey: EditRecipe?
+    /// Edits whose route cannot render a patch fall back to one whole frame for the loupe.
+    @State private var wholeFrameKey: EditRecipe?
     @AppStorage("darkroom.loupe") private var showLoupe = true
     /// Enough for 100 % at native resolution on most phones without an export-sized render.
     private static let loupeMaximum = 4096
@@ -41,10 +46,8 @@ struct DarkroomWorkspace: View {
             : CGSize(width: session.photo.height, height: session.photo.width)
         let crop = session.recipe.crop.pixelRect(in: upright).size
         guard crop.width > 0, crop.height > 0, expectedSize.width > 0, expectedSize.height > 0 else { return nil }
-        let limit = session.recipe.filmEdgeLayout == nil
-            ? CGFloat(PreviewQuality.editorMaximum) * max(crop.width, crop.height) / max(upright.width, upright.height)
-            : CGFloat(Self.loupeMaximum)
-        let long = min(max(crop.width, crop.height), limit)
+        // Patches are rendered at the photo's own resolution, so 100 % means its real pixels.
+        let long = max(crop.width, crop.height)
         return (long * expectedSize.width / max(expectedSize.width, expectedSize.height)).rounded()
     }
     private var displayedImage: UIImage { session.recipe.filmEdgeLayout == nil ? session.displayImage : image ?? session.displayImage }
@@ -75,6 +78,8 @@ struct DarkroomWorkspace: View {
             loupeImage: loupeKey == renderKey ? loupeImage : nil,
             loupeRefining: loupeRefining,
             loupeWidth: loupeWidth,
+            loupePatch: loupePatchKey == renderKey ? loupePatch : nil,
+            onLoupeInspect: { loupeRect = $0 },
             showLoupe: $showLoupe)
         .overlay(alignment: .top) {
             if pending { ProgressView().padding(12).glassEffect().accessibilityIdentifier("darkroom.edge.rendering") }
@@ -106,8 +111,28 @@ struct DarkroomWorkspace: View {
                 if !Task.isCancelled { failure = error.localizedDescription; pending = false }
             }
         }
-        .task(id: LoupeRequest(recipe: renderKey, active: showLoupe && !suspended && !interacting)) {
-            guard showLoupe, !suspended, !interacting, loupeKey != renderKey else { return }
+        .task(id: PatchRequest(recipe: renderKey, rect: loupeRect, active: showLoupe && !suspended && !interacting)) {
+            guard showLoupe, !suspended, !interacting, let rect = loupeRect, wholeFrameKey != renderKey else { return }
+            if loupePatchKey == renderKey, let loupePatch, loupePatch.rect.contains(rect.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))) { return }
+            let recipe = renderKey
+            do {
+                // Follow the lens once it rests; a wider patch then covers small moves.
+                try await Task.sleep(for: .milliseconds(120))
+                while pending { try await Task.sleep(for: .milliseconds(100)) }
+                loupeRefining = true
+                defer { loupeRefining = false }
+                let wide = rect.insetBy(dx: -0.6 * rect.width, dy: -0.6 * rect.height)
+                if let patch = await session.loupePatch(recipe, visible: wide) {
+                    try Task.checkCancellation()
+                    loupePatch = patch
+                    loupePatchKey = recipe
+                } else if !Task.isCancelled {
+                    wholeFrameKey = recipe
+                }
+            } catch {}
+        }
+        .task(id: LoupeRequest(recipe: renderKey, active: showLoupe && !suspended && !interacting && wholeFrameKey == renderKey)) {
+            guard showLoupe, !suspended, !interacting, wholeFrameKey == renderKey, loupeKey != renderKey else { return }
             let recipe = renderKey
             do {
                 // Let the regular preview finish first; the loupe is a refinement, never a race.
@@ -126,4 +151,5 @@ struct DarkroomWorkspace: View {
     }
     private struct Request: Equatable { let recipe: EditRecipe; let suspended: Bool; let retry: Int; let interacting: Bool }
     private struct LoupeRequest: Equatable { let recipe: EditRecipe; let active: Bool }
+    private struct PatchRequest: Equatable { let recipe: EditRecipe; let rect: CGRect?; let active: Bool }
 }

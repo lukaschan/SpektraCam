@@ -17,12 +17,13 @@ struct DarkroomView: View {
     var loupeImage: UIImage? = nil
     var loupeRefining = false
     var loupeWidth: CGFloat? = nil
+    var loupePatch: PhotoRenderer.Detail? = nil
+    var onLoupeInspect: ((CGRect) -> Void)? = nil
     @Binding var showLoupe: Bool
     @State private var loupeCenter: CGPoint?
     @AppStorage("darkroom.light.on") private var tableLit = true
     @State private var expanded = false
     @State private var fineTune = false
-    @State private var gateFineTune = false
     private enum Style: String { case cleanPrint, filmEdge }
     private var current: PrintLayout { layout ?? PrintLayout() }
     private var sourceSize: CGSize { printSourceSize ?? image.size }
@@ -34,7 +35,9 @@ struct DarkroomView: View {
         GeometryReader { workspace in
             VStack(spacing: 12) {
                 PrintPreview(image: imageReady ? image : nil, imageSize: sourceSize, layout: current,
+                             paperColor: edge?.distress.enlargerPrint == true && resolvedType == .negativePrint ? PaperTone.color(of: image) : .white,
                              loupeImage: loupeImage, loupeRefining: loupeRefining, loupeWidth: loupeWidth,
+                             loupePatch: loupePatch, onLoupeInspect: onLoupeInspect,
                              showLoupe: showLoupe, tableLit: tableLit, loupeCenter: $loupeCenter)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .bottomLeading) { LightTableSwitch(lit: $tableLit) }
@@ -126,12 +129,28 @@ struct DarkroomView: View {
                     edge = next
                 }),
                 prefix: "darkroom.edge.format.")
+            if edge?.format == .roll120 {
+                PanelTabs(
+                    options: FilmEdgeLayout.RollFrame.allCases.map { ($0, $0.title) },
+                    selection: Binding(get: { edge?.rollFrame ?? .six6 }, set: { frame in
+                        var next = edge ?? FilmEdgeLayout.newDefault()
+                        next.rollFrame = frame
+                        edge = next
+                    }),
+                    prefix: "darkroom.edge.frame.")
+                PanelTabs(
+                    options: FilmEdgeLayout.RollGate.allCases.map { ($0, $0.title) },
+                    selection: Binding(get: { edge?.rollGate ?? .hasselblad }, set: { body in
+                        var next = edge ?? FilmEdgeLayout.newDefault()
+                        next.rollGate = body
+                        edge = next
+                    }),
+                    prefix: "darkroom.edge.body.")
+            }
             ViewThatFits(in: .horizontal) {
                 HStack { gateSize; Spacer(); cropButton }
                 VStack(alignment: .leading, spacing: 6) { gateSize; cropButton }
             }
-            Text(String(localized: "darkroom.edge.aperture_note", defaultValue: "35 mm uses a fixed 3:2 crop; cine film keeps its BH perforations. 120 uses a square crop without perforations."))
-                .font(.caption).foregroundStyle(.secondary)
             Divider().padding(.vertical, 4)
             gateControls
             Divider().padding(.vertical, 4)
@@ -162,40 +181,7 @@ struct DarkroomView: View {
                     setGate { $0 = FilmEdgeGate(kind) }
                 }),
                 prefix: "darkroom.gate.", isSelectionActive: gate.kind != nil)
-            DisclosureGroup(isExpanded: $gateFineTune) {
-                VStack(alignment: .leading, spacing: 6) {
-                    gateSlider(String(localized: "darkroom.distress.gate_softness", defaultValue: "Edge softness"), \.softness,
-                               scale: 1000, step: 1, unit: "µm", identifier: "softness")
-                    gateSlider(String(localized: "darkroom.distress.gate_wear", defaultValue: "Gate wear"), \.wear,
-                               scale: 1000, step: 1, unit: "µm", identifier: "wear")
-                    gateSlider(String(localized: "darkroom.distress.carrier_blur", defaultValue: "Holder blur"), \.holderBlur,
-                               step: 0.01, unit: "mm", identifier: "holderBlur")
-                    gateSlider(String(localized: "darkroom.distress.carrier_detail", defaultValue: "Holder edge detail"), \.holderDetail,
-                               scale: 100, step: 1, unit: "%", identifier: "holderDetail")
-                    gateSlider(String(localized: "darkroom.distress.tilt", defaultValue: "Film tilt"), \.tilt,
-                               step: 0.05, unit: "°", identifier: "tilt")
-                    gateSlider(String(localized: "darkroom.distress.bulge", defaultValue: "Film bulge"), \.bulge,
-                               scale: 100, step: 1, unit: "%", identifier: "bulge", fillOrigin: 0)
-                }
-                .padding(.top, 6)
-            } label: {
-                Text(String(localized: "darkroom.distress.fine_tune", defaultValue: "Fine-tune"))
-            }
-            .accessibilityIdentifier("darkroom.gate.fineTune")
         }
-    }
-    private func gateSlider(_ title: String, _ path: WritableKeyPath<FilmEdgeGate, Double>, scale: Double = 1,
-                            step: Double, unit: String, identifier: String, fillOrigin: Double? = nil) -> some View {
-        let range = FilmEdgeGate.ranges[path] ?? (0...1)
-        let scaled = (range.lowerBound * scale)...(range.upperBound * scale)
-        return NumericControl(
-            title: title, value: Binding(get: { gate[keyPath: path] * scale }, set: { value in
-                setGate { $0[keyPath: path] = min(max(value / scale, range.lowerBound), range.upperBound) }
-            }), range: scaled, step: step,
-            minimum: scaled.lowerBound, maximum: scaled.upperBound, unit: unit,
-            identifier: "darkroom.gate." + identifier,
-            defaultValue: FilmEdgeGate()[keyPath: path] * scale,
-            fillOrigin: fillOrigin ?? scaled.lowerBound, onEditingChanged: onEdgeEditingChanged)
     }
 
     // MARK: Distress — how the film was handled. Presets for a quick start, every field for fine control.
@@ -267,6 +253,7 @@ struct DarkroomView: View {
                             Text(String(localized: "darkroom.distress.shape_glow", defaultValue: "Glow")).tag(FilmEdgeDistress.LeakShape.glow)
                             Text(String(localized: "darkroom.distress.shape_streak", defaultValue: "Streak")).tag(FilmEdgeDistress.LeakShape.streak)
                             Text(String(localized: "darkroom.distress.shape_flare", defaultValue: "Flare")).tag(FilmEdgeDistress.LeakShape.flare)
+                            Text(String(localized: "darkroom.distress.shape_burn", defaultValue: "Burn")).tag(FilmEdgeDistress.LeakShape.burn)
                         }.pickerStyle(.segmented).accessibilityIdentifier("darkroom.distress.leakShape")
                         distressSlider(String(localized: "darkroom.distress.leak_strength", defaultValue: "Leak"), \.leak,
                                        scale: 100, step: 1, unit: "%", identifier: "leak")
@@ -344,7 +331,7 @@ struct DarkroomView: View {
                     next.scale = min(max(value / 100, PrintLayout.scaleRange.lowerBound), PrintLayout.scaleRange.upperBound)
                     layout = next.isIdentity ? nil : next
                 }),
-                range: 25...max(100, min(400, (geometry?.fillScale ?? 1) * 100)), step: 1,
+                range: 25...max(edge == nil ? 100 : 200, min(400, (geometry?.fillScale ?? 1) * 100)), step: 1,
                 minimum: 25, maximum: 400, unit: "%", identifier: "darkroom.scale",
                 defaultValue: 100, fillOrigin: 0, onEditingChanged: onEditingChanged)
             HStack {
@@ -407,10 +394,14 @@ private struct PrintPreview: View {
     let image: UIImage?
     let imageSize: CGSize
     let layout: PrintLayout
+    /// The sheet continues the print's own unexposed margin.
+    var paperColor = Color.white
     var loupeImage: UIImage? = nil
     var loupeRefining = false
     /// Pixel width the loupe's full-resolution frame will have, known before it is rendered.
     var loupeWidth: CGFloat? = nil
+    var loupePatch: PhotoRenderer.Detail? = nil
+    var onLoupeInspect: ((CGRect) -> Void)? = nil
     var showLoupe = false
     var tableLit = true
     @Binding var loupeCenter: CGPoint?
@@ -421,7 +412,7 @@ private struct PrintPreview: View {
                               max(1, viewport.size.height - 36) / geometry.paperSize.height)
                 let paper = CGSize(width: geometry.paperSize.width * fit, height: geometry.paperSize.height * fit)
                 ZStack(alignment: .topLeading) {
-                    Color.white
+                    paperColor
                     if let image { Image(uiImage: image).resizable()
                         .frame(width: geometry.imageRect.width * fit, height: geometry.imageRect.height * fit)
                         .position(x: geometry.imageRect.midX * fit, y: geometry.imageRect.midY * fit)
@@ -444,9 +435,10 @@ private struct PrintPreview: View {
                                                      y: paperFrame.minY + geometry.imageRect.minY * fit,
                                                      width: geometry.imageRect.width * fit, height: geometry.imageRect.height * fit),
                                   paperFrame: paperFrame, bounds: viewport.size,
-                                  refining: loupeRefining || loupeImage == nil,
-                                  surround: LightTableBackdrop.surround(lit: tableLit),
-                                  fullWidth: loupeWidth, center: $loupeCenter)
+                                  refining: loupeRefining || (loupeImage == nil && loupePatch == nil),
+                                  surround: LightTableBackdrop.surround(lit: tableLit), paper: paperColor,
+                                  fullWidth: loupeWidth, patch: loupePatch, onInspect: onLoupeInspect,
+                                  center: $loupeCenter)
                 }
             }
         }

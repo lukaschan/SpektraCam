@@ -67,11 +67,11 @@ struct CropControls: View {
                 HStack {
                     transformButtons
                     Spacer()
-                    if filmGate?.format != .roll120 { orientationButtons }
+                    if filmGate?.isSquare != true { orientationButtons }
                 }
                 VStack(spacing: 8) {
                     HStack { transformButtons }
-                    if filmGate?.format != .roll120 { HStack { orientationButtons } }
+                    if filmGate?.isSquare != true { HStack { orientationButtons } }
                 }
             }
             .buttonStyle(.glass)

@@ -4,7 +4,8 @@
 // Distress fields mirror FilmEdgeGeometry (Models/FilmEdgeLayout.swift) hash-for-hash.
 // e[0] size/pitch/portrait, e[1] gate, e[2] holes (perforated, centre, KS radius, scratches-in-image),
 // e[3] bulge/erosion + tilt, e[4] seed/stock/wear, e[5] carrier (roughness, tail, open half along/across),
-// e[6] fog/leak, e[7..8] leak frame + dust/scratches, e[9] leak light, e[10] source holes, e[11] destination KS,
+// e[6] fog/leak, e[7..8] leak frame + dust/scratches, e[9] leak light + carrier wave, e[10] source holes,
+// e[11] carrier corner + destination KS,
 // e[12] hole variation/perforation leak + leak kind/shape, e[13] fog light + carrier reflection,
 // e[14] carrier blur/detail + streak direction, e[15] rim core light + carrier tail width, e[16..] 16 scratches.
 inline uint fe_hash(uint x){x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;x^=x>>16;return x;}
@@ -46,7 +47,7 @@ inline FeHole fe_jitter(FeHole h,constant float4 *e,float4 k){
 }
 inline float edge_support(float2 origin, constant float4 *e, bool destination=false) {
     if(e[2].x==0)return 1;
-    float4 k=destination?e[11]:e[10];bool vary=!destination&&e[12].x>0;
+    float4 k=destination?float4(0,e[11].yzw):e[10];bool vary=!destination&&e[12].x>0;
     // Most pixels are far from the two perforation bands.
     float across=fe_strip(fe_film(origin+0.5f,e),e).y;
     if(abs(abs(across)-e[2].y)>k.w+e[0].z*1.5f+0.2f)return 1;
@@ -77,7 +78,16 @@ inline float2 edge_hole_rim(float a,float t,constant float4 *e){
 inline float fe_gate_distance(float2 f,constant float4 *e){
     float hx=e[1].x,hy=e[1].y,ux=clamp(f.x/hx,-1.0f,1.0f),uy=clamp(f.y/hy,-1.0f,1.0f),b=e[3].x;
     hx+=0.15f*b*(1-uy*uy);hy+=0.22f*b*(1-ux*ux);
-    return fe_box(f,float2(hx,hy),e[1].z);
+    float d=fe_box(f,float2(hx,hy),abs(e[1].z));
+    if(e[1].z<0){
+        // Hasselblad V notches: two small triangles of open gate on the left edge.
+        float u=-(f.x+hx),depth=0.34f,hw=0.42f,slope=sqrt(depth*depth+hw*hw);
+        for(int k=0;k<2;++k){
+            float v=abs(f.y-(k==0?-2.7f:2.4f));
+            d=min(d,max((v*depth+u*hw-hw*depth)/slope,max(-u-0.3f,u-0.26f)));
+        }
+    }
+    return d;
 }
 inline float edge_gate(float2 px,constant float4 *e){
     float2 f=fe_film(px,e);
@@ -94,6 +104,10 @@ inline float edge_leak_field(float2 f,constant float4 *e){
     float depth=max(0.0f,dot(v,e[7].zw)),lateral=v.x*e[7].w-v.y*e[7].z;
     float n=fe_value(f.x/(0.6f*size),f.y/(0.6f*size),fe_seed(e,4));
     int shape=int(e[12].w);
+    if(shape==3){
+        float front=size*(1+0.14f*fe_value(lateral/(0.5f*size),0.5f,fe_seed(e,4))+0.04f*fe_value(lateral/(0.08f*size),1.5f,fe_seed(e,4)));
+        return 60/(1+exp(min((depth-front)/(0.045f*size+0.12f),40.0f)));
+    }
     if(shape==0){
         float lobeA=exp(-lateral*lateral/(2*pow(1.4f*size,2.0f)));
         float shifted=lateral-e[8].x*size,lobeB=exp(-shifted*shifted/(2*pow(0.7f*size,2.0f)));
@@ -138,13 +152,43 @@ inline float4 edge_exposure(float2 px,constant float4 *e){
 inline float edge_carrier_distance(float2 px,constant float4 *e){
     float2 c=fe_canvas(px,e);float pr=fe_pixel_radius(e);
     float2 opening=e[0].w!=0?e[5].wz:e[5].zw;
-    float base=fe_box(c,opening,0);float amplitude=e[5].x;
-    if(amplitude<=0||base<= -(amplitude*1.6f+pr+e[14].x))return base;
     float2 s=fe_strip(c,e);float scale=1.2f;
+    float base=fe_box(c,opening,e[11].x)+e[9].w*fe_value(s.x/11,s.y/11,fe_seed(e,52));float amplitude=e[5].x;
+    if(amplitude<=0||base<= -(amplitude*1.6f+pr+e[14].x))return base;
     float broad=0.5f+0.5f*(0.85f*fe_value(s.x/scale,s.y/scale,fe_seed(e,6))+0.15f*fe_value(s.x/(0.2f*scale),s.y/(0.2f*scale),fe_seed(e,7)));
     float n=fe_value(s.x/(0.35f*scale),s.y/(0.35f*scale),fe_seed(e,8));
     float notch=clamp((n-0.6f)/0.3f,0.0f,1.0f);
     return base+amplitude*(broad+0.5f*notch*notch*(3-2*notch));
+}
+// Lint on the holder edge: hairs rooted under it, reaching into the opening, in silhouette.
+inline float edge_fibres(float2 c,constant float4 *e){
+    float2 hs=e[0].w!=0?e[5].wz:e[5].zw;
+    float detail=e[14].y,blur=max(fe_pixel_radius(e),0.5f*e[14].x),clearValue=1;uint seed=fe_seed(e,53);
+    for(int k=0;k<6;++k){
+        uint h0=fe_hash2(k,0,seed);
+        if(fe_unit(h0)>=0.15f+0.85f*detail)continue;
+        uint h1=fe_hash(h0),h2=fe_hash(h1),h3=fe_hash(h2),h4=fe_hash(h3),h5=fe_hash(h4),h6=fe_hash(h5);
+        float u=fe_unit(h2)*2-1;float2 p,n;uint side=h1&3u;
+        if(side==0){p=float2(u*hs.x,-hs.y);n=float2(0,1);}
+        else if(side==1){p=float2(u*hs.x,hs.y);n=float2(0,-1);}
+        else if(side==2){p=float2(-hs.x,u*hs.y);n=float2(1,0);}
+        else{p=float2(hs.x,u*hs.y);n=float2(-1,0);}
+        float size=fe_unit(h3),len=0.3f+1.8f*size*size;
+        float angle=(fe_unit(h4)-0.5f)*2,curl=(fe_unit(h5)-0.5f)*1.6f;
+        float cs=cos(angle),sn=sin(angle);float2 d=float2(cs*n.x-sn*n.y,sn*n.x+cs*n.y);
+        p-=0.15f*n;
+        if(abs(c.x-p.x)>=len+0.3f||abs(c.y-p.y)>=len+0.3f)continue;
+        float nearest=1e9f;float2 a=p;
+        for(int i=1;i<=8;++i){
+            float q=float(i)/8;
+            float2 b=p+float2(d.x*q-d.y*curl*q*q,d.y*q+d.x*curl*q*q)*len,s=b-a;
+            float w=clamp(dot(c-a,s)/max(dot(s,s),1e-12f),0.0f,1.0f);
+            nearest=min(nearest,length(c-a-w*s));a=b;
+        }
+        float width=0.008f+0.012f*fe_unit(h6),rr=max(width,0.9f*blur);
+        clearValue*=1-0.85f*(width/rr)*fe_penumbra(nearest-rr,blur);
+    }
+    return 1-clearValue;
 }
 // Defocused holder edge plus specks of light through its abraded edge.
 // Holder: crisp defocused core, a faint wide tail of scattered light, and abraded-edge specks.
@@ -152,14 +196,24 @@ inline float edge_carrier(float2 px,constant float4 *e){
     float d=edge_carrier_distance(px,e),r=max(e[14].x,fe_pixel_radius(e));
     if(d< -r)return 1;
     float open=fe_penumbra(d,r),detail=e[14].y;
+    // e[15].w < 0: an opaque enlarger carrier; its scattered light is added by edge_halo.
+    if(e[15].w<0)return open;
     float pass=open+(1-open)*e[5].y*exp(-max(d,0.0f)/e[15].w);
-    if(detail<=0||d>=r+0.45f)return pass;
+    if(detail<=0)return pass;
+    if(d> -2.6f)pass*=1-edge_fibres(fe_canvas(px,e),e);
+    if(d>=r+0.45f)return pass;
     float2 s=fe_strip(fe_canvas(px,e),e);
     float n=0.6f*fe_value(s.x/0.05f,s.y/0.05f,fe_seed(e,49))+0.4f*fe_value(s.x/0.15f,s.y/0.15f,fe_seed(e,51));
     float u=clamp((n-0.15f)/0.55f,0.0f,1.0f);
     float patch=0.5f+0.5f*fe_value(s.x/0.6f,s.y/0.6f,fe_seed(e,50));
     float speck=u*u*(3-2*u)*patch*patch;
     return pass+(1-pass)*detail*0.5f*speck*exp(-max(d-r*0.5f,0.0f)/0.12f);
+}
+inline float edge_halo(float2 px,constant float4 *e){
+    if(e[15].w>=0)return 0;
+    float d=edge_carrier_distance(px,e),r=max(e[14].x,fe_pixel_radius(e));
+    if(d<= -r)return 0;
+    return (1-fe_penumbra(d,r))*e[5].y*exp(max(d,0.0f)/e[15].w);
 }
 inline float edge_reflection(float2 px,constant float4 *e){
     float r=e[13].w;if(r<=0)return 0;
@@ -234,7 +288,7 @@ kernel void film_edge_transmission(device float4 *image [[buffer(0)]],constant f
         occlusion=1-(1-edge_dust(p,e))*(1-scatter*float3(0.23f,0.45f,1.0f));
     }
     float3 light=(image[i].xyz*support+clear.xyz*(1-support))*(1-occlusion*support)*carrier;
-    if((mode&16u)!=0)light+=clear.xyz*edge_reflection(p,e)*carrier;
+    if((mode&16u)!=0)light+=clear.xyz*(edge_reflection(p,e)*carrier+edge_halo(p,e));
     image[i].xyz=light;
 }
 // Emulsion scratches thin the developed dye stack before printing or scanning.

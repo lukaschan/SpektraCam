@@ -173,6 +173,11 @@ nonisolated struct FilmPipeline: Sendable {
                 let mode: FilmEdgeGeometry.Transmission = destinationFilm ? [.carrier, .destination] : [.damage, .carrier]
                 for i in xyz.pixels.indices {
                     xyz.pixels[i] = edge.transmit(xyz.pixels[i], clear: clear, x: i % width, y: i / width, mode: mode)
+                }                // Scanner veiling glare: clear holes and bright picture areas glow into what is
+                // next to them. A wide exponential spread of a few percent of the scanned light.
+                let flare = xyz.exponential(RGB(repeating: FilmEdgeGeometry.scanFlareMicrometers / pitch))
+                for i in xyz.pixels.indices {
+                    xyz.pixels[i] = xyz.pixels[i] * (1 - FilmEdgeGeometry.scanFlare) + flare.pixels[i] * FilmEdgeGeometry.scanFlare
                 }
             }
         }

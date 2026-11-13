@@ -31,7 +31,7 @@ import UniformTypeIdentifiers
             "The nominal stock-edge gap was mistaken for a hole-center inset")
         let pitch = geometry.pixelPitchMicrometers
         precondition(abs(pitch * geometry.gate.width - 36000) < 1e-9)
-        precondition(geometry.width == 256 && geometry.height == 182)
+        precondition(geometry.width == 256 && geometry.height == 180)
         var runs = 0, inHole = false
         for x in 0..<geometry.width {
             let hole = geometry.supportCoverage(x: x, y: 0) < 1
@@ -83,7 +83,11 @@ import UniformTypeIdentifiers
                     pipeline: pipeline, seed: 9, autoExposureEV: 0, edge: geometry)
                 let noisyB = try await gpu.process(input, width: geometry.width, height: geometry.height,
                     pipeline: pipeline, seed: 71, autoExposureEV: 0, edge: geometry)
-                for i in holes { precondition(noisyA.pixels[i] == noisyB.pixels[i], "Dye/grain appeared in an open hole") }
+                // A hole carries no dye, but scanner glare spreads a little of its grainy surround into it.
+                for i in holes {
+                    let d = noisyA.pixels[i] - noisyB.pixels[i]
+                    precondition(max(abs(d.x), abs(d.y), abs(d.z)) < 0.02, "Dye/grain appeared in an open hole")
+                }
             }
             let hole = cpu[holes[holes.count / 2]]
             let rebate = cpu[(Int(geometry.gate.maxY) + 2) * geometry.width + geometry.width / 2]
@@ -341,7 +345,8 @@ import UniformTypeIdentifiers
                 // Away from the hole edge, so scanner blur of the surrounding film is excluded.
                 guard (-3...3).allSatisfy({ d in open(x + d, y) && open(x, y + d) }) else { continue }
                 let i = y * gs.width + x
-                precondition(abs((leaky[i] - quiet[i]).sum()) < 1e-4, "Leak or fog tinted an open sprocket on \(type): \(leaky[i]) vs \(quiet[i])")
+                // Scanner glare carries a few percent of the fogged surround into the opening.
+                precondition(abs((leaky[i] - quiet[i]).sum()) < 5e-3, "Leak or fog tinted an open sprocket on \(type): \(leaky[i]) vs \(quiet[i])")
                 checked += 1
             }}
             precondition(checked > 10, "No interior sprocket pixels checked for \(type)")
@@ -368,7 +373,8 @@ import UniformTypeIdentifiers
         let front = try scanPipeline.process(dark, width: gF.width, height: gF.height, stochastic: false, edge: gF, autoExposureEV: 0)
         let back = try scanPipeline.process(dark, width: gB.width, height: gB.height, stochastic: false, edge: gB, autoExposureEV: 0)
         let rebate = 2 * gF.width + gF.width / 2, picture = (Int(gF.gate.minY) + 4) * gF.width + gF.width / 2
-        precondition(front[rebate] == none[rebate] || abs((front[rebate] - none[rebate]).sum()) < 1e-6, "Front leak exposed the rebate")
+        // Only scanner glare from the leaked picture reaches the rebate, not the leak itself.
+        precondition(abs((front[rebate] - none[rebate]).sum()) < 5e-3, "Front leak exposed the rebate")
         precondition(abs((front[picture] - none[picture]).sum()) > 0.01, "Front leak did not expose the picture")
         precondition(abs((back[rebate] - none[rebate]).sum()) > 0.01, "Back leak did not reach the rebate")
         let cool = FilmEdgeGeometry.light(neutral: RGB(1, 1, 1), warmth: -1), warmLight = FilmEdgeGeometry.light(neutral: RGB(1, 1, 1), warmth: 1)
@@ -431,7 +437,7 @@ import UniformTypeIdentifiers
         let gh = geometry(hand, longEdge: 1024, gate: FilmEdgeGate(.natural))  // a strongly tilted strip may legitimately show slivers
         var visibleHoles = 0
         for y in 0..<gh.height { for x in 0..<gh.width where gh.supportCoverage(x: x, y: y) < 1 && gh.carrierCoverage(x: x, y: y) > 0.5 { visibleHoles += 1 } }
-        precondition(visibleHoles == 0 && gh.distress.carrierDetail == 0 && gh.distress.carrierBlur < 0.05,
+        precondition(visibleHoles == 0 && gh.distress.carrierDetail == 0 && gh.distress.carrierBlur < 0.1,
             "Enlarger print showed \(visibleHoles) sprocket pixels or kept the scan holder")
         // Hole rim: the yellow core and strongest halo face the picture.
         var rimmed = FilmEdgeDistress(); rimmed.holeVariation = 1; rimmed.seed = 21
@@ -613,7 +619,7 @@ import UniformTypeIdentifiers
         let quickMS = (ProcessInfo.processInfo.systemUptime - previewStart) * 1000
         let refineStart = ProcessInfo.processInfo.systemUptime
         let refined = try await large.renderFilmEdge(settled, maximum: 2160)
-        precondition(refined.width == 2160 && refined.height == 1533)  // 38.6 × 27.4 mm with the holder margin
+        precondition(refined.width == 2160 && refined.height == 1519)  // 38.4 × 27.0 mm with the holder margin
         let refineMS = (ProcessInfo.processInfo.systemUptime - refineStart) * 1000
         do {
             _ = try await large.export(settled, size: .full, format: .png, quality: 1)

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// A fluorescent-tube light box: enamelled steel frame, opal diffuser, tubes showing faintly
 /// through it. Switched off, the diffuser is a dim neutral surround for judging the print
@@ -107,5 +108,17 @@ struct LightTableSwitch: View {
         .accessibilityValue(lit ? String(localized: "common.on", defaultValue: "On") : String(localized: "common.off", defaultValue: "Off"))
         .accessibilityAddTraits(.isToggle)
         .accessibilityIdentifier("darkroom.light.switch")
+    }
+}
+
+/// Paper colour for the sheet under a hand print, remembered per rendered frame.
+@MainActor enum PaperTone {
+    private static let cache = NSCache<UIImage, UIColor>()
+    static func color(of image: UIImage) -> Color {
+        if let hit = cache.object(forKey: image) { return Color(uiColor: hit) }
+        guard let cg = image.cgImage else { return .white }
+        let tone = UIColor(cgColor: PrintCompositor.paperTone(of: cg))
+        cache.setObject(tone, forKey: image)
+        return Color(uiColor: tone)
     }
 }

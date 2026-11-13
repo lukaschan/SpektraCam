@@ -151,6 +151,8 @@ nonisolated enum CropAspect: String, CaseIterable, Identifiable, Codable, Sendab
     case cinemaFlat = "1.85:1"
     case cinemaScope = "2.39:1"
     case rollSquare = "120 · 6×6 (square)"
+    case roll645 = "120 · 6×4.5"
+    case roll67 = "120 · 6×7"
     case super35ANSI = "Super 35 · ANSI 24.9×18.7 mm"
     case super16ARRI = "Super 16 · ARRI 12.35×7.5 mm"
     case super8Camera = "Super 8 · camera 5.79×4.01 mm"
@@ -200,6 +202,8 @@ nonisolated enum CropAspect: String, CaseIterable, Identifiable, Codable, Sendab
         case .cinemaFlat: 1.85
         case .cinemaScope: 2.39
         case .rollSquare: 1
+        case .roll645: 56 / 41.5
+        case .roll67: 69.5 / 56
         case .super35ANSI: 24.9 / 18.7
         case .super16ARRI: 12.35 / 7.5
         case .super8Camera: 5.79 / 4.01

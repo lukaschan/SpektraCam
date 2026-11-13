@@ -3,7 +3,19 @@ import Foundation
 
 /// A bounded SDR finishing pass. The light table and its shadows never enter the file.
 nonisolated enum PrintCompositor {
-    static func render(_ image: CGImage, layout: PrintLayout, maximum: Int? = nil) throws -> CGImage {
+    /// The print's unexposed margin, read from its corner: paper around a hand print is the
+    /// same sheet, not a brighter white.
+    static func paperTone(of image: CGImage) -> CGColor {
+        var pixel = [UInt8](repeating: 255, count: 4)
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        if let context = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                   space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue),
+           let corner = image.cropping(to: CGRect(x: 0, y: 0, width: 2, height: 2)) {
+            context.draw(corner, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        return CGColor(colorSpace: space, components: [CGFloat(pixel[0]) / 255, CGFloat(pixel[1]) / 255, CGFloat(pixel[2]) / 255, 1])!
+    }
+    static func render(_ image: CGImage, layout: PrintLayout, maximum: Int? = nil, paper: CGColor? = nil) throws -> CGImage {
         try Task.checkCancellation()
         let sourceLong = max(image.width, image.height)
         let longEdge = min(sourceLong, maximum ?? sourceLong)
@@ -22,7 +34,7 @@ nonisolated enum PrintCompositor {
                 bitsPerComponent: 8, bytesPerRow: 0, space: space,
                 bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
         else { throw PhotoExporter.Failure.render }
-        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.setFillColor(paper ?? CGColor(gray: 1, alpha: 1))
         context.fill(CGRect(origin: .zero, size: geometry.paperSize))
         context.interpolationQuality = .high
         // Centered placement is symmetric under CGContext's vertical coordinate convention.
