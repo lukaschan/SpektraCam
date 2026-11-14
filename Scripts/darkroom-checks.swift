@@ -47,6 +47,20 @@ import Foundation
             }
         }
         try checkBladeEdge()
+        // Fill is the (negative) border at which the picture just covers the sheet.
+        do {
+            var sheet = PrintLayout(); sheet.paper = .fiveBySeven; sheet.handSet = false
+            let fill = PrintGeometry.fillMargin(imageSize: sourceSize, layout: sheet)
+            precondition(fill < 0 && PrintLayout.marginRange.contains(fill), "A 3:2 picture on 5 × 7 needs a negative fill border: \(fill)")
+            sheet.margin = fill
+            let covered = PrintGeometry(imageSize: sourceSize, layout: sheet, longEdge: 1400)!
+            precondition(covered.imageRect.minX <= 0.5 && covered.imageRect.minY <= 0.5
+                && covered.imageRect.maxX >= covered.paperSize.width - 0.5 && covered.imageRect.maxY >= covered.paperSize.height - 0.5,
+                "The fill border did not cover the sheet: \(covered.imageRect) on \(covered.paperSize)")
+            var square = PrintLayout(); square.paper = .fourBySix
+            precondition(abs(PrintGeometry.fillMargin(imageSize: CGSize(width: 600, height: 400), layout: square)) < 1e-12,
+                         "Matching proportions needed a fill border")
+        }
         precondition(abs(Easel.penumbra(magnification: 4) - (4.5 / 40 + 0.05)) < 1e-12, "Easel penumbra formula")
         let legacyLayout = try JSONDecoder().decode(PrintLayout.self, from: Data("{\"paper\":\"fourBySix\",\"scale\":0.8}".utf8))
         precondition(!legacyLayout.handSet && legacyLayout.easelSeed == 1 && legacyLayout.blade == .natural,

@@ -1324,13 +1324,26 @@ final class EditorInteractionTests: XCTestCase {
         preview.name = "Darkroom fixed paper with easel border"
         preview.lifetime = .keepAlways
         add(preview)
+        // The value editor: a compact popover showing the value as the label rounds it.
+        app.buttons["darkroom.border.value"].tap()
+        XCTAssertTrue(app.textFields["numeric.input"].waitForExistence(timeout: 5))
+        let entry = XCTAttachment(screenshot: app.screenshot())
+        entry.name = "Compact value editor"
+        entry.lifetime = .keepAlways
+        add(entry)
+        app.buttons["numeric.done"].tap()
+        XCTAssertEqual(app.buttons["darkroom.border.value"].value as? String, chosenScale, "Done changed an untouched value")
         // Borderless: the loupe shows the same cropped sheet as the preview, never a border.
         app.buttons["darkroom.fill"].tap()
         let borderless = XCTAttachment(screenshot: app.screenshot())
         borderless.name = "Darkroom borderless sheet under the loupe"
         borderless.lifetime = .keepAlways
         add(borderless)
-        app.buttons["darkroom.fill"].tap()
+        XCTAssertEqual(app.buttons["darkroom.fill"].value as? String, "On", "Fill did not set the covering border")
+        // Fill sets a value (the covering, usually negative border); Undo restores the previous one.
+        app.buttons["editor.history"].tap()
+        app.buttons["Undo"].tap()
+        XCTAssertEqual(app.buttons["darkroom.border.value"].value as? String, chosenScale)
         XCTAssertTrue(app.buttons["darkroom.rotatePaper"].waitForExistence(timeout: 5))
         app.buttons["darkroom.rotatePaper"].tap()
         let expanded = XCTAttachment(screenshot: app.screenshot())

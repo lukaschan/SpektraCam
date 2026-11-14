@@ -42,6 +42,11 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
     /// blades crop into the picture. The blades keep the frame's proportions.
     var printZoom = 0.97
     static let printZoomRange = 0.9...1.1
+    /// Scan only: how much of the strip the scanner's crop takes in, relative to the frame. 100 %
+    /// is the frame itself; lower shows the rebate, the holes and (for a negative in a holder) the
+    /// holder's edge. A digital crop, so its edge is sharp.
+    var scanZoom = 0.9
+    static let scanZoomRange = 0.75...1.05
     /// Enlarger print: paper rendered around the easel opening, in fractions of the frame's long
     /// side; room for a hand-set blade's miss and its penumbra. The rest of the sheet is composited.
     static let easelMargin = 0.025
@@ -95,7 +100,7 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         return abs(max(imageSize.width, imageSize.height) - min(imageSize.width, imageSize.height) * ratio) <= ratio
     }
     init() {}
-    enum CodingKeys: String, CodingKey { case format, cinePerforations, rollFrame, rollGate, gate, distress, printZoom }
+    enum CodingKeys: String, CodingKey { case format, cinePerforations, rollFrame, rollGate, gate, distress, printZoom, scanZoom }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         format = try values.decodeIfPresent(Format.self, forKey: .format) ?? .film35
@@ -106,6 +111,8 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         distress = try values.decodeIfPresent(FilmEdgeDistress.self, forKey: .distress) ?? FilmEdgeDistress()
         let zoom = try values.decodeIfPresent(Double.self, forKey: .printZoom) ?? 0.97
         printZoom = zoom.isFinite ? min(max(zoom, Self.printZoomRange.lowerBound), Self.printZoomRange.upperBound) : 0.97
+        let scan = try values.decodeIfPresent(Double.self, forKey: .scanZoom) ?? 0.9
+        scanZoom = scan.isFinite ? min(max(scan, Self.scanZoomRange.lowerBound), Self.scanZoomRange.upperBound) : 0.9
     }
 }
 
@@ -190,6 +197,10 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     /// much rebate they show. Set from the edge type (a negative print), not by hand; see
     /// `EditRecipe.renderedFilmEdgeLayout`.
     var enlargerPrint = false
+    /// Set from the edge type, not saved: a negative scanned in a holder (direct or inverted), and
+    /// a negative scan inverted to a positive. Positive scans are direct camera scans, no holder.
+    var scanHolder = false
+    var invertedScan = false
     var edgeFog = 0.0
     var leak = 0.0
     var leakKind = LeakKind.back
@@ -386,6 +397,10 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     let carrierHalf: (along: Double, across: Double)
     /// Enlarger print on a hand-set easel: the opening's centre relative to the frame, canvas mm.
     let easelOffset: (x: Double, y: Double)
+    /// Where the camera left the frame among its holes: not exactly centred on the eight, as the
+    /// advance and the sprocket's play vary. Seeded, up to ±`maxRegistration` mm along the strip.
+    let registration: Double
+    static let maxRegistration = 0.3
     /// Creative routes: the material graph's scene stops at the inner edge of the penumbra, so a
     /// separately developed centre can fade straight into rebate without a rim of the material image.
     var erodesGate = false
@@ -454,6 +469,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         static let destination = Self(rawValue: 8)
         /// Paper printing only: carrier-edge reflection of unmasked enlarger light.
         static let reflection = Self(rawValue: 16)
+        /// Inverted negative scan: the holder's blocked light, inverted (`invertedHolder`).
+        static let invertedHolder = Self(rawValue: 32)
     }
 
     /// `easel` supplies a hand-set enlarger print's placement; nil prints square and centred.
@@ -477,6 +494,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         if resolved.enlargerPrint { resolved.carrierRoughness = (easel?.blade ?? .natural).wear }
         distress = resolved
         easelOffset = handSet ? (0.18 * Easel.jitter(easelSeed, 4), 0.18 * Easel.jitter(easelSeed, 5)) : (0, 0)
+        registration = Self.maxRegistration * (FilmEdgeNoise.unit(Self.streamSeed(resolved.seed, 61)) * 2 - 1)
         // `portrait` means the film runs vertically on the canvas. 6 × 4.5 frames lie across the
         // film, so a landscape 645 picture sits on a vertical strip.
         portrait = (imageSize.height > imageSize.width) == (layout.gateAlong >= layout.gateAcross)
@@ -491,9 +509,12 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             let margin = FilmEdgeLayout.easelMargin * max(long, short)
             extent = CGSize(width: 2 * (carrierHalf.along + margin), height: 2 * (carrierHalf.across + margin))
         } else {
-            let alongReveal = 0.8, acrossReveal = format == .film35 ? 1.1 : 0.8, holder = 0.4
-            carrierHalf = (long / 2 + alongReveal, short / 2 + acrossReveal)
-            extent = CGSize(width: long + 2 * (alongReveal + holder), height: short + 2 * (acrossReveal + holder))
+            // The scanner's crop window. A holder (negatives only) is open along the strip, where the
+            // film continues past the frame gap, and masks across it, cutting through the holes on 35 mm.
+            extent = CGSize(width: long / layout.scanZoom, height: short / layout.scanZoom)
+            // Measured on P1485707 (318 px/mm): about 0.2 mm of each KS hole shows before the holder.
+            let acrossReveal = format == .film35 ? 0.83 : 0.8
+            carrierHalf = distress.scanHolder ? (1e4, short / 2 + acrossReveal) : (1e4, 1e4)
         }
         let factor = Double(longEdge) / max(extent.width, extent.height)
         let landscapeSize = CGSize(width: max(1, (extent.width * factor).rounded()),
@@ -509,7 +530,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let ha = Double(portrait ? height : width) / factor / 2
         let ht = Double(portrait ? width : height) / factor / 2
         leakFrame = Self.leakFrame(distress, portrait: portrait, halfAlong: ha, halfAcross: ht)
-        scratchCandidates = Self.scratches(distress, halfAlong: ha, halfAcross: carrierHalf.across, gateAcross: short / 2)
+        scratchCandidates = Self.scratches(distress, halfAlong: ha, halfAcross: min(carrierHalf.across, ht), gateAcross: short / 2)
     }
 
     var pixelPitchMicrometers: Double { millimetersPerPixel * 1000 }
@@ -680,7 +701,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// reaches the green layer too (a bright yellow core). The flat edge facing the picture
     /// catches the most light, as a streak along the edge with sparkle where the emulsion broke.
     private func holeRim(_ a: Double, _ t: Double) -> (warm: Double, core: Double) {
-        let hole = jittered(perforation.hole(along: a, across: t), perforation)
+        let hole = jittered(perforation.hole(along: a + registration, across: t), perforation)
         guard hole.distance > -0.004, hole.distance < 0.2 else { return (0, 0) }
         let v = distress.holeVariation
         let h = FilmEdgeNoise.hash(hole.index, hole.side, seed(47))
@@ -768,8 +789,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         for sy in 0..<4 { for sx in 0..<4 {
             let (fx, fy) = film(Double(x) + (Double(sx) + 0.5) / 4, Double(y) + (Double(sy) + 0.5) / 4)
             let (along, across) = strip(fx, fy)
-            // Centered frame; phase is fixed, with no random shuffling.
-            var hole = kind.hole(along: along, across: across)
+            // The source holes sit where the camera registered the frame; a print's own holes do not move.
+            var hole = kind.hole(along: destination ? along : along + registration, across: across)
             if vary && abs(hole.distance) < 0.1 { hole = jittered(hole, kind) }
             if hole.distance >= 0 { covered += 1 }
         }}
@@ -1014,6 +1035,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
 
     /// Combine intact film and clear light in transmission; never average densities with air.
     func transmit(_ film: SIMD3<Double>, clear: SIMD3<Double>, x: Int, y: Int, mode: Transmission) -> SIMD3<Double> {
+        if mode.contains(.invertedHolder) { return invertedHolder(film, x: x, y: y) }
         let support = supportCoverage(x: x, y: y, destination: mode.contains(.destination))
         let carrier = mode.contains(.carrier) ? carrierCoverage(x: x, y: y) : 1
         // Clear openings are the black reference wherever the carrier passes light.
@@ -1026,6 +1048,48 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         var light = (film * support + clear * (1 - support)) * (1 - occlusion * support) * carrier
         if mode.contains(.reflection) { light += clear * (carrierReflection(x: x, y: y) * carrier + carrierHalo(x: x, y: y)) }
         return light
+    }
+    /// The holder in an inverted negative scan (matched to a camera scan, P1485707, at 318 px/mm).
+    /// Where it passes a fraction c of the light the raw capture is c times darker, down to a flare
+    /// floor that is the same over any film; inversion turns the capture into brightness:
+    /// v = 1 / (c^γ / q + (1 − c) / (1.1 W)), q the film's own inverted value. Over a clear hole
+    /// that runs black → red → orange → yellow, over the rebate salmon pink, and under the solid
+    /// holder both reach the same slightly over-white value that the scan's white point W clips
+    /// per channel (pinkish). The holder is nearly in focus (≈ 0.1 mm ramp) with the gate's wear
+    /// profile on its cut edge. Capture noise, amplified by inversion, is strongest where the edge
+    /// is soft and mild in the solid white: blotches streaked along the edge. Light scattered off
+    /// the edge adds raw exposure just inside the opening (a darker band). Linear output.
+    static let holderGamma = SIMD3<Double>(1.4, 1.0, 0.75)
+    static let holderWhite = SIMD3<Double>(1.0, 0.82, 0.78)
+    /// The inverted scan's black offset: clear film inverts to a little above zero.
+    static let holderBlack = 0.012, holderWear = 0.02
+    static let holderScatter = 0.55, holderScatterWidth = 0.07
+    func invertedHolder(_ film: SIMD3<Double>, x: Int, y: Int) -> SIMD3<Double> {
+        let r = max(distress.carrierBlur, pixelRadius)
+        var d = carrierDistance(x: x, y: y)
+        guard d > -(r + Self.holderWear + 6 * Self.holderScatterWidth) else { return film }
+        let (cx, cy) = canvas(Double(x) + 0.5, Double(y) + 0.5)
+        let (a, t) = strip(cx, cy)
+        d += Self.holderWear * FilmEdgeNoise.wear(a, t, seed(62), seed(63))
+        let c = FilmEdgeNoise.penumbra(d, r)
+        // Blotches streaked 3:1 along the edge, never finer than ~1.5 output pixels; coarser
+        // sampling averages them, so their strength falls with the same factor.
+        let fine = max(0.015, 2.7 * pixelRadius), coarse = max(0.045, 5.4 * pixelRadius)
+        let luma = 0.6 * FilmEdgeNoise.value(a / (3 * fine), t / fine, seed(56))
+            + 0.4 * FilmEdgeNoise.value(a / (3 * coarse), t / coarse, seed(57))
+        let sigma = (0.7 * (1 - c) * min(1, c / 0.15) + 0.08) * (0.015 / fine).squareRoot()
+        // Scattered light inside the opening darkens the inverted rebate.
+        let scatter = d < 0 ? 1 - Self.holderScatter * exp(d / Self.holderScatterWidth) : 1
+        var out = SIMD3<Double>.zero
+        for i in 0..<3 {
+            let chroma = FilmEdgeNoise.value(a / (3 * coarse), t / coarse, seed(58 + UInt32(i)))
+            // Sharpening rings slightly below zero beside edges; a raw capture cannot.
+            let q = max(film[i], 0) * scatter + Self.holderBlack
+            let v = 1 / (pow(c, Self.holderGamma[i]) / q + (1 - c) / (1.1 * Self.holderWhite[i]))
+            let noisy = v * pow(10, (0.95 * luma + 0.05 * chroma) * sigma * (1 - c))
+            out[i] = min(max(noisy - Self.holderBlack, 0), Self.holderWhite[i])
+        }
+        return out
     }
     /// Emulsion scratches thin the developed dye before printing or scanning.
     func scratchedDensity(_ density: SIMD3<Double>, x: Int, y: Int) -> SIMD3<Double> {
@@ -1055,7 +1119,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             SIMD4(Float(fogLight.x), Float(fogLight.y), Float(fogLight.z), Float(d.carrierReflection)),
             SIMD4(Float(d.carrierBlur), Float(d.carrierDetail), Float(leak.direction.0), Float(leak.direction.1)),
             SIMD4(Float(coreLight.x), Float(coreLight.y), Float(coreLight.z), Float(d.enlargerPrint ? -d.carrierTailWidth : d.carrierTailWidth)),
-            SIMD4(Float(easelOffset.x), Float(easelOffset.y), 0, 0),
+            SIMD4(Float(easelOffset.x), Float(easelOffset.y), Float(registration), 0),
         ]
         for s in scratchCandidates {
             values.append(SIMD4(Float(s.across), Float(s.wander), Float(s.wavelength), Float(s.phase)))
@@ -1088,13 +1152,16 @@ extension EditRecipe {
     /// and cinema prints never are.
     nonisolated var renderedFilmEdgeLayout: FilmEdgeLayout? {
         guard var layout = filmEdgeLayout else { return nil }
-        layout.distress.enlargerPrint = resolvedFilmEdgeType == .negativePrint
+        let type = resolvedFilmEdgeType
+        layout.distress.enlargerPrint = type == .negativePrint
+        layout.distress.scanHolder = type == .invertedScan || type == .negativeScan
+        layout.distress.invertedScan = type == .invertedScan
         return layout
     }
     /// The sheet this edit is printed on, or nil when the picture is shown as itself. A film-edge
     /// enlarger print always has one: the easel's border is part of it.
     nonisolated var printedLayout: PrintLayout? {
-        if renderedFilmEdgeLayout?.distress.enlargerPrint == true { return printLayout ?? PrintLayout() }
+        if renderedFilmEdgeLayout?.distress.enlargerPrint == true { return printLayout ?? .enlargerDefault }
         return printLayout.flatMap { $0.isIdentity ? nil : $0 }
     }
     /// What goes on the sheet, for a picture or film-edge canvas of `size`.

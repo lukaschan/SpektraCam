@@ -31,14 +31,16 @@ import UniformTypeIdentifiers
             "The nominal stock-edge gap was mistaken for a hole-center inset")
         let pitch = geometry.pixelPitchMicrometers
         precondition(abs(pitch * geometry.gate.width - 36000) < 1e-9)
-        precondition(geometry.width == 256 && geometry.height == 180)
+        precondition(geometry.width == 256 && geometry.height == 171, "Scan canvas \(geometry.width)×\(geometry.height)")
         var runs = 0, inHole = false
         for x in 0..<geometry.width {
             let hole = geometry.supportCoverage(x: x, y: 0) < 1
             if hole && !inHole { runs += 1 }
             inHole = hole
         }
-        precondition(runs == 8, "135 registration must show eight full-size perforation slivers")
+        // The scan window (frame / scan framing) spans this many KS pitches, plus partial holes at its ends.
+        let pitches = Double(geometry.width) * geometry.millimetersPerPixel / FilmEdgeGeometry.Perforation.ks1870.pitch
+        precondition(runs >= Int(pitches) && runs <= Int(pitches) + 2, "135 registration: \(runs) holes across \(pitches) pitches")
         let input = (0..<geometry.width * geometry.height).map { i in
             SIMD4<Float>(Float(i % geometry.width) / Float(geometry.width) * 0.5 + 0.02, 0.18, 0.1, 1)
         }
@@ -144,15 +146,16 @@ import UniformTypeIdentifiers
         func geometry(_ distress: FilmEdgeDistress, longEdge: Int = 256, format: FilmEdgeLayout.Format = .film35,
                       perforation: FilmEdgeGeometry.Perforation = .ks1870,
                       gate: FilmEdgeGate = FilmEdgeGate(.precise), zoom: Double = 0.985,
-                      easel: PrintLayout? = nil) -> FilmEdgeGeometry {
+                      easel: PrintLayout? = nil, scanZoom: Double = 0.9) -> FilmEdgeGeometry {
             var layout = FilmEdgeLayout(); layout.format = format; layout.distress = distress; layout.gate = gate
-            layout.printZoom = zoom
+            layout.printZoom = zoom; layout.scanZoom = scanZoom
             let image = format == .film35 ? size : CGSize(width: 600, height: 600)
             return FilmEdgeGeometry(imageSize: image, layout: layout, longEdge: longEdge, perforation: perforation, easel: easel)!
         }
         var all = FilmEdgeDistress.Preset.worn.values
         all.seed = 0xC0FFEE; all.carrierRoughness = 0.3; all.leak = 0.5; all.dust = 0.8; all.scratches = 0.9
         all.holeVariation = 1; all.edgeFog = 1; all.carrierReflection = 0.8
+        all.scanHolder = true  // a negative in its holder unless a route says otherwise
         let rgb = input.map { RGB(Double($0.x), Double($0.y), Double($0.z)) }
         var selection = FilmEdgeSelection(); selection.mode = .manual
         var maxError = 0.0
@@ -165,7 +168,10 @@ import UniformTypeIdentifiers
             selection.manualType = type
             var recipe = base; recipe.filmEdgeSelection = selection
             let pipeline = try FilmPipeline(library: library, recipe: FilmEdgeRenderer.materialRecipe(recipe))
-            let g = geometry(distress, perforation: perforation, gate: { var r = FilmEdgeGate(.rough); r.holderDetail = 1; return r }())
+            // The route's holder flags, as `renderedFilmEdgeLayout` sets them.
+            var routed = distress
+            routed.scanHolder = type == .invertedScan || type == .negativeScan; routed.invertedScan = type == .invertedScan
+            let g = geometry(routed, perforation: perforation, gate: { var r = FilmEdgeGate(.rough); r.holderDetail = 1; return r }())
             let cpu = try pipeline.process(rgb, width: g.width, height: g.height, stochastic: false, edge: g, autoExposureEV: 0)
             let metal = try await gpu.process(input, width: g.width, height: g.height, pipeline: pipeline,
                 stochastic: false, autoExposureEV: 0, edge: g)
@@ -212,7 +218,8 @@ import UniformTypeIdentifiers
                 && recipe.printContent(canvas: size) == .scan, "Negative scan used an easel or a sheet")
             let pipeline = try FilmPipeline(library: library, recipe: FilmEdgeRenderer.materialRecipe(recipe))
             precondition(!FilmEdgeRenderer.materialRecipe(recipe).scanFilm, "Negative scan was not inverted")
-            let g = geometry(FilmEdgeDistress(), longEdge: 1024, gate: FilmEdgeGate(.natural))
+            var held = FilmEdgeDistress(); held.scanHolder = true; held.invertedScan = true
+            let g = geometry(held, longEdge: 1024, gate: FilmEdgeGate(.natural), scanZoom: 0.8)
             let scene = (0..<(g.width * g.height)).map { _ in RGB(0.18, 0.18, 0.18) }
             let out = try pipeline.process(scene, width: g.width, height: g.height, stochastic: false, edge: g, autoExposureEV: 0)
             let mm = g.millimetersPerPixel
@@ -222,10 +229,38 @@ import UniformTypeIdentifiers
             precondition(holder.sum() > 2.0 && rebate.sum() < 0.6 && holder.sum() > rebate.sum() + 1.5,
                          "Negative scan holder \(holder) not light against the rebate \(rebate)")
         }
+        // Registration: the camera leaves the frame a little off centre among its holes, seeded and
+        // bounded; the source holes move with it, a cinema print's own holes do not.
+        do {
+            var one = FilmEdgeDistress(); one.seed = 1
+            var other = FilmEdgeDistress(); other.seed = 7
+            let a = geometry(one, longEdge: 1024), b = geometry(other, longEdge: 1024)
+            precondition(abs(a.registration) <= FilmEdgeGeometry.maxRegistration && abs(b.registration) <= FilmEdgeGeometry.maxRegistration
+                && a.registration != b.registration, "Registration not seeded within ±0.3 mm: \(a.registration), \(b.registration)")
+            var moved = 0, destinationMoved = 0
+            for y in 0..<a.height { for x in stride(from: 0, to: a.width, by: 2) {
+                if a.supportCoverage(x: x, y: y) != b.supportCoverage(x: x, y: y) { moved += 1 }
+                if a.supportCoverage(x: x, y: y, destination: true) != b.supportCoverage(x: x, y: y, destination: true) { destinationMoved += 1 }
+            }}
+            precondition(moved > 0 && destinationMoved == 0, "Registration moved \(moved) source and \(destinationMoved) print pixels")
+        }
+        // Scan framing is the scanner's crop window; positive scans have no holder at all.
+        do {
+            let tight = geometry(FilmEdgeDistress(), longEdge: 1024, scanZoom: 1), wide = geometry(FilmEdgeDistress(), longEdge: 1024, scanZoom: 0.8)
+            precondition(abs(Double(tight.width) * tight.millimetersPerPixel - 36) < 0.1
+                && abs(Double(wide.width) * wide.millimetersPerPixel - 45) < 0.1, "Scan framing is not the frame over the zoom")
+            for y in stride(from: 0, to: wide.height, by: 3) { for x in stride(from: 0, to: wide.width, by: 3) {
+                precondition(wide.carrierCoverage(x: x, y: y) == 1, "A positive scan showed a holder")
+            }}
+            var held = FilmEdgeDistress(); held.scanHolder = true
+            let g = geometry(held, longEdge: 1024, scanZoom: 0.8)
+            precondition(g.carrierCoverage(x: g.width / 2, y: 0) < 0.05 && g.carrierCoverage(x: g.width / 2, y: g.height / 2) == 1,
+                         "A negative scan lost its holder")
+        }
         // Amount 0 is exactly the clean edge; positions do not move with strength.
         var muted = all; muted.amount = 0
         // Gate optics and hole variation are not scaled by Amount.
-        var soft = FilmEdgeDistress(); soft.holeVariation = all.holeVariation; soft.seed = all.seed
+        var soft = FilmEdgeDistress(); soft.holeVariation = all.holeVariation; soft.seed = all.seed; soft.scanHolder = all.scanHolder
         let clean = geometry(FilmEdgeDistress()), zero = geometry(muted), softClean = geometry(soft)
         for y in 0..<clean.height { for x in 0..<clean.width {
             precondition(softClean.gateCoverage(x: x, y: y) == zero.gateCoverage(x: x, y: y)
@@ -254,18 +289,21 @@ import UniformTypeIdentifiers
         precondition(abs(carrierSmall / carrierLarge - 1) < 0.08, "Carrier area depends on resolution: \(carrierSmall) vs \(carrierLarge) mm²")
         // Perforations keep full nominal size: without tilt the clean and distressed holes match.
         var straight = all; straight.tilt = 0; straight.holeVariation = 0
-        let s = geometry(straight), nominal = geometry({ var n = FilmEdgeDistress(); n.holeVariation = 0; return n }())
+        let s = geometry(straight), nominal = geometry({ var n = FilmEdgeDistress(); n.holeVariation = 0; n.seed = straight.seed; return n }())
         for y in 0..<s.height { for x in 0..<s.width { precondition(s.supportCoverage(x: x, y: y) == nominal.supportCoverage(x: x, y: y)) } }
         // 120 has no sprockets, even when distressed.
         let roll = geometry(all, format: .roll120)
         for y in stride(from: 0, to: roll.height, by: 3) { for x in stride(from: 0, to: roll.width, by: 3) { precondition(roll.supportCoverage(x: x, y: y) == 1) } }
         // Opaque dust polarity follows the route: white specks on paper, dark specks in a slide scan.
-        var dusty = FilmEdgeDistress(); dusty.dust = 1; dusty.seed = 3
-        let d = geometry(dusty)
-        var dustIndex: Int?, best = 0.0
-        for y in Int(d.gate.minY + 4)..<Int(d.gate.maxY - 4) { for x in Int(d.gate.minX + 4)..<Int(d.gate.maxX - 4) {
-            let o = d.dustOcclusion(x: x, y: y); if o > best { best = o; dustIndex = y * d.width + x }
-        }}
+        // The first seed that drops a speck inside the picture (dust is placed across the whole canvas).
+        var dustIndex: Int?, best = 0.0, d = geometry(FilmEdgeDistress())
+        for seed in UInt32(3)...40 where best <= 0.3 {
+            var dusty = FilmEdgeDistress(); dusty.dust = 1; dusty.seed = seed
+            d = geometry(dusty); best = 0
+            for y in Int(d.gate.minY + 4)..<Int(d.gate.maxY - 4) { for x in Int(d.gate.minX + 4)..<Int(d.gate.maxX - 4) {
+                let o = d.dustOcclusion(x: x, y: y); if o > best { best = o; dustIndex = y * d.width + x }
+            }}
+        }
         precondition(best > 0.3, "No visible dust particle in the test frame")
         let flat = Array(repeating: RGB(repeating: 0.12), count: d.width * d.height)
         for (type, brighter) in [(FilmEdgeType.negativePrint, true), (.reversalScan, false)] {
@@ -297,7 +335,8 @@ import UniformTypeIdentifiers
             let hole = bhGeometry.supportCoverage(x: x, y: 0) < 1
             if hole && !open { bhRuns += 1 }; open = hole
         }
-        precondition(bhRuns == 8, "BH strip lost its eight perforations per frame")
+        let bhPitches = Double(bhGeometry.width) * bhGeometry.millimetersPerPixel / bh.pitch
+        precondition(bhRuns >= Int(bhPitches) && bhRuns <= Int(bhPitches) + 2, "BH strip: \(bhRuns) holes across \(bhPitches) pitches")
         // Scratches stay in the rebate unless released; then they may cross the picture.
         var scratched = FilmEdgeDistress(); scratched.scratches = 1; scratched.seed = 11
         func insideScratch(_ g: FilmEdgeGeometry) -> Double {
@@ -366,7 +405,8 @@ import UniformTypeIdentifiers
             if abs(Double(y) - Double(w.height) / 2) < Double(w.height) * 0.3 { rimFar = max(rimFar, rim) } else { rimNear = max(rimNear, rim) }
         }}
         for x in 0..<w.width { let hole = w.supportCoverage(x: x, y: 2) < 1; if hole && !inside { runs += 1 }; inside = hole }
-        precondition(changed > 20 && abs(holeArea / cleanArea - 1) < 0.03 && runs == 8,
+        let windowPitches = Double(w.width) * w.millimetersPerPixel / FilmEdgeGeometry.Perforation.ks1870.pitch
+        precondition(changed > 20 && abs(holeArea / cleanArea - 1) < 0.03 && runs >= Int(windowPitches) && runs <= Int(windowPitches) + 2,
             "Hole variation: \(changed) px changed, area ratio \(holeArea / cleanArea), \(runs) holes")
         precondition(rimNear > 0.05 && rimFar == 0, "Hole rim misplaced: near \(rimNear), far \(rimFar)")
         // Sprockets stay pure clear/black whatever the leaks and fog do to the film around them.
@@ -431,17 +471,24 @@ import UniformTypeIdentifiers
         var printRecipe = base; printRecipe.filmEdgeSelection = selection
         let printPipeline = try FilmPipeline(library: library, recipe: FilmEdgeRenderer.materialRecipe(printRecipe))
         func printed(_ d: FilmEdgeDistress) throws -> (FilmEdgeGeometry, [RGB]) {
-            let g = geometry(d)
+            var held = d; held.scanHolder = true
+            let g = geometry(held)
             let grey = Array(repeating: RGB(repeating: 0.12), count: g.width * g.height)
             return (g, try printPipeline.process(grey, width: g.width, height: g.height, stochastic: false, edge: g, autoExposureEV: 0))
         }
         let (_, plainPrint) = try printed(FilmEdgeDistress())
         var reflective = FilmEdgeDistress(); reflective.carrierReflection = 1
         let (gr, reflectedPrint) = try printed(reflective)
-        let endPixel = (gr.height / 2) * gr.width + Int(gr.gate.minX) - 2
-        precondition((reflectedPrint[endPixel] - plainPrint[endPixel]).sum() < -0.002, "Carrier reflection did not darken the print edge")
+        // The holder masks across the strip (open along it): the strongest darkening just inside its edge.
+        let edgeRow = Int((Double(gr.height) / 2 - gr.carrierHalf.across / gr.millimetersPerPixel).rounded())
+        var darkest = 0.0
+        for y in max(0, edgeRow)..<min(gr.height, edgeRow + 12) { for x in 0..<gr.width {
+            darkest = min(darkest, (reflectedPrint[y * gr.width + x] - plainPrint[y * gr.width + x]).sum())
+        }}
+        precondition(darkest < -0.002, "Carrier reflection did not darken the print edge: \(darkest)")
         var blurGate = FilmEdgeGate(.precise); blurGate.holderBlur = 0.3; blurGate.holderDetail = 0
-        let gb = geometry(FilmEdgeDistress(), longEdge: 1024, gate: blurGate)
+        var inHolder = FilmEdgeDistress(); inHolder.scanHolder = true
+        let gb = geometry(inHolder, longEdge: 1024, gate: blurGate)
         let column = gb.width / 2
         var previous = 1.0, partial = 0
         for y in 0..<Int(gb.gate.minY) {
@@ -453,12 +500,12 @@ import UniformTypeIdentifiers
         precondition(partial > 8, "Holder edge is not visibly out of focus: \(partial) px")
         // Crisp core plus a faint tail: a few percent of light 0.3 mm past the opening, never a long ramp.
         var crisp = FilmEdgeGate(.precise); crisp.holderDetail = 0
-        let gc = geometry(FilmEdgeDistress(), longEdge: 1024, gate: crisp)
+        let gc = geometry(inHolder, longEdge: 1024, gate: crisp, scanZoom: 0.8)
         let tailRow = Int((Double(gc.height) / 2 - (gc.carrierHalf.across + 0.3) / gc.millimetersPerPixel).rounded())
         let tail = gc.carrierCoverage(x: gc.width / 2, y: tailRow)
         precondition(tail > 0.003 && tail < 0.03, "Holder tail out of range: \(tail)")
         var detailGate = blurGate; detailGate.holderDetail = 1
-        let gd = geometry(FilmEdgeDistress(), longEdge: 1024, gate: detailGate)
+        let gd = geometry(inHolder, longEdge: 1024, gate: detailGate)
         var specks = 0
         for y in 0..<Int(gd.gate.minY) { for x in 0..<gd.width where gd.carrierCoverage(x: x, y: y) > gb.carrierCoverage(x: x, y: y) + 0.05 { specks += 1 } }
         precondition(specks > 20, "Holder edge detail produced no light specks")
@@ -569,6 +616,16 @@ import UniformTypeIdentifiers
             let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
             CGImageDestinationAddImage(dest, preview, nil); precondition(CGImageDestinationFinalize(dest))
         }
+        // Visual review: a negative scan's holder edge at full size, framed wide.
+        do {
+            var held = recipe
+            var selection = FilmEdgeSelection(); selection.mode = .manual; selection.manualType = .invertedScan
+            held.filmEdgeSelection = selection; held.filmEdgeLayout?.scanZoom = 0.8
+            let image = try await renderer.renderFilmEdge(held, maximum: 3000)
+            let url = folder.appendingPathComponent("invertedScan-holder.png")
+            let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
+            CGImageDestinationAddImage(dest, image, nil); precondition(CGImageDestinationFinalize(dest))
+        }
         // Visual review: every preset on a negative print and a slide scan.
         for preset in FilmEdgeDistress.Preset.allCases {
             for type in [FilmEdgeType.negativePrint, .reversalScan] {
@@ -602,6 +659,8 @@ import UniformTypeIdentifiers
                 creative.filmEdgeSelection = selection
                 if lut { creative.look.mode = .lut; creative.look.first.id = lutID } else { creative.look.enabled = false }
                 creative.filmEdgeLayout?.gate.softness = 0.1
+                // Compositing rims and seams only: rebate scratches are real lines near the gate.
+                creative.filmEdgeLayout?.distress.scratches = 0
                 let image = try await lutRenderer.renderFilmEdge(creative, maximum: 1080)
                 let pixels = try PhotoColorBridge.decode(image)
                 let crop = creative.filmEdgeLayout!.constrainedCrop(CropSelection(), imageSize: CGSize(width: 900, height: 600))
@@ -614,7 +673,8 @@ import UniformTypeIdentifiers
                 var seams = 0, columns = 0
                 for x in stride(from: image.width / 5, to: image.width * 4 / 5, by: 3) {
                     for (edge, inward) in [(top, 1), (bottom, -1)] {
-                        let interior = luma(x, edge + 40 * inward), rebate = luma(x, edge - 10 * inward)
+                        // The rebate's own brightest point beside the gate (it is not perfectly flat).
+                        let interior = luma(x, edge + 40 * inward), rebate = (4...10).map { luma(x, edge - $0 * inward) }.max()!
                         let band = (-4...12).map { luma(x, edge + $0 * inward) }
                         precondition(band.max()! < max(interior, rebate) + 0.03,
                             "Creative \(type) LUT \(lut) gate edge has a bright rim at x \(x): \(band.max()!) vs \(interior)")

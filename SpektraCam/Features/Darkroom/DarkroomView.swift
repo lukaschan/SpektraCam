@@ -25,7 +25,12 @@ struct DarkroomView: View {
     @State private var expanded = false
     @State private var fineTune = false
     private enum Style: String { case cleanPrint, filmEdge }
-    private var current: PrintLayout { layout ?? PrintLayout() }
+    /// A film-edge enlarger print starts on 5 × 7; anything else starts as the photo itself.
+    private var current: PrintLayout {
+        if let layout { return layout }
+        if case .enlarger = content { return .enlargerDefault }
+        return PrintLayout()
+    }
     private var sourceSize: CGSize { printSourceSize ?? image.size }
     /// What is on the sheet: the picture, or a film-edge canvas with or without its own easel.
     private var content: PrintGeometry.Content {
@@ -159,7 +164,7 @@ struct DarkroomView: View {
             }
             Divider().padding(.vertical, 4)
             gateControls
-            if resolvedType == .negativePrint { zoomControl }
+            if resolvedType == .negativePrint { zoomControl } else { scanZoomControl }
             Divider().padding(.vertical, 4)
             distressControls
             Divider().padding(.vertical, 4)
@@ -317,6 +322,21 @@ struct DarkroomView: View {
             Text(readout).font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("darkroom.easel.readout")
         }
     }
+    /// The scan's counterpart to the enlarger zoom: how far past the frame the scanner's crop reaches.
+    private var scanZoomControl: some View {
+        let layout = edge ?? FilmEdgeLayout.newDefault()
+        return NumericControl(
+            title: String(localized: "darkroom.edge.scan_zoom", defaultValue: "Scan framing"),
+            value: Binding(get: { layout.scanZoom * 100 }, set: { value in
+                var next = edge ?? FilmEdgeLayout.newDefault()
+                let range = FilmEdgeLayout.scanZoomRange
+                next.scanZoom = min(max(value / 100, range.lowerBound), range.upperBound)
+                edge = next
+            }),
+            range: 75...105, step: 0.5, minimum: 75, maximum: 105, unit: "%",
+            identifier: "darkroom.edge.scanZoom", defaultValue: 90, fillOrigin: 100,
+            onEditingChanged: onEdgeEditingChanged)
+    }
     // MARK: Easel — blades on the paper: their edge and how they were set.
     /// Blades show wherever there is a border (or a film-edge enlarger print, which has its own).
     private var showsEasel: Bool {
@@ -352,10 +372,16 @@ struct DarkroomView: View {
 
     // MARK: Paper — the sheet and the easel's white border.
     private var paperControls: some View {
-        let sheet = current.paper.longMillimetres
-        let margin = current.resolvedMargin(content)
-        // On a sized sheet the border is in millimetres; as image, in percent of the long side.
-        let factor = sheet ?? 100
+        // Percent of the sheet's long side; below zero the picture runs past the sheet's edge.
+        let fill = PrintGeometry.fillMargin(imageSize: sourceSize, layout: current, content: content)
+        let margin = current.fill ? fill : current.resolvedMargin(content)
+        let filled = abs(margin - fill) < 0.0005
+        func setMargin(_ value: Double) {
+            var next = current
+            next.fill = false
+            next.margin = min(max(value, PrintLayout.marginRange.lowerBound), PrintLayout.marginRange.upperBound)
+            layout = next
+        }
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Picker(String(localized: "darkroom.paper", defaultValue: "Paper"), selection: binding(\.paper)) {
@@ -376,25 +402,16 @@ struct DarkroomView: View {
             HStack(alignment: .bottom, spacing: 10) {
                 NumericControl(
                     title: String(localized: "darkroom.border", defaultValue: "Border"),
-                    value: Binding(get: { margin * factor }, set: { value in
-                        var next = current
-                        next.fill = false
-                        next.margin = min(max(value / factor, PrintLayout.marginRange.lowerBound), PrintLayout.marginRange.upperBound)
-                        layout = next.isDefault ? nil : next
-                    }),
-                    range: 0...(PrintLayout.marginRange.upperBound * factor), step: sheet == nil ? 0.5 : 0.5,
-                    minimum: 0, maximum: PrintLayout.marginRange.upperBound * factor, unit: sheet == nil ? "%" : "mm",
+                    value: Binding(get: { margin * 100 }, set: { setMargin($0 / 100) }),
+                    range: (PrintLayout.marginRange.lowerBound * 100)...(PrintLayout.marginRange.upperBound * 100), step: 0.5,
+                    minimum: PrintLayout.marginRange.lowerBound * 100, maximum: PrintLayout.marginRange.upperBound * 100, unit: "%",
                     identifier: "darkroom.border",
-                    defaultValue: { var d = current; d.margin = nil; d.fill = false; return d.resolvedMargin(content) * factor }(),
+                    defaultValue: { var d = current; d.margin = nil; d.fill = false; return d.resolvedMargin(content) * 100 }(),
                     fillOrigin: 0, onEditingChanged: onEditingChanged)
-                Button(String(localized: "darkroom.fill", defaultValue: "Fill")) {
-                    var next = current
-                    next.fill.toggle()
-                    layout = next.isDefault ? nil : next
-                }
-                .buttonStyle(.glass).tint(current.fill ? .accentColor : nil)
-                .accessibilityValue(current.fill ? String(localized: "common.on", defaultValue: "On") : String(localized: "common.off", defaultValue: "Off"))
-                .accessibilityIdentifier("darkroom.fill")
+                Button(String(localized: "darkroom.fill", defaultValue: "Fill")) { setMargin(fill) }
+                    .buttonStyle(.glass).tint(filled ? .accentColor : nil)
+                    .accessibilityValue(filled ? String(localized: "common.on", defaultValue: "On") : String(localized: "common.off", defaultValue: "Off"))
+                    .accessibilityIdentifier("darkroom.fill")
             }
         }
     }

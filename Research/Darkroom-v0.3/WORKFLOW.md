@@ -2,6 +2,15 @@
 
 Updated 2026-11-10. This file is the repository handoff point; read it before continuing Darkroom work. Changes are local and uncommitted. Preserve the preexisting Xcode project version/signing edits.
 
+## Nov 14 (night) — Scans: framing, direct camera scans, inverted holder
+
+- `FilmEdgeLayout.scanZoom` (0.75–1.05, default 0.85): non-enlarger canvases are the scanner's crop window, gate / zoom. Its edge is a digital crop.
+- `FilmEdgeDistress.scanHolder` / `invertedScan` (resolved, not saved): negative scans (direct and inverted) have a holder, open along the strip (`carrierHalf.along = 1e4`) and masking across at gate + 0.83 mm on 35 mm (12.83 mm; KS hole inner edge 12.68 mm). Measured on P1485707 at 318 px/mm (hole pitch 1513 px = 4.75 mm): ≈ 0.17 mm of hole shows. Positive scans have no holder (`carrierHalf = 1e4`). Default `scanZoom` 0.9.
+- Inverted scan: no holder at the print stage; the final linear stage runs `[.endpoint]` then `[.invertedHolder]` (CPU `invertedHolder`, Metal `edge_inverted_holder`, mode 32). c = penumbra(d + 0.02·wear, holder blur) (core only, no tail); q = max(P, 0)·s + 0.012; v = 1 / (c^γ / q + (1 − c) / (1.1 W)), γ = (1.4, 1.0, 0.75), W = (1, 0.82, 0.78); noise ×10^(n σ (1 − c)), σ = 0.7 (1 − c) min(1, c / 0.15) + 0.08, streaked 3:1 along the strip at max(0.015 mm, 2.7 px radius) / max(0.045 mm, 5.4 px radius); s = 1 − 0.55 e^(d/0.07) inside the opening. To-scale proof at 100 px/mm against P1485707.
+- `FilmEdgeGeometry.registration`: seeded ±0.3 mm along-strip shift of the source holes (`e[16].z`); destination (cinema print) holes fixed.
+- `PrintLayout.marginRange` = −0.2…0.2, shown in %; Fill = `PrintGeometry.fillMargin` (negative when proportions differ). Film-edge enlarger prints default to `PrintLayout.enlargerDefault` (5 × 7).
+- `NumericEntry` is a popover (`presentationCompactAdaptation(.popover)`) with the label's rounding, step nudges with repeat, range hint, reset, Done. Value labels sit in a quiet capsule.
+
 ## Nov 14 (evening) — Worn blade edges, easel border and Fill
 
 **Negative scan** (`FilmEdgeType.invertedScan`, shown after Negative print): the print route's positive (`scanFilm = false`, same material defaults as Negative print) with `enlargerPrint = false`, so the scanner holder replaces the easel. The holder blocks the exposure and comes out paper-light; the thin rebate is dark (navy on a colour negative, as in P1485659); clear holes are black. No sheet by default (`printedLayout == nil`). Auto never selects it. Checked: no easel/sheet, inverted, holder light vs rebate dark; included in the CPU/Metal parity loop.

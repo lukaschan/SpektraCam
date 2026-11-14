@@ -2089,6 +2089,24 @@
         }
       }
     },
+    "control.decrease" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decrease"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "减少"
+          }
+        }
+      }
+    },
     "control.details" : {
       "comment" : "Control interface text.",
       "extractionState" : "manual",
@@ -2125,74 +2143,20 @@
         }
       }
     },
-    "control.number" : {
-      "comment" : "Control interface text.",
+    "control.increase" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a number."
+            "value" : "Increase"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请输入数值。"
-          }
-        }
-      }
-    },
-    "control.number_maximum" : {
-      "comment" : "Control interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a number no greater than %@."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请输入不大于 %@ 的数值。"
-          }
-        }
-      }
-    },
-    "control.number_minimum" : {
-      "comment" : "Control interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a number of at least %@."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请输入不小于 %@ 的数值。"
-          }
-        }
-      }
-    },
-    "control.number_range" : {
-      "comment" : "Control interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a number from %@ to %@."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请输入 %@ 至 %@ 之间的数值。"
+            "value" : "增加"
           }
         }
       }
@@ -2229,78 +2193,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "散射混合"
-          }
-        }
-      }
-    },
-    "control.whole_number" : {
-      "comment" : "Control interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a whole number."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请输入整数。"
-          }
-        }
-      }
-    },
-    "control.whole_number_maximum" : {
-      "comment" : "Control interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a whole number no greater than %@."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请输入不大于 %@ 的整数。"
-          }
-        }
-      }
-    },
-    "control.whole_number_minimum" : {
-      "comment" : "Control interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a whole number of at least %@."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请输入不小于 %@ 的整数。"
-          }
-        }
-      }
-    },
-    "control.whole_number_range" : {
-      "comment" : "Control interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a whole number from %@ to %@."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请输入 %@ 至 %@ 之间的整数。"
           }
         }
       }
@@ -3951,6 +3843,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "负片直扫"
+          }
+        }
+      }
+    },
+    "darkroom.edge.scan_zoom" : {
+      "comment" : "Darkroom copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan framing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描取景"
           }
         }
       }

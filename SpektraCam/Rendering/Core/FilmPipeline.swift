@@ -129,7 +129,9 @@ nonisolated struct FilmPipeline: Sendable {
                 let clear = enlarger.clearExposure * reference.printingScale
                 // Contact printing onto cinema print film has no carrier; the scanner holder masks later.
                 let cinema = FilmStock.prints.first { $0.id == recipe.printID }?.support == "film"
-                let mode: FilmEdgeGeometry.Transmission = cinema ? [.damage] : [.damage, .carrier, .reflection]
+                // An inverted scan's holder acts on the scan, after inversion (see below).
+                let scanned = cinema || edge.distress.invertedScan
+                let mode: FilmEdgeGeometry.Transmission = scanned ? [.damage] : [.damage, .carrier, .reflection]
                 for i in printRaw.pixels.indices {
                     printRaw.pixels[i] = edge.transmit(printRaw.pixels[i], clear: clear, x: i % width, y: i / width, mode: mode)
                 }
@@ -200,8 +202,11 @@ nonisolated struct FilmPipeline: Sendable {
         let paperOutput = !recipe.bypassesPrint
             && FilmStock.prints.first { $0.id == recipe.printID }?.support != "film"
         if let edge, paperOutput {
+            let inverted = edge.distress.invertedScan
             for i in output.pixels.indices {
-                output.pixels[i] = edge.transmit(output.pixels[i], clear: .zero, x: i % width, y: i / width, mode: [.endpoint, .carrier])
+                let p = edge.transmit(output.pixels[i], clear: .zero, x: i % width, y: i / width,
+                                      mode: inverted ? [.endpoint] : [.endpoint, .carrier])
+                output.pixels[i] = inverted ? edge.transmit(p, clear: .zero, x: i % width, y: i / width, mode: [.invertedHolder]) : p
             }
         }
         return output.pixels.map {

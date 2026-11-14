@@ -37,14 +37,18 @@ nonisolated struct PrintLayout: Codable, Equatable, Sendable {
     var paper = Paper.asImage
     var orientation = Orientation.automatic
     /// The easel's white border: the narrowest margin between the blades and the sheet's edge,
-    /// as a fraction of the sheet's long side. The sheet stays fixed; the picture is inset.
+    /// as a fraction of the sheet's long side. The sheet stays fixed; the picture is inset, or
+    /// with a negative border runs past the sheet's edge (Fill is the border that just covers it).
     /// Nil is automatic (see `resolvedMargin`).
     var margin: Double?
-    static let marginRange = 0.0...0.2
+    static let marginRange = -0.2...0.2
+    /// A film-edge enlarger print starts on a 5 × 7 sheet; a photo shown as itself stays as image.
+    static var enlargerDefault: Self { var layout = Self(); layout.paper = .fiveBySeven; return layout }
     /// The automatic border: none for a photo shown as itself, a modest one on a sized sheet
     /// and around a film-edge enlarger print, whose blades should show.
     static let automaticMargin = 0.04
-    /// Borderless: the picture covers the sheet, as on a borderless easel. The border is ignored.
+    /// Saved before the border went negative: the picture covers the sheet. Fill now sets
+    /// `margin` to `PrintGeometry.fillMargin` instead.
     var fill = false
     /// Printed on a hand-set easel: blades set by eye leave uneven margins and, on a film-edge
     /// enlarger print, a projection a fraction of a degree off square. Off (the default) is a
@@ -214,6 +218,18 @@ nonisolated struct PrintGeometry {
             || imageRect.maxX > paperSize.width + 0.01 || imageRect.maxY > paperSize.height + 0.01
     }
 
+    /// The border at which the picture (its easel frame) just covers the sheet: zero when their
+    /// proportions match, negative otherwise.
+    static func fillMargin(imageSize: CGSize, layout: PrintLayout, content: Content = .picture) -> Double {
+        guard imageSize.width > 0, imageSize.height > 0 else { return 0 }
+        var frame = CGRect(x: 0, y: 0, width: 1, height: 1)
+        if case .enlarger(let unit) = content, unit.width > 0, unit.height > 0 { frame = unit }
+        let fw = Double(imageSize.width * frame.width), fh = Double(imageSize.height * frame.height)
+        let aspect = layout.paperAspect(imageAspect: fw / fh)
+        let (w, h) = aspect >= 1 ? (1.0, 1 / aspect) : (aspect, 1.0)
+        let cover = max(w / fw, h / fh)
+        return min(0, min((w - cover * fw) / 2, (h - cover * fh) / 2))
+    }
     init?(imageSize: CGSize, layout: PrintLayout, longEdge: CGFloat, content: Content = .picture) {
         guard imageSize.width.isFinite, imageSize.height.isFinite,
             imageSize.width > 0, imageSize.height > 0,

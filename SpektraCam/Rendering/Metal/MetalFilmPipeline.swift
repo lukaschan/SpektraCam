@@ -1473,9 +1473,11 @@ actor MetalFilmPipeline {
                 try node("paper_exposure_image", density, paper)
                 if let enlarger = color.enlarger {
                     let cinema = FilmStock.prints.first { $0.id == recipe.printID }?.support == "film"
+                    // An inverted scan's holder acts on the scan, after inversion (see below).
+                    let scanned = cinema || edge?.distress.invertedScan == true
                     try edgeNode("film_edge_transmission", paper,
                                  clear: enlarger.clearExposure * reference.printingScale,
-                                 mode: cinema ? [.damage] : [.damage, .carrier, .reflection])
+                                 mode: scanned ? [.damage] : [.damage, .carrier, .reflection])
                 }
                 pool.release(density)
                 density = paper
@@ -1548,7 +1550,12 @@ actor MetalFilmPipeline {
             if !recipe.bypassesPrint && !destinationFilm {
                 // Clear source openings define the finished negative-print black endpoint.
                 // Apply in linear light, after scan optics; intact rebate color is retained.
-                try edgeNode("film_edge_transmission", density, mode: [.endpoint, .carrier])
+                if edge?.distress.invertedScan == true {
+                    try edgeNode("film_edge_transmission", density, mode: [.endpoint])
+                    try edgeNode("film_edge_transmission", density, mode: [.invertedHolder])
+                } else {
+                    try edgeNode("film_edge_transmission", density, mode: [.endpoint, .carrier])
+                }
             }
             return density
         }
