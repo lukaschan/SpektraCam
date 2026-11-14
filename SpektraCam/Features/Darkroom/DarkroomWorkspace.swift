@@ -23,7 +23,8 @@ struct DarkroomWorkspace: View {
     private static let loupeMaximum = 4096
     private var renderKey: EditRecipe {
         var key = session.recipe
-        key.printLayout = nil
+        // The easel's hand-set placement is part of a film-edge render; the paper is not.
+        key.printLayout = key.printLayout?.easelOnly
         return key
     }
     private var expectedSize: CGSize {
@@ -31,7 +32,7 @@ struct DarkroomWorkspace: View {
             ? CGSize(width: session.photo.width, height: session.photo.height)
             : CGSize(width: session.photo.height, height: session.photo.width)
         let crop = session.recipe.crop.pixelRect(in: upright).size
-        if let layout = session.recipe.filmEdgeLayout,
+        if let layout = session.recipe.renderedFilmEdgeLayout,
            let geometry = FilmEdgeGeometry(imageSize: crop, layout: layout, longEdge: 1000) {
             return CGSize(width: geometry.width, height: geometry.height)
         }

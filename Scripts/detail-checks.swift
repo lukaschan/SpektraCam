@@ -95,7 +95,8 @@ import ImageIO
         // Darkroom loupe: a patch of the film-edge canvas must match the whole canvas render.
         for (name, change) in [
             ("35 mm lab scan", { (l: inout FilmEdgeLayout) in l.distress.apply(.lab) }),
-            ("35 mm hand print, worn", { (l: inout FilmEdgeLayout) in l.distress.apply(.handPrint); l.distress.dust = 0.5; l.distress.edgeFog = 0.3 }),
+            // Negative prints are enlarger prints on an easel.
+            ("35 mm enlarger print, dusty", { (l: inout FilmEdgeLayout) in l.distress.dust = 0.5; l.distress.edgeFog = 0.3; l.printZoom = 0.93 }),
             ("6 × 7", { (l: inout FilmEdgeLayout) in l.format = .roll120; l.rollFrame = .six7 }),
         ] as [(String, (inout FilmEdgeLayout) -> Void)] {
             let worker = PhotoRenderer(

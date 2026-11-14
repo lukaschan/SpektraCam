@@ -274,7 +274,8 @@ final class EditorInteractionTests: XCTestCase {
         XCTAssertLessThan(app.buttons["library.export"].frame.midX, app.buttons["library.revert"].frame.midX)
         app.buttons["library.export"].tap()
         XCTAssertTrue(app.buttons["batch.prepareShare"].waitForExistence(timeout: 10))
-        app.buttons["S"].tap()
+        app.buttons["Percent"].tap()
+        app.buttons["25 %"].tap()
         app.buttons["batch.prepareShare"].tap()
         let ready = app.buttons["batch.share"]
         XCTAssertTrue(ready.waitForExistence(timeout: 45))
@@ -898,8 +899,9 @@ final class EditorInteractionTests: XCTestCase {
         XCTAssertFalse(app.buttons["library.delete"].isEnabled)
         libraryPhotos(app).firstMatch.tap()
         app.buttons["photo.export"].tap()
-        XCTAssertTrue(app.buttons["S"].waitForExistence(timeout: 10))
-        app.buttons["S"].tap()
+        XCTAssertTrue(app.buttons["Percent"].waitForExistence(timeout: 10))
+        app.buttons["Percent"].tap()
+        app.buttons["25 %"].tap()
         XCTAssertTrue(app.buttons["export.save"].waitForExistence(timeout: 30))
         XCTAssertTrue(app.buttons["export.save"].isHittable)
         XCTAssertTrue(app.buttons["export.share"].isHittable)
@@ -1263,8 +1265,11 @@ final class EditorInteractionTests: XCTestCase {
         app.buttons["editor.export"].tap()
         XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 5))
         app.buttons["darkroom.export"].tap()
-        XCTAssertTrue(app.buttons["S"].waitForExistence(timeout: 5))
-        app.buttons["S"].tap()
+        XCTAssertTrue(app.buttons["Long edge"].waitForExistence(timeout: 5))
+        app.buttons["Long edge"].tap()
+        // The output size is known before the file renders.
+        let output = app.descendants(matching: .any)["export.output"]
+        XCTAssertTrue(output.waitForExistence(timeout: 5))
         app.buttons["PNG"].tap()
         app.buttons["JPEG"].tap()
         app.buttons["Standard"].tap()
@@ -1276,14 +1281,15 @@ final class EditorInteractionTests: XCTestCase {
         XCTAssertTrue(app.buttons["export.share"].isHittable)
         XCTAssertGreaterThan(
             app.buttons["Done"].frame.minY, app.frame.height * 0.15, "Export opened at full height")
-        let dimensionRow = app.descendants(matching: .any)["export.dimensions"]
+        let dimensionRow = app.descendants(matching: .any)["export.output"]
         XCTAssertTrue(dimensionRow.isHittable)
         let dimensionText = ([dimensionRow.label, dimensionRow.value as? String ?? ""]
             + dimensionRow.staticTexts.allElementsBoundByIndex.map(\.label)).joined(separator: " ")
-        let dimensions = dimensionText.components(separatedBy: CharacterSet.decimalDigits.inverted)
-            .compactMap(Int.init)
+        // "W × H px · N MP": the first two numbers are the pixel size.
+        let dimensions = Array(dimensionText.components(separatedBy: " px").first.map {
+            $0.components(separatedBy: CharacterSet.decimalDigits.inverted).compactMap(Int.init) } ?? [])
         XCTAssertGreaterThanOrEqual(dimensions.count, 2)
-        XCTAssertTrue(dimensions.allSatisfy { (1...1080).contains($0) }, "Small exports must not exceed 1080 or upscale a small fixture")
+        XCTAssertTrue(dimensions.prefix(2).allSatisfy { (1...2048).contains($0) }, "A 2048 px long edge must not exceed 2048 or upscale a small fixture")
         XCTAssertLessThan(dimensionRow.frame.maxY, save.frame.minY)
         XCTAssertFalse(
             app.staticTexts.matching(
@@ -1387,18 +1393,17 @@ final class EditorInteractionTests: XCTestCase {
         app.buttons["crop.done"].tap()
         XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
         app.buttons["darkroom.expand"].tap()
-        let mode = app.segmentedControls["darkroom.edge.mode"]
-        XCTAssertTrue(mode.waitForExistence(timeout: 10))
-        XCTAssertTrue(mode.buttons["Auto"].isSelected)
-        mode.buttons["Manual"].tap()
+        let auto = app.buttons["darkroom.edge.type.auto"]
+        XCTAssertTrue(auto.waitForExistence(timeout: 10))
+        XCTAssertTrue(auto.isSelected)
         let slide = app.buttons["darkroom.edge.type.reversalScan"]
         XCTAssertTrue(slide.waitForExistence(timeout: 5))
         slide.tap()
-        XCTAssertTrue(slide.isSelected)
-        mode.buttons["Auto"].tap()
+        XCTAssertTrue(slide.isSelected && !auto.isSelected)
+        auto.tap()
         XCTAssertTrue(app.descendants(matching: .any)["darkroom.edge.resolved"].exists)
-        mode.buttons["Manual"].tap()
-        XCTAssertTrue(app.buttons["darkroom.edge.type.reversalScan"].isSelected, "Auto erased the previous manual choice")
+        slide.tap()
+        XCTAssertTrue(app.buttons["darkroom.edge.type.reversalScan"].isSelected)
         app.buttons["darkroom.edge.adjustCrop"].tap()
         XCTAssertTrue(app.buttons["crop.done"].waitForExistence(timeout: 5))
         app.buttons["crop.done"].tap()
@@ -1441,8 +1446,7 @@ final class EditorInteractionTests: XCTestCase {
         app.buttons["photo.develop"].tap()
         XCTAssertTrue(app.buttons["editor.export"].waitForExistence(timeout: 15))
         app.buttons["editor.export"].tap()
-        XCTAssertTrue(app.segmentedControls["darkroom.edge.mode"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.segmentedControls["darkroom.edge.mode"].buttons["Manual"].isSelected)
+        XCTAssertTrue(app.buttons["darkroom.edge.type.reversalScan"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["darkroom.edge.type.reversalScan"].isSelected)
         XCTAssertTrue(app.buttons["darkroom.edge.format.film35"].isSelected)
     }
@@ -1474,10 +1478,9 @@ final class EditorInteractionTests: XCTestCase {
         app.buttons["crop.done"].tap()
         XCTAssertTrue(app.buttons["darkroom.export"].waitForExistence(timeout: 10))
         app.buttons["darkroom.expand"].tap()
-        let mode = app.segmentedControls["darkroom.edge.mode"]
-        XCTAssertTrue(mode.waitForExistence(timeout: 5))
-        mode.buttons["手动"].tap()
-        XCTAssertTrue(app.buttons["darkroom.edge.type.negativePrint"].exists)
+        XCTAssertTrue(app.buttons["darkroom.edge.type.negativePrint"].waitForExistence(timeout: 5))
+        app.buttons["darkroom.edge.type.negativePrint"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["darkroom.easel.zoom"].exists, "Negative print did not show the easel")
         XCTAssertTrue(app.buttons["darkroom.edge.format.film35"].exists)
         let edgeCapture = XCTAttachment(screenshot: app.screenshot())
         edgeCapture.name = "Darkroom film edge Chinese accessibility text"

@@ -9,6 +9,7 @@ import Foundation
                 var layout = PrintLayout()
                 layout.paper = paper
                 layout.orientation = orientation
+                layout.handSet = false  // a machine print is exactly centred
                 let fit = PrintGeometry(imageSize: sourceSize, layout: layout, longEdge: 1200)!
                 precondition(!fit.cropsImage)
                 precondition(abs(fit.imageRect.midX - fit.paperSize.width / 2) < 1e-9)
@@ -19,14 +20,38 @@ import Foundation
                 precondition(fill.imageRect.height >= fill.paperSize.height - 0.01)
                 let restored = try JSONDecoder().decode(PrintLayout.self, from: JSONEncoder().encode(layout))
                 precondition(restored == layout)
+                // Hand-set easel: slightly off centre, never cropping, with a physical blade penumbra.
+                layout.scale = 0.8; layout.handSet = true
+                for seed in [UInt32(1), 2, 3, 99] {
+                    layout.easelSeed = seed
+                    let centred = { var l = layout; l.handSet = false; return PrintGeometry(imageSize: sourceSize, layout: l, longEdge: 1200)! }()
+                    let set = PrintGeometry(imageSize: sourceSize, layout: layout, longEdge: 1200)!
+                    let long = max(set.paperSize.width, set.paperSize.height)
+                    let dx = set.imageRect.minX - centred.imageRect.minX, dy = set.imageRect.minY - centred.imageRect.minY
+                    precondition(!set.cropsImage && set.imageRect.size == centred.imageRect.size, "Hand-set easel cropped or resized")
+                    precondition(abs(dx) <= 0.008 * long + 1e-9 && abs(dy) <= 0.008 * long + 1e-9, "Hand-set offset too large")
+                    precondition(abs(dx) <= 0.45 * centred.imageRect.minX + 1e-9 && abs(dy) <= 0.45 * centred.imageRect.minY + 1e-9,
+                                 "Hand-set offset ran into the margin")
+                    if let sheet = paper.longMillimetres {
+                        // 0.03 mm paper spread plus h / (N(1 + M)): between 0.05 and 0.2 mm on paper.
+                        let blurMillimetres = Double(set.bladeBlur) / (Double(long) / sheet)
+                        precondition(blurMillimetres > 0.05 && blurMillimetres < 0.2, "Blade penumbra \(blurMillimetres) mm")
+                    } else {
+                        precondition(dx == 0 && dy == 0 && set.bladeBlur == 0, "As-image paper moved with the easel")
+                    }
+                }
             }
         }
+        precondition(abs(Easel.penumbra(magnification: 4) - (3.0 / 40 + 0.03)) < 1e-12, "Easel penumbra formula")
+        let legacyLayout = try JSONDecoder().decode(PrintLayout.self, from: Data("{\"paper\":\"fourBySix\",\"scale\":0.8}".utf8))
+        precondition(legacyLayout.handSet && legacyLayout.easelSeed == 1, "Saved layouts did not default to a hand-set easel")
         let legacy = try JSONDecoder().decode(EditRecipe.self, from: Data("{\"version\":4,\"filmID\":\"kodak_portra_400\",\"printID\":\"kodak_portra_endura\"}".utf8))
         precondition(legacy.printLayout == nil && legacy.filmID == "kodak_portra_400")
         var recipe = legacy
         var layout = PrintLayout()
         layout.paper = .eightByTen
         layout.scale = 0.5
+        layout.handSet = false
         recipe.printLayout = layout
         precondition(recipe.processingRecipe == legacy.processingRecipe,
             "Paper layout invalidated the film processing cache")
@@ -66,9 +91,24 @@ import Foundation
         precondition(rgb(bytes, 300, 150, 140) == rgb(originalBytes, 600, 300, 300),
             "Composition inverted or changed the lower image")
         precondition(expected.imageRect.width == 150 && expected.imageRect.height == 100)
+        // Placement is top-left in PrintGeometry and bottom-left in CoreGraphics: an off-centre
+        // hand-set picture must land where the geometry says, and the blade softens only its edge.
+        var handSet = layout; handSet.handSet = true; handSet.easelSeed = 3
+        let placedGeometry = PrintGeometry(imageSize: sourceSize, layout: handSet, longEdge: 300)!
+        let placed = pixels(try PrintCompositor.render(source, layout: handSet, maximum: 300, bladeEdge: true))
+        let r = placedGeometry.imageRect
+        precondition(r.minY != expected.imageRect.minY, "Seed 3 did not move the picture vertically")
+        let inside = rgb(placed, 300, Int(r.midX), Int(r.minY + r.height * 0.25))
+        let outside = rgb(placed, 300, Int(r.midX), Int(r.minY) - 2)
+        precondition(inside == rgb(originalBytes, 600, 300, 100) && outside.allSatisfy { $0 == 255 },
+            "Hand-set placement drawn upside down or misplaced: \(inside), \(outside)")
         let full = try PrintCompositor.render(source, layout: layout)
-        precondition(full.width == 600 && full.height == 480, "Full output silently grew its long edge")
-        print("PASS: paper orientation, Fit/Fill, centered scale, legacy recipes, processing-cache independence, SDR composition, white margins, image orientation and bounded export size")
+        // Native: the 600 px picture at half scale keeps its pixels, so the sheet is 1200 × 960.
+        precondition(full.width == 1200 && full.height == 960, "Full output resampled the picture: \(full.width)×\(full.height)")
+        var cropping = layout; cropping.scale = 2
+        let tight = try PrintCompositor.render(source, layout: cropping)
+        precondition(max(tight.width, tight.height) == 300, "A sheet cropping the picture was enlarged: \(tight.width)×\(tight.height)")
+        print("PASS: paper orientation, Fit/Fill, centered scale, hand-set easel bounds/penumbra/placement, legacy recipes, processing-cache independence, SDR composition, white margins, image orientation and native-resolution sheets")
     }
     static func pixels(_ image: CGImage) -> [UInt8] {
         let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,

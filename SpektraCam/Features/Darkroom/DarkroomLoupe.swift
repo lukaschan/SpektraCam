@@ -19,6 +19,8 @@ struct DarkroomLoupe: View {
     var fullWidth: CGFloat? = nil
     /// Native-resolution pixels for the area under the lens, when they have been rendered.
     var patch: PhotoRenderer.Detail? = nil
+    /// A clean print's easel-blade penumbra, as a fraction of the picture's width.
+    var bladeEdge: CGFloat = 0
     /// Reports the part of the photograph under the lens (unit coordinates of `imageFrame`).
     var onInspect: ((CGRect) -> Void)? = nil
     @Binding var center: CGPoint?
@@ -61,16 +63,20 @@ struct DarkroomLoupe: View {
                 Rectangle().fill(paper)
                     .frame(width: paperFrame.width * z, height: paperFrame.height * z)
                     .offset(x: paperOrigin.x, y: paperOrigin.y)
-                Image(uiImage: image).resizable().interpolation(.high)
-                    .frame(width: imageFrame.width * z, height: imageFrame.height * z)
-                    .offset(x: imageOrigin.x, y: imageOrigin.y)
-                if let patch {
-                    Image(decorative: patch.image, scale: 1).resizable().interpolation(.high)
-                        .frame(width: patch.rect.width * imageFrame.width * z,
-                               height: patch.rect.height * imageFrame.height * z)
-                        .offset(x: imageOrigin.x + patch.rect.minX * imageFrame.width * z,
-                                y: imageOrigin.y + patch.rect.minY * imageFrame.height * z)
+                ZStack(alignment: .topLeading) {
+                    Image(uiImage: image).resizable().interpolation(.high)
+                        .frame(width: imageFrame.width * z, height: imageFrame.height * z)
+                    if let patch {
+                        Image(decorative: patch.image, scale: 1).resizable().interpolation(.high)
+                            .frame(width: patch.rect.width * imageFrame.width * z,
+                                   height: patch.rect.height * imageFrame.height * z)
+                            .offset(x: patch.rect.minX * imageFrame.width * z,
+                                    y: patch.rect.minY * imageFrame.height * z)
+                    }
                 }
+                .frame(width: imageFrame.width * z, height: imageFrame.height * z, alignment: .topLeading)
+                .modifier(BladeEdge(width: bladeEdge * imageFrame.width * z))
+                .offset(x: imageOrigin.x, y: imageOrigin.y)
             }
             .frame(width: d, height: d, alignment: .topLeading)
             .clipShape(Circle())
@@ -93,7 +99,7 @@ struct DarkroomLoupe: View {
                 Spacer()
                 HStack(spacing: 4) {
                     if refining { ProgressView().controlSize(.mini).tint(.white) }
-                    Text(doubled ? "200 %" : "100 %")
+                    Text(verbatim: doubled ? "200 %" : "100 %")
                 }
                 .font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(.white)
                 .padding(.horizontal, 7).padding(.vertical, 2)
@@ -123,5 +129,17 @@ struct DarkroomLoupe: View {
         .accessibilityHint(String(localized: "darkroom.loupe_hint", defaultValue: "Drag over the print to inspect it. Double-tap to change magnification."))
         .accessibilityAction(named: String(localized: "darkroom.loupe_zoom", defaultValue: "Change magnification")) { doubled.toggle() }
         .accessibilityIdentifier("darkroom.loupe")
+    }
+}
+
+/// The easel blade's penumbra on a clean print (see `Easel`): the picture fades to paper across it.
+struct BladeEdge: ViewModifier {
+    let width: CGFloat
+    func body(content: Content) -> some View {
+        if width > 0.3 {
+            content.mask { Rectangle().inset(by: width / 2).blur(radius: width / 4) }
+        } else {
+            content
+        }
     }
 }

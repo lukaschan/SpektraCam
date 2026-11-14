@@ -28,14 +28,25 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         var title: String {
             switch self {
             case .plain: String(localized: "darkroom.rollgate.plain", defaultValue: "Plain")
-            case .hasselblad: "Hasselblad V"
-            case .toy: String(localized: "darkroom.rollgate.toy", defaultValue: "Toy camera")
+            case .hasselblad: "V"
+            case .toy: "Holga"
             }
         }
     }
     var rollGate = RollGate.hasselblad
     var gate = FilmEdgeGate()
     var distress = FilmEdgeDistress()
+    /// Enlarger print only: how large the projected frame is relative to the easel opening, set
+    /// by raising or lowering the enlarger head. 100 % puts the blades on the frame edge; below,
+    /// the opening shows a black band of rebate (at 90 % the holes start to show); above, the
+    /// blades crop into the picture. The blades keep the frame's proportions.
+    var printZoom = 0.985
+    static let printZoomRange = 0.9...1.1
+    /// Rebate shown beyond the frame on film (positive) or picture cropped (negative), in mm,
+    /// at the frame's ends and along its sides.
+    var easelBorder: (ends: Double, sides: Double) {
+        (gateAlong / 2 * (1 / printZoom - 1), gateAcross / 2 * (1 / printZoom - 1))
+    }
     /// The last gate type a person chose becomes the default for their next film edge.
     static let gateKindKey = "darkroom.gateKind"
     static var preferredGate: FilmEdgeGate.Kind {
@@ -78,7 +89,7 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         return abs(max(imageSize.width, imageSize.height) - min(imageSize.width, imageSize.height) * ratio) <= ratio
     }
     init() {}
-    enum CodingKeys: String, CodingKey { case format, cinePerforations, rollFrame, rollGate, gate, distress }
+    enum CodingKeys: String, CodingKey { case format, cinePerforations, rollFrame, rollGate, gate, distress, printZoom }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         format = try values.decodeIfPresent(Format.self, forKey: .format) ?? .film35
@@ -87,6 +98,8 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         rollGate = try values.decodeIfPresent(RollGate.self, forKey: .rollGate) ?? .hasselblad
         gate = (try? values.decodeIfPresent(FilmEdgeGate.self, forKey: .gate)) ?? FilmEdgeGate()
         distress = try values.decodeIfPresent(FilmEdgeDistress.self, forKey: .distress) ?? FilmEdgeDistress()
+        let zoom = try values.decodeIfPresent(Double.self, forKey: .printZoom) ?? 0.985
+        printZoom = zoom.isFinite ? min(max(zoom, Self.printZoomRange.lowerBound), Self.printZoomRange.upperBound) : 0.985
     }
 }
 
@@ -166,8 +179,10 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     var carrierRoughness = 0.0
     /// Unmasked enlarger light reflected by a bare-metal carrier edge onto the paper (prints only).
     var carrierReflection = 0.0
-    /// Printed on an enlarger (RA-4) rather than scanned: the filed carrier sits in the negative
-    /// plane, so its edge is crisp with a faint flare halo, and the opening stops short of the holes.
+    /// Printed on an enlarger (colour or black-and-white, the same optics) rather than scanned:
+    /// the easel's straight blades mask the paper, and `FilmEdgeLayout.printZoom` decides how
+    /// much rebate they show. Set from the edge type (a negative print), not by hand; see
+    /// `EditRecipe.renderedFilmEdgeLayout`.
     var enlargerPrint = false
     var edgeFog = 0.0
     var leak = 0.0
@@ -208,12 +223,11 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
     static func defaultWarmth(_ kind: LeakKind) -> Double { kind == .front ? -0.4 : 0.6 }
 
     enum Preset: String, CaseIterable, Sendable {
-        case clean, lab, handPrint, worn, leaky
+        case clean, lab, worn, leaky
         var title: String {
             switch self {
             case .clean: String(localized: "darkroom.distress.clean", defaultValue: "Clean")
             case .lab: String(localized: "darkroom.distress.lab", defaultValue: "Lab scan")
-            case .handPrint: String(localized: "darkroom.distress.hand_print", defaultValue: "Hand print")
             case .worn: String(localized: "darkroom.distress.worn", defaultValue: "Old camera")
             case .leaky: String(localized: "darkroom.distress.leaky", defaultValue: "Light leak")
             }
@@ -226,8 +240,6 @@ nonisolated struct FilmEdgeDistress: Codable, Equatable, Sendable {
             case .clean: break
             case .lab:
                 d.scratches = 0.5; d.edgeFog = 0.06
-            case .handPrint:
-                d.enlargerPrint = true; d.carrierRoughness = 0.14; d.carrierReflection = 0.35
             case .worn:
                 d.tilt = 1; d.bulge = 0.3; d.carrierRoughness = 0.08; d.holeVariation = 0.8
                 d.edgeFog = 0.3; d.leak = 0.3; d.leakSize = 10; d.warmth = 0.7
@@ -361,6 +373,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// Carrier opening half sizes in transport/across axes (mm); the canvas extends past them so
     /// the out-of-focus holder edge is visible.
     let carrierHalf: (along: Double, across: Double)
+    /// Enlarger print on a hand-set easel: the opening's centre relative to the frame, canvas mm.
+    let easelOffset: (x: Double, y: Double)
     /// Creative routes: the material graph's scene stops at the inner edge of the penumbra, so a
     /// separately developed centre can fade straight into rebate without a rim of the material image.
     var erodesGate = false
@@ -407,7 +421,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     }
     /// The source film's holes; a cinema print's own holes are always KS-1870.
     let perforation: Perforation
-    /// Gate corner radius, from prints: a 35 mm camera gate is clearly rounded (about 0.4 mm);
+    /// Gate corner radius, from prints: a 35 mm camera gate is nearly square (about 0.1 mm,
+    /// measured on Ilford Multigrade enlargements);
     /// a Hasselblad magazine's is nearly square, a moulded toy-camera mask very round.
     let gateCorner: Double
     /// Hasselblad V notches: centres along the left edge (mm from the frame centre), depth and
@@ -430,28 +445,43 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         static let reflection = Self(rawValue: 16)
     }
 
-    init?(imageSize: CGSize, layout: FilmEdgeLayout, longEdge: Int, perforation: Perforation = .ks1870) {
+    /// `easel` supplies a hand-set enlarger print's placement; nil prints square and centred.
+    init?(imageSize: CGSize, layout: FilmEdgeLayout, longEdge: Int, perforation: Perforation = .ks1870,
+          easel: PrintLayout? = nil) {
         guard imageSize.width > 0, imageSize.height > 0,
               imageSize.width.isFinite, imageSize.height.isFinite,
               longEdge > 0, longEdge <= 65_536, layout.matchesGate(imageSize) else { return nil }
         format = layout.format
         let roll = layout.format == .roll120
-        gateCorner = !roll ? 0.4 : layout.rollGate == .toy ? 1.6 : 0.12
+        gateCorner = !roll ? 0.1 : layout.rollGate == .toy ? 1.6 : 0.12
         notched = roll && layout.rollGate == .hasselblad
         self.perforation = perforation
-        distress = Self.resolve(layout)
+        var resolved = Self.resolve(layout)
+        // Set by eye, the projection lands a fraction of a degree off square and a little off
+        // centre in the easel opening: the black rebate band tapers and differs side to side.
+        let handSet = resolved.enlargerPrint && easel?.handSet == true
+        let easelSeed = easel?.easelSeed ?? 1
+        if handSet { resolved.tilt = min(max(resolved.tilt + 0.3 * Easel.jitter(easelSeed, 3), -3.3), 3.3) }
+        distress = resolved
+        easelOffset = handSet ? (0.18 * Easel.jitter(easelSeed, 4), 0.18 * Easel.jitter(easelSeed, 5)) : (0, 0)
         // `portrait` means the film runs vertically on the canvas. 6 × 4.5 frames lie across the
         // film, so a landscape 645 picture sits on a vertical strip.
         portrait = (imageSize.height > imageSize.width) == (layout.gateAlong >= layout.gateAcross)
         let short = layout.gateAcross
         let long = layout.gateAlong
-        // Scan holder opening (or, for an enlarger print, a filed carrier that stops short of the
-        // holes) plus room for the holder edge beyond it. The canvas size never changes.
-        let alongReveal = 0.8, acrossReveal = format == .film35 ? 1.1 : 0.8, holder = 0.4
-        let alongOpen = distress.enlargerPrint ? 0.6 : alongReveal
-        let acrossOpen = distress.enlargerPrint ? (format == .film35 ? 0.55 : 0.6) : acrossReveal
-        carrierHalf = (long / 2 + alongOpen, short / 2 + acrossOpen)
-        let extent = CGSize(width: long + 2 * (alongReveal + holder), height: short + 2 * (acrossReveal + holder))
+        // Scan: the holder opening plus room for its out-of-focus edge; the canvas never changes.
+        // Enlarger print: the easel opening (the frame scaled by the print zoom) plus a margin of
+        // the same sheet, wide enough for a hand-set offset and the blade's penumbra.
+        let extent: CGSize
+        if distress.enlargerPrint {
+            carrierHalf = (long / 2 / layout.printZoom, short / 2 / layout.printZoom)
+            let margin = 0.025 * max(long, short)
+            extent = CGSize(width: 2 * (carrierHalf.along + margin), height: 2 * (carrierHalf.across + margin))
+        } else {
+            let alongReveal = 0.8, acrossReveal = format == .film35 ? 1.1 : 0.8, holder = 0.4
+            carrierHalf = (long / 2 + alongReveal, short / 2 + acrossReveal)
+            extent = CGSize(width: long + 2 * (alongReveal + holder), height: short + 2 * (acrossReveal + holder))
+        }
         let factor = Double(longEdge) / max(extent.width, extent.height)
         let landscapeSize = CGSize(width: max(1, (extent.width * factor).rounded()),
                                    height: max(1, (extent.height * factor).rounded()))
@@ -489,15 +519,23 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let toy = layout.format == .roll120 && layout.rollGate == .toy
         d.gateSoftness = toy ? max(g.softness, 0.22) : g.softness
         d.gateWear = toy ? max(g.wear, 0.1) : g.wear
-        // A filed carrier sits a film-thickness from the negative: its edge prints slightly soft,
-        // and light scattered by the bare filed metal spills a faint halo onto the paper beyond
-        // it. A scan holder is further out of focus and scatters a short tail.
-        d.carrierBlur = d.enlargerPrint ? 0.07 : g.holderBlur
-        d.carrierDetail = d.enlargerPrint ? 0 : g.holderDetail
-        d.carrierTail = d.enlargerPrint ? 0.02 + 0.1 * d.carrierReflection : 0.08
-        d.carrierTailWidth = d.enlargerPrint ? 0.1 : 0.12
-        d.carrierCorner = d.enlargerPrint ? 0.35 : 0.2
-        d.carrierWave = d.enlargerPrint ? 0.05 + 0.8 * d.carrierRoughness : 0.02
+        if d.enlargerPrint {
+            // Easel blades: straight, square-cornered and opaque, with no halo or reflection. Their
+            // penumbra (`Easel`) for a nominal 6-inch print, in film mm; the radius is half the ramp.
+            let m = 152.4 / max(layout.gateAlong, layout.gateAcross)
+            d.carrierBlur = Easel.penumbra(magnification: m) / m / 2
+            d.carrierDetail = 0; d.carrierTail = 0; d.carrierTailWidth = 0.1
+            d.carrierCorner = 0.01; d.carrierWave = 0
+            d.carrierRoughness = 0; d.carrierReflection = 0
+        } else {
+            // A scan holder is out of focus and scatters a short tail.
+            d.carrierBlur = g.holderBlur
+            d.carrierDetail = g.holderDetail
+            d.carrierTail = 0.08
+            d.carrierTailWidth = 0.12
+            d.carrierCorner = 0.2
+            d.carrierWave = 0.02
+        }
         let sign: Double = streamSeed(d.seed, 60) & 1 == 0 ? 1 : -1
         d.tilt = min(max(g.tilt * sign + d.tilt, -3), 3)
         d.bulge = min(max(g.bulge + d.bulge, -1.5), 1.5)
@@ -741,7 +779,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
     /// Signed distance to the carrier/holder opening (> 0 where it blocks light), fixed to the
     /// canvas: the film can tilt inside it.
     func carrierDistance(x: Int, y: Int) -> Double {
-        let (cx, cy) = canvas(Double(x) + 0.5, Double(y) + 0.5)
+        let (px, py) = canvas(Double(x) + 0.5, Double(y) + 0.5)
+        let cx = px - easelOffset.x, cy = py - easelOffset.y
         let (hx, hy) = portrait ? (carrierHalf.across, carrierHalf.along) : (carrierHalf.along, carrierHalf.across)
         let (a, t) = strip(cx, cy)
         let base = FilmEdgeNoise.box(cx, cy, hx, hy, distress.carrierCorner)
@@ -1003,6 +1042,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             SIMD4(Float(fogLight.x), Float(fogLight.y), Float(fogLight.z), Float(d.carrierReflection)),
             SIMD4(Float(d.carrierBlur), Float(d.carrierDetail), Float(leak.direction.0), Float(leak.direction.1)),
             SIMD4(Float(coreLight.x), Float(coreLight.y), Float(coreLight.z), Float(d.enlargerPrint ? -d.carrierTailWidth : d.carrierTailWidth)),
+            SIMD4(Float(easelOffset.x), Float(easelOffset.y), 0, 0),
         ]
         for s in scratchCandidates {
             values.append(SIMD4(Float(s.across), Float(s.wander), Float(s.wavelength), Float(s.phase)))
@@ -1031,6 +1071,13 @@ nonisolated struct FilmEdgeGeometry: Sendable {
 }
 
 extension EditRecipe {
+    /// The layout as rendered: a negative print is always an enlarger print on an easel; scans
+    /// and cinema prints never are.
+    nonisolated var renderedFilmEdgeLayout: FilmEdgeLayout? {
+        guard var layout = filmEdgeLayout else { return nil }
+        layout.distress.enlargerPrint = resolvedFilmEdgeType == .negativePrint
+        return layout
+    }
     /// Normalize old adaptive v5 recipes as well as live crop edits. Never mutate Develop.
     nonisolated mutating func constrainFilmEdgeCrop(imageSize: CGSize) {
         guard let filmEdgeLayout else { return }

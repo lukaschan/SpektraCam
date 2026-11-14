@@ -29,7 +29,8 @@ actor BatchPhotoExporter {
         let crop = recipe?.crop.normalizedRect ?? CropSelection.fullImage
         let fraction =
             max(crop.width * (rotated ? h : w), crop.height * (rotated ? w : h)) / max(w, h)
-        let maximum = min(max(w, h), Double(size.maximum ?? Int.max) / max(fraction, 1e-6))
+        let cap = size.longEdge(native: Int(max(w, h) * fraction))
+        let maximum = min(max(w, h), Double(cap ?? Int.max) / max(fraction, 1e-6))
         let scale = maximum / max(w, h)
         do {
             if let recipe {

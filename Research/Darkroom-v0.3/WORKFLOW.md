@@ -2,6 +2,48 @@
 
 Updated 2026-11-10. This file is the repository handoff point; read it before continuing Darkroom work. Changes are local and uncommitted. Preserve the preexisting Xcode project version/signing edits.
 
+## Nov 14 (later) — Square gate corners, export sizes, a leaner Darkroom
+
+- **Gate corner:** IMG_1675 (two Multigrade prints with rebate bands) shows inner corners of about 0.08–0.1 mm on film at about 97 px/mm. The 35 mm gate corner went from 0.4 mm to 0.1 mm.
+- **120 bodies:** "Hasselblad V" is now **V** and "Toy camera" is now **Holga**. Saved raw values are unchanged.
+- **Export sizes:** the renderer already cropped correctly (a 50 % crop exported at its own 3000 × 2000). The faults were in what the sizes meant:
+  - on paper, "Full" made the sheet as large as the picture, so the picture was resampled;
+  - the panel showed the uncropped original;
+  - fixed S/M/L caps made L equal to Full on crops.
+
+  Now `PhotoExporter.Size` is **Original / Long edge / Percent / Print (ppi)**, resolved against the native output and never enlarged. On paper the picture keeps one source pixel per output pixel (`PrintCompositor.nativeSize`), and a sheet that crops the picture keeps only the pixels shown. The planned W × H and MP appear before rendering (`PhotoRenderer.exportDimensions`), and the last choice is remembered. The presentation render uses the same picture size as export.
+- **Darkroom simplified:**
+  - Auto and the four edge types are one row of pills;
+  - **Negative print is always an enlarger print** (`EditRecipe.renderedFilmEdgeLayout`), so the toggle and the Hand print preset are gone, and the easel appears for that type;
+  - the Filed roughness, Edge reflection and Leak colour sliders are removed; leak colour follows the leak path;
+  - unused strings were pruned.
+- **Faster checks:** `core-checks.py --optimized` compiles with `-O -assert-config Debug`, which keeps every precondition and its message. `check-darkroom.py` uses it. The film-edge suite runs in about 40 s instead of about 25 min.
+- **Known, older failure:** `tone-checks` still expects recipe version 4; the current version has been 5 since the Darkroom PoC.
+
+## Nov 14 — Enlarger prints and the easel (one model for B&W and RA-4)
+
+Runze's Ilford Multigrade prints (with a rebate border, borderless, and a close-up) and the RA-4 references showed that the old Hand print was wrong. Real prints have straight easel blades and a clean picture, with no filed edge, fog or vignette. The black border is a thin band of rebate that tapers where the projection is not quite square to the easel. B&W and colour use the same optics, so they share one model; monochrome stays an output choice.
+
+Measurements from the full-resolution HEICs (hole pitch about 181 px per film mm in IMG_1673):
+- **Blade edge:** about 8 px from paper to black, ≈ 0.04 mm on film including phone blur.
+- **Gate edge into the picture:** a ramp of about 0.15 mm on film.
+- **Holes:** as black as the rebate, with a thin light outline at the cut wall (our hole rim).
+- **IMG_1670:** the band runs from zero on one side to about 0.3 mm on film on others.
+
+**Model**
+- **Easel (paper stage, `PrintLayout`/`PrintGeometry`/`Easel`):** each blade's edge lies about h = 3 mm above the emulsion. The lens pupil seen from the paper spans 1/(N(1+M)), so the penumbra is h/(N(1+M)) plus about 0.03 mm of paper spread. At f/8 that is about 0.1 mm on a 4×6.
+- **Hand-set easel** (default on, with a toggle and a "New placement" dice):
+  - every print: margins up to 0.8 % of the sheet's long side uneven, never more than 45 % of a margin;
+  - clean print: the blade penumbra fades the picture into the paper;
+  - film-edge enlarger print: the projection is up to 0.3° off square and up to 0.18 mm off centre in the opening, so the black band tapers. Off gives a centred machine print.
+- **Enlarger zoom** (film edge, 90–110 %, default 98.5 %): the projected frame relative to the easel opening, with blades keeping the frame's proportions. The border is 18(1/z − 1) mm at the ends and 12(1/z − 1) mm at the sides. About 90 % reaches the holes; above 100 % the blades crop. The canvas is the opening plus a 2.5 % margin of the same sheet.
+- **Enlarger print carrier:** straight, square-cornered, opaque, with no halo or reflection. Filed roughness and edge reflection apply only to scan holders and are hidden for enlarger prints. The Hand print preset is now just "enlarger print".
+- **Metal:** `e[16]` carries the easel offset; scratches moved to `e[17…]`.
+
+**Checks:**
+- Paper: hand-set bounds, penumbra 0.05–0.2 mm, top-left vs CoreGraphics placement, legacy layouts default to hand-set.
+- Film edge: clean preset; default shows a rebate band and no holes; 90 % reaches the holes; 105 % crops; opening and canvas follow the zoom; straight blade; hand-set ranges; machine print square; scans ignore the easel; CPU/Metal parity for a hand-set enlarger print.
+
 ## Nov 12 (later) — LUT / creative route fixed; test charts
 
 Runze reported that the edge looks wrong with a LUT. Any recipe whose Develop differs from the edge material uses the creative composite: a LUT, Develop off, a cross-family stock, and also every scan or cinema type with the default Portra recipe. A probe rendered all four types through Spektrafilm, a LUT and Develop off and found three faults:

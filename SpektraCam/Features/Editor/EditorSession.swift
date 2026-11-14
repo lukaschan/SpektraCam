@@ -203,6 +203,11 @@ import SwiftUI
             recipe.flags = recipe.flags.filter { !$0.key.hasPrefix("film_render.grain.") }
         }
     }
+    /// The exported file's pixel size for `size`, before rendering.
+    func exportDimensions(size: PhotoExporter.Size) async -> (width: Int, height: Int) {
+        let snapshot = recipe
+        return await filmRenderer.exportDimensions(snapshot, size: size)
+    }
     func export(
         size: PhotoExporter.Size, format: PhotoExporter.Format, quality: Double,
         allowOvercommit: Bool = false
@@ -247,7 +252,7 @@ import SwiftUI
     func loupePatch(_ snapshot: EditRecipe, visible: CGRect) async -> PhotoRenderer.Detail? {
         patchTask?.cancel()
         var recipe = snapshot
-        recipe.printLayout = nil
+        recipe.printLayout = recipe.printLayout?.easelOnly
         let renderer = filmRenderer
         let job = Task { () -> PhotoRenderer.Detail? in
             if recipe.filmEdgeLayout != nil { return try? await renderer.renderEdgeDetail(recipe, visible: visible) }
@@ -261,7 +266,7 @@ import SwiftUI
     func darkroomLoupe(_ snapshot: EditRecipe, maximum: Int) async throws -> CGImage {
         loupeTask?.cancel()
         var recipe = snapshot
-        recipe.printLayout = nil
+        recipe.printLayout = recipe.printLayout?.easelOnly
         let renderer = filmRenderer
         let job = Task { try await renderer.renderPresentation(recipe, maximum: maximum) }
         loupeTask = job

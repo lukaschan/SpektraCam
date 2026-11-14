@@ -105,8 +105,9 @@ import UniformTypeIdentifiers
             $0.printLayout = layout
         }
         let printed = try await session.export(size: .small, format: .png, quality: 1)
-        precondition(printed.1 == 1024 && printed.2 == 819,
-            "Session export ignored the saved paper geometry or exceeded its pixel budget")
+        // The 1024 px picture at 80 % keeps its pixels: a 1280 px sheet, capped at 1080 by the long edge.
+        precondition(printed.1 == 1080 && printed.2 == 864,
+            "Session export ignored the saved paper geometry or exceeded its pixel budget: \(printed.1)×\(printed.2)")
         let printedSource = CGImageSourceCreateWithURL(printed.0 as CFURL, nil)!
         let printedImage = CGImageSourceCreateImageAtIndex(printedSource, 0, nil)!
         precondition(printedImage.bitsPerComponent == 8 && printedImage.colorSpace?.model == .rgb)

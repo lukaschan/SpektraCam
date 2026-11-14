@@ -34,8 +34,8 @@ struct DarkroomView: View {
     var body: some View {
         GeometryReader { workspace in
             VStack(spacing: 12) {
-                PrintPreview(image: imageReady ? image : nil, imageSize: sourceSize, layout: current,
-                             paperColor: edge?.distress.enlargerPrint == true && resolvedType == .negativePrint ? PaperTone.color(of: image) : .white,
+                PrintPreview(image: imageReady ? image : nil, imageSize: sourceSize, layout: current, bladeEdge: edge == nil,
+                             paperColor: edge != nil && resolvedType == .negativePrint ? PaperTone.color(of: image) : .white,
                              loupeImage: loupeImage, loupeRefining: loupeRefining, loupeWidth: loupeWidth,
                              loupePatch: loupePatch, onLoupeInspect: onLoupeInspect,
                              showLoupe: showLoupe, tableLit: tableLit, loupeCenter: $loupeCenter)
@@ -77,6 +77,7 @@ struct DarkroomView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if edge != nil { edgeControls }
                         paperControl
+                        if showsEaselToggle { easelToggle }
                         scaleControl
                         if expanded { details }
                     }
@@ -89,6 +90,11 @@ struct DarkroomView: View {
     }
 
     private enum FormatChoice: String { case film35, cine35, roll120 }
+    /// Auto, or one of the film-edge types (by raw value).
+    private struct EdgeChoice: RawRepresentable, Hashable {
+        let rawValue: String
+        static let auto = EdgeChoice(rawValue: "auto")
+    }
     private var formatChoice: FormatChoice {
         guard let edge else { return .film35 }
         if edge.format == .roll120 { return .roll120 }
@@ -96,27 +102,27 @@ struct DarkroomView: View {
     }
     private var edgeControls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(String(localized: "darkroom.edge.selection", defaultValue: "Edge selection"), selection: Binding(
-                get: { (edgeSelection ?? FilmEdgeSelection()).mode }, set: { mode in
+            // One row: Auto follows Develop; a type pins the edge. Auto keeps the last pinned type.
+            PanelTabs(
+                options: [(EdgeChoice.auto, String(localized: "common.auto", defaultValue: "Auto"))]
+                    + FilmEdgeType.allCases.map { (EdgeChoice(rawValue: $0.rawValue), $0.title) },
+                selection: Binding(get: {
+                    let current = edgeSelection ?? FilmEdgeSelection()
+                    return current.mode == .automatic ? .auto : EdgeChoice(rawValue: current.manualType.rawValue)
+                }, set: { choice in
                     var next = edgeSelection ?? FilmEdgeSelection()
-                    next.mode = mode
-                    edgeSelection = next
-                })) {
-                Text(String(localized: "common.auto", defaultValue: "Auto")).tag(FilmEdgeSelection.Mode.automatic)
-                Text(String(localized: "darkroom.edge.manual", defaultValue: "Manual")).tag(FilmEdgeSelection.Mode.manual)
-            }.pickerStyle(.segmented).accessibilityIdentifier("darkroom.edge.mode")
-            if (edgeSelection ?? FilmEdgeSelection()).mode == .manual {
-                PanelTabs(
-                    options: FilmEdgeType.allCases.map { ($0, $0.title) },
-                    selection: Binding(get: { (edgeSelection ?? FilmEdgeSelection()).manualType }, set: { type in
-                        var next = edgeSelection ?? FilmEdgeSelection()
+                    if let type = FilmEdgeType(rawValue: choice.rawValue) {
+                        next.mode = .manual
                         next.manualType = type
-                        edgeSelection = next
-                    }),
-                    prefix: "darkroom.edge.type.")
-            } else {
+                    } else {
+                        next.mode = .automatic
+                    }
+                    edgeSelection = next
+                }),
+                prefix: "darkroom.edge.type.")
+            if (edgeSelection ?? FilmEdgeSelection()).mode == .automatic {
                 LabeledContent(String(localized: "darkroom.edge.from_develop", defaultValue: "From Develop"), value: resolvedType.title)
-                    .accessibilityIdentifier("darkroom.edge.resolved")
+                    .font(.caption).accessibilityIdentifier("darkroom.edge.resolved")
             }
             PanelTabs(
                 options: [(FormatChoice.film35, "35 mm"),
@@ -153,6 +159,10 @@ struct DarkroomView: View {
             }
             Divider().padding(.vertical, 4)
             gateControls
+            if resolvedType == .negativePrint {
+                Divider().padding(.vertical, 4)
+                easelControls
+            }
             Divider().padding(.vertical, 4)
             distressControls
         }
@@ -228,15 +238,6 @@ struct DarkroomView: View {
                         distressSlider(String(localized: "darkroom.distress.hole_variation", defaultValue: "Hole variation"), \.holeVariation,
                                        scale: 100, step: 1, unit: "%", identifier: "holeVariation")
                     }
-                    distressGroup(String(localized: "darkroom.distress.carrier", defaultValue: "Carrier and holder")) {
-                        Toggle(String(localized: "darkroom.distress.enlarger_print", defaultValue: "Enlarger print (RA-4)"),
-                               isOn: Binding(get: { distress.enlargerPrint }, set: { on in setDistress { $0.enlargerPrint = on } }))
-                            .accessibilityIdentifier("darkroom.distress.enlargerPrint")
-                        distressSlider(String(localized: "darkroom.distress.carrier_roughness", defaultValue: "Filed roughness"), \.carrierRoughness,
-                                       step: 0.01, unit: "mm", identifier: "carrier")
-                        distressSlider(String(localized: "darkroom.distress.carrier_reflection", defaultValue: "Edge reflection (print)"), \.carrierReflection,
-                                       scale: 100, step: 1, unit: "%", identifier: "carrierReflection")
-                    }
                     distressGroup(String(localized: "darkroom.distress.light", defaultValue: "Fog and leaks")) {
                         distressSlider(String(localized: "darkroom.distress.edge_fog", defaultValue: "Edge fog"), \.edgeFog,
                                        scale: 100, step: 1, unit: "%", identifier: "fog")
@@ -261,8 +262,6 @@ struct DarkroomView: View {
                                        step: 0.5, unit: "mm", identifier: "leakSize")
                         distressSlider(String(localized: "darkroom.distress.leak_position", defaultValue: "Leak position"), \.leakPosition,
                                        scale: 100, step: 1, unit: "%", identifier: "leakPosition")
-                        distressSlider(String(localized: "darkroom.distress.warmth", defaultValue: "Leak colour: cool ↔ warm"), \.warmth,
-                                       scale: 100, step: 1, unit: "", identifier: "warmth", fillOrigin: 0)
                     }
                     distressGroup(String(localized: "darkroom.distress.damage", defaultValue: "Dust and scratches")) {
                         distressSlider(String(localized: "darkroom.distress.dust", defaultValue: "Dust"), \.dust,
@@ -302,6 +301,64 @@ struct DarkroomView: View {
             defaultValue: FilmEdgeDistress()[keyPath: path] * scale,
             fillOrigin: fillOrigin ?? scaled.lowerBound, onEditingChanged: onEdgeEditingChanged)
     }
+    // MARK: Easel — the enlarger head's height sets how much of the frame the blades show.
+    private var easelControls: some View {
+        let layout = edge ?? FilmEdgeLayout.newDefault()
+        let border = layout.easelBorder
+        func mm(_ v: Double) -> String { abs(v).formatted(.number.precision(.fractionLength(2))) }
+        let readout: String
+        if abs(border.ends) < 0.005 {
+            readout = String(localized: "darkroom.easel.on_edge", defaultValue: "The blades sit on the frame edge.")
+        } else if border.ends > 0 {
+            readout = String(localized: "darkroom.easel.border",
+                             defaultValue: "Rebate shown: \(mm(border.ends)) mm at the ends, \(mm(border.sides)) mm at the sides (on film).")
+        } else {
+            readout = String(localized: "darkroom.easel.crop",
+                             defaultValue: "Cropped: \(mm(border.ends)) mm at the ends, \(mm(border.sides)) mm at the sides (on film).")
+        }
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(String(localized: "darkroom.easel", defaultValue: "Easel")).foregroundStyle(.secondary)
+            NumericControl(
+                title: String(localized: "darkroom.easel.zoom", defaultValue: "Enlarger zoom"),
+                value: Binding(get: { layout.printZoom * 100 }, set: { value in
+                    var next = edge ?? FilmEdgeLayout.newDefault()
+                    let range = FilmEdgeLayout.printZoomRange
+                    next.printZoom = min(max(value / 100, range.lowerBound), range.upperBound)
+                    edge = next
+                }),
+                range: 90...110, step: 0.5, minimum: 90, maximum: 110, unit: "%",
+                identifier: "darkroom.easel.zoom", defaultValue: 98.5, fillOrigin: 100,
+                onEditingChanged: onEdgeEditingChanged)
+            Text(readout).font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("darkroom.easel.readout")
+            Text(String(localized: "darkroom.easel.note", defaultValue: "Below 100 % the opening shows the black rebate, and the holes from about 90 %. Above 100 % the blades crop into the picture."))
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+    /// A borderless clean print shows the easel on any sized sheet; a film-edge print whenever it
+    /// is printed on an enlarger.
+    private var showsEaselToggle: Bool {
+        edge == nil ? current.paper != .asImage : resolvedType == .negativePrint
+    }
+    private var easelToggle: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Toggle(String(localized: "darkroom.easel.hand_set", defaultValue: "Hand-set easel"), isOn: binding(\.handSet))
+                    .accessibilityIdentifier("darkroom.easel.handSet")
+                Button(String(localized: "darkroom.easel.new_placement", defaultValue: "New placement"), systemImage: "dice") {
+                    var next = current
+                    next.easelSeed = UInt32.random(in: 2...UInt32.max)
+                    layout = next
+                }
+                .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
+                .frame(minWidth: 44, minHeight: 44).disabled(!current.handSet)
+                .accessibilityIdentifier("darkroom.easel.seed")
+            }
+            Text(edge == nil
+                 ? String(localized: "darkroom.easel.hand_set_note", defaultValue: "Margins a little uneven and the blade's soft edge, as when the easel is set by eye. Off: a centred machine print.")
+                 : String(localized: "darkroom.easel.hand_set_edge_note", defaultValue: "The projection lands a fraction of a degree off square and slightly off centre, so the black band tapers. Off: square and centred."))
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
     private var gateSize: some View {
         Text((edge ?? FilmEdgeLayout()).gateTitle(portrait: sourceSize.height > sourceSize.width))
             .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("darkroom.edge.gate")
@@ -329,7 +386,7 @@ struct DarkroomView: View {
                 value: Binding(get: { current.scale * 100 }, set: { value in
                     var next = current
                     next.scale = min(max(value / 100, PrintLayout.scaleRange.lowerBound), PrintLayout.scaleRange.upperBound)
-                    layout = next.isIdentity ? nil : next
+                    layout = next.isDefault ? nil : next
                 }),
                 range: 25...max(edge == nil ? 100 : 200, min(400, (geometry?.fillScale ?? 1) * 100)), step: 1,
                 minimum: 25, maximum: 400, unit: "%", identifier: "darkroom.scale",
@@ -380,13 +437,13 @@ struct DarkroomView: View {
         Binding(get: { current[keyPath: keyPath] }, set: { value in
             var next = current
             next[keyPath: keyPath] = value
-            layout = next.isIdentity ? nil : next
+            layout = next.isDefault ? nil : next
         })
     }
     private func setScale(_ value: Double) {
         var next = current
         next.scale = min(max(value, PrintLayout.scaleRange.lowerBound), PrintLayout.scaleRange.upperBound)
-        layout = next.isIdentity ? nil : next
+        layout = next.isDefault ? nil : next
     }
 }
 
@@ -394,6 +451,8 @@ private struct PrintPreview: View {
     let image: UIImage?
     let imageSize: CGSize
     let layout: PrintLayout
+    /// A clean print: the easel blades cut into the projection and soften its boundary.
+    var bladeEdge = false
     /// The sheet continues the print's own unexposed margin.
     var paperColor = Color.white
     var loupeImage: UIImage? = nil
@@ -415,6 +474,7 @@ private struct PrintPreview: View {
                     paperColor
                     if let image { Image(uiImage: image).resizable()
                         .frame(width: geometry.imageRect.width * fit, height: geometry.imageRect.height * fit)
+                        .modifier(BladeEdge(width: bladeEdge ? geometry.bladeBlur * fit : 0))
                         .position(x: geometry.imageRect.midX * fit, y: geometry.imageRect.midY * fit)
                     }
                 }
@@ -437,7 +497,9 @@ private struct PrintPreview: View {
                                   paperFrame: paperFrame, bounds: viewport.size,
                                   refining: loupeRefining || (loupeImage == nil && loupePatch == nil),
                                   surround: LightTableBackdrop.surround(lit: tableLit), paper: paperColor,
-                                  fullWidth: loupeWidth, patch: loupePatch, onInspect: onLoupeInspect,
+                                  fullWidth: loupeWidth, patch: loupePatch,
+                                  bladeEdge: bladeEdge ? geometry.bladeBlur / max(geometry.imageRect.width, 1) : 0,
+                                  onInspect: onLoupeInspect,
                                   center: $loupeCenter)
                 }
             }

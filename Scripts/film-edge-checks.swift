@@ -143,10 +143,12 @@ import UniformTypeIdentifiers
         // Precise gate by default (no tilt or bulge), so geometric assertions stay exact.
         func geometry(_ distress: FilmEdgeDistress, longEdge: Int = 256, format: FilmEdgeLayout.Format = .film35,
                       perforation: FilmEdgeGeometry.Perforation = .ks1870,
-                      gate: FilmEdgeGate = FilmEdgeGate(.precise)) -> FilmEdgeGeometry {
+                      gate: FilmEdgeGate = FilmEdgeGate(.precise), zoom: Double = 0.985,
+                      easel: PrintLayout? = nil) -> FilmEdgeGeometry {
             var layout = FilmEdgeLayout(); layout.format = format; layout.distress = distress; layout.gate = gate
+            layout.printZoom = zoom
             let image = format == .film35 ? size : CGSize(width: 600, height: 600)
-            return FilmEdgeGeometry(imageSize: image, layout: layout, longEdge: longEdge, perforation: perforation)!
+            return FilmEdgeGeometry(imageSize: image, layout: layout, longEdge: longEdge, perforation: perforation, easel: easel)!
         }
         var all = FilmEdgeDistress.Preset.worn.values
         all.seed = 0xC0FFEE; all.carrierRoughness = 0.3; all.leak = 0.5; all.dust = 0.8; all.scratches = 0.9
@@ -174,6 +176,32 @@ import UniformTypeIdentifiers
                 if error > 1e-3 { bad += 1 }
             }}
             precondition(bad == 0, "Distress CPU/Metal disagreement on \(type): \(bad) values")
+        }
+        // Enlarger print on a hand-set easel: offset opening, square blades, rotated projection.
+        do {
+            var printed = all; printed.enlargerPrint = true
+            var easel = PrintLayout(); easel.easelSeed = 9
+            selection.manualType = .negativePrint
+            var recipe = base; recipe.filmEdgeSelection = selection
+            let pipeline = try FilmPipeline(library: library, recipe: FilmEdgeRenderer.materialRecipe(recipe))
+            let g = geometry(printed, gate: FilmEdgeGate(.rough), zoom: 0.92, easel: easel)
+            precondition(g.easelOffset.x != 0 && g.easelOffset.y != 0, "Hand-set easel had no offset")
+            // The opening sets this canvas's size: a smooth synthetic scene of its own.
+            let scene = (0..<(g.width * g.height)).map { i -> SIMD4<Float> in
+                let u = Float(i % g.width) / Float(g.width), v = Float(i / g.width) / Float(g.height)
+                return SIMD4(0.05 + 0.4 * u, 0.1 + 0.3 * v, 0.2 + 0.2 * u * v, 1)
+            }
+            let cpu = try pipeline.process(scene.map { RGB(Double($0.x), Double($0.y), Double($0.z)) },
+                                           width: g.width, height: g.height, stochastic: false, edge: g, autoExposureEV: 0)
+            let metal = try await gpu.process(scene, width: g.width, height: g.height, pipeline: pipeline,
+                stochastic: false, autoExposureEV: 0, edge: g)
+            var bad = 0
+            for i in cpu.indices { for ch in 0..<3 {
+                let error = abs(cpu[i][ch] - Double(metal.pixels[i][ch]))
+                maxError = max(maxError, error)
+                if error > 1e-3 { bad += 1 }
+            }}
+            precondition(bad == 0, "Enlarger print CPU/Metal disagreement: \(bad) values")
         }
         // Amount 0 is exactly the clean edge; positions do not move with strength.
         var muted = all; muted.amount = 0
@@ -431,14 +459,49 @@ import UniformTypeIdentifiers
         let probeX = Double(level.width) / 2 + 0.5, probeY = level.gate.minY - 0.15 / level.millimetersPerPixel
         let (fx0, fy0) = level.film(probeX, probeY), (fx1, fy1) = round.film(probeX, probeY)
         precondition(level.gateDistance(fx0, fy0) > 0.1 && round.gateDistance(fx1, fy1) < 0, "Bulge did not bow the gate outline")
-        // Enlarger print: the filed carrier stops before the holes, so no sprocket shows on the print.
-        var hand = FilmEdgeDistress.Preset.handPrint.values
+        // Enlarger print: a clean preset (no filing, reflection or halo); the easel's zoom decides
+        // the border. Default shows a thin rebate band and no holes; 90 % reaches the holes; above
+        // 100 % the blades crop into the picture.
+        var hand = FilmEdgeDistress(); hand.enlargerPrint = true  // what a negative print renders
         hand.seed = 3
-        let gh = geometry(hand, longEdge: 1024, gate: FilmEdgeGate(.natural))  // a strongly tilted strip may legitimately show slivers
-        var visibleHoles = 0
-        for y in 0..<gh.height { for x in 0..<gh.width where gh.supportCoverage(x: x, y: y) < 1 && gh.carrierCoverage(x: x, y: y) > 0.5 { visibleHoles += 1 } }
-        precondition(visibleHoles == 0 && gh.distress.carrierDetail == 0 && gh.distress.carrierBlur < 0.1,
-            "Enlarger print showed \(visibleHoles) sprocket pixels or kept the scan holder")
+        precondition(hand.carrierRoughness == 0 && hand.carrierReflection == 0 && hand.edgeFog == 0 && hand.leak == 0,
+            "Hand print preset is not clean")
+        func holes(_ g: FilmEdgeGeometry) -> Int {
+            var count = 0
+            for y in 0..<g.height { for x in 0..<g.width where g.supportCoverage(x: x, y: y) < 1 && g.carrierCoverage(x: x, y: y) > 0.5 { count += 1 } }
+            return count
+        }
+        func rebateBand(_ g: FilmEdgeGeometry) -> Int {
+            var count = 0
+            for y in 0..<g.height { for x in 0..<g.width where g.gateCoverage(x: x, y: y) == 0 && g.carrierCoverage(x: x, y: y) > 0.5 { count += 1 } }
+            return count
+        }
+        let gh = geometry(hand, longEdge: 1024, gate: FilmEdgeGate(.natural))
+        precondition(holes(gh) == 0 && rebateBand(gh) > 0 && gh.distress.carrierDetail == 0 && gh.distress.carrierTail == 0
+            && gh.distress.carrierBlur < 0.02 && gh.easelOffset == (0, 0),
+            "Default enlarger print: \(holes(gh)) hole pixels, no rebate band, a scan holder or a hand-set offset without an easel")
+        precondition(holes(geometry(hand, longEdge: 1024, gate: FilmEdgeGate(.precise), zoom: 0.9)) > 0, "90 % zoom did not reach the holes")
+        let cropped = geometry(hand, longEdge: 1024, gate: FilmEdgeGate(.precise), zoom: 1.05)
+        precondition(rebateBand(cropped) == 0 && holes(cropped) == 0, "Blades above 100 % still showed rebate")
+        // The opening is the zoomed frame plus a margin of the same paper; blades are straight.
+        let exact = geometry(hand, longEdge: 1024, gate: FilmEdgeGate(.precise), zoom: 0.95)
+        precondition(abs(exact.carrierHalf.along - 18 / 0.95) < 1e-9 && abs(exact.carrierHalf.across - 12 / 0.95) < 1e-9,
+            "Easel opening does not follow the zoom")
+        precondition(abs(Double(exact.width) * exact.millimetersPerPixel - 2 * (18 / 0.95 + 0.9)) < 2 * exact.millimetersPerPixel,
+            "Enlarger canvas is not the opening plus its paper margin")
+        let row = Int((Double(exact.height) / 2 - exact.carrierHalf.across / exact.millimetersPerPixel).rounded())
+        let edgeDistances = stride(from: exact.width / 4, to: exact.width * 3 / 4, by: 7).map { exact.carrierDistance(x: $0, y: row) }
+        precondition(edgeDistances.allSatisfy { abs($0 - edgeDistances[0]) < 1e-9 }, "Easel blade is not straight")
+        // Hand-set: up to 0.3° extra rotation and 0.18 mm offset, seeded; off is square and centred.
+        var easel = PrintLayout(); easel.easelSeed = 5
+        let set = geometry(hand, gate: FilmEdgeGate(.precise), easel: easel)
+        easel.handSet = false
+        let machine = geometry(hand, gate: FilmEdgeGate(.precise), easel: easel)
+        precondition(machine.easelOffset == (0, 0) && machine.distress.tilt == 0, "Machine easel was not square and centred")
+        precondition(abs(set.distress.tilt) <= 0.3 && set.distress.tilt != 0 && abs(set.easelOffset.x) <= 0.18 && abs(set.easelOffset.y) <= 0.18,
+            "Hand-set easel outside its range: \(set.distress.tilt)°, \(set.easelOffset)")
+        precondition(geometry(FilmEdgeDistress(), gate: FilmEdgeGate(.precise), easel: PrintLayout()).easelOffset == (0, 0),
+            "A scan moved with the easel")
         // Hole rim: the yellow core and strongest halo face the picture.
         var rimmed = FilmEdgeDistress(); rimmed.holeVariation = 1; rimmed.seed = 21
         let gRim = geometry(rimmed, longEdge: 2048)
@@ -456,7 +519,7 @@ import UniformTypeIdentifiers
         var warm = FilmEdgeDistress(); warm.warmth = 1
         let light = geometry(warm).leakLight(neutral: neutral)
         precondition(light.x > 5 * light.z, "Base-path light did not favour the red-sensitive layer")
-        print("PASS: distress CPU/Metal agreement incl. BH/released scratches (max \(maxError)), BH-1866 vs KS-1870 geometry, hole variation and rim, sprockets untouched by leaks, perforation fog, gated front vs back leaks, carrier reflection, holder core/tail/detail, gate types/tilt/bulge, enlarger print hides holes, picture-side rim core, rebate-clamped scratches, depth/route scratch colour, Amount 0 identity, stable seeded features, physical-size dust/carrier (\(dustSmall)/\(dustLarge) mm²), intact KS holes, 120 without sprockets, route-dependent dust polarity")
+        print("PASS: distress CPU/Metal agreement incl. BH/released scratches (max \(maxError)), BH-1866 vs KS-1870 geometry, hole variation and rim, sprockets untouched by leaks, perforation fog, gated front vs back leaks, carrier reflection, holder core/tail/detail, gate types/tilt/bulge, enlarger easel zoom/blades/hand-set placement and parity, picture-side rim core, rebate-clamped scratches, depth/route scratch colour, Amount 0 identity, stable seeded features, physical-size dust/carrier (\(dustSmall)/\(dustLarge) mm²), intact KS holes, 120 without sprockets, route-dependent dust polarity")
     }
 
     static func checkWorkflow(root: URL, recipe initial: EditRecipe) async throws {
@@ -521,7 +584,8 @@ import UniformTypeIdentifiers
                 let pixels = try PhotoColorBridge.decode(image)
                 let crop = creative.filmEdgeLayout!.constrainedCrop(CropSelection(), imageSize: CGSize(width: 900, height: 600))
                 let g = FilmEdgeGeometry(imageSize: crop.pixelRect(in: CGSize(width: 900, height: 600)).size,
-                                         layout: creative.filmEdgeLayout!, longEdge: max(image.width, image.height))!
+                                         layout: creative.renderedFilmEdgeLayout!, longEdge: max(image.width, image.height),
+                                         easel: PrintLayout())!
                 precondition(g.width == image.width && g.height == image.height)
                 let top = Int(g.gate.minY), bottom = Int(g.gate.maxY)
                 func luma(_ x: Int, _ y: Int) -> Double { let v = pixels[y * image.width + x]; return Double(v.x + v.y + v.z) / 3 }
@@ -532,7 +596,8 @@ import UniformTypeIdentifiers
                         let band = (-4...12).map { luma(x, edge + $0 * inward) }
                         precondition(band.max()! < max(interior, rebate) + 0.03,
                             "Creative \(type) LUT \(lut) gate edge has a bright rim at x \(x): \(band.max()!) vs \(interior)")
-                        if band.min()! < min(interior, rebate) - 0.05 { seams += 1 }
+                        // A negative print's rebate band is black: nothing can be darker than it.
+                        if type != .negativePrint && band.min()! < min(interior, rebate) - 0.05 { seams += 1 }
                         columns += 1
                     }
                 }
@@ -562,8 +627,11 @@ import UniformTypeIdentifiers
         let (url, w, h) = try await renderer.export(restored, size: .small, format: .png, quality: 1)
         defer { try? FileManager.default.removeItem(at: url) }
         let exported = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithURL(url as CFURL, nil)!, 0, nil)!
-        precondition(w == 900 && h == 720 && preview.width == w && preview.height == h,
-            "Finishing silently increased native dimensions or lost the paper shape")
+        // A 1080 px long edge of the sheet; the picture keeps native resolution up to that.
+        let planned = await renderer.exportDimensions(restored, size: .small)
+        precondition(max(w, h) == 1080 && abs(Double(w) / Double(h) - 1.25) < 0.01 && preview.width == w && preview.height == h
+            && planned.width == w && planned.height == h,
+            "Finishing lost the paper shape, exceeded its size or disagreed with the planned size: \(w)×\(h), planned \(planned)")
         let a = try PhotoColorBridge.decode(preview), b = try PhotoColorBridge.decode(exported)
         precondition(a.count == b.count)
         for i in a.indices {
@@ -571,7 +639,36 @@ import UniformTypeIdentifiers
                 "Saved presentation and PNG export diverged")
             precondition(abs(b[i].x - b[i].y) < 0.002 && abs(b[i].x - b[i].z) < 0.002, "B&W did not include the edge")
         }
-        precondition(b[0].x > 0.99, "Paper inherited edge density or table shadows")
+        // An enlarger print's margin is the paper's own white (its unexposed base), never table shadow.
+        precondition(b[0].x > 0.6 && abs(b[0].x - b[b.count - 1].x) < 0.005, "Paper inherited edge density or table shadows: \(b[0]) vs \(b[b.count - 1])")
+        // Export sizes resolve against the native output and never enlarge. A crop exports its own
+        // pixels; on paper the picture keeps one source pixel per output pixel.
+        do {
+            var plain = EditRecipe()
+            plain.flags["film_render.grain.active"] = false
+            plain.crop.normalizedRect = CGRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5)
+            for (size, expected) in [(PhotoExporter.Size.original, (450, 300)), (.percent(50), (225, 150)),
+                                     (.longEdge(2048), (450, 300)), (.longEdge(300), (300, 200))] {
+                let planned = await renderer.exportDimensions(plain, size: size)
+                let (file, w, h) = try await renderer.export(plain, size: size, format: .png, quality: 1)
+                try? FileManager.default.removeItem(at: file)
+                precondition(w == expected.0 && h == expected.1 && planned.width == w && planned.height == h,
+                             "\(size.rawValue) on a crop gave \(w)×\(h), planned \(planned)")
+            }
+            var sheet = PrintLayout(); sheet.paper = .fourBySix; sheet.handSet = false
+            sheet.scale = 0.5
+            plain.printLayout = sheet
+            let small = await renderer.exportDimensions(plain, size: .original)
+            precondition(max(small.width, small.height) == 900, "Half-scale picture on paper was not kept at native resolution: \(small)")
+            sheet.scale = 2
+            plain.printLayout = sheet
+            let cropped = await renderer.exportDimensions(plain, size: .original)
+            precondition(max(cropped.width, cropped.height) == 225, "Picture cropped by the sheet was enlarged: \(cropped)")
+            let printed = await renderer.exportDimensions(plain, size: .print(ppi: 300))
+            precondition(printed == cropped, "Print size enlarged a small picture: \(printed)")
+            precondition(PhotoExporter.Size(rawValue: "long:2048") == .longEdge(2048) && PhotoExporter.Size(rawValue: "print:300") == .print(ppi: 300)
+                && PhotoExporter.Size(rawValue: "percent:0") == nil && PhotoExporter.Size(rawValue: "L") == nil, "Size storage")
+        }
         // Cancellation cannot publish a file or leave the serial worker unusable.
         let cancelled = Task { try await renderer.renderFilmEdge(recipe, maximum: 720) }
         cancelled.cancel()
@@ -601,7 +698,7 @@ import UniformTypeIdentifiers
         recipe.constrainFilmEdgeCrop(imageSize: CGSize(width: 900, height: 600))
         let fixedCrop = recipe.crop.pixelRect(in: CGSize(width: 600, height: 900))
         let expected = FilmEdgeGeometry(imageSize: recipe.crop.pixelRect(in: CGSize(width: 600, height: 900)).size,
-            layout: recipe.filmEdgeLayout!, longEdge: Int(max(fixedCrop.width, fixedCrop.height)))!
+            layout: recipe.renderedFilmEdgeLayout!, longEdge: Int(max(fixedCrop.width, fixedCrop.height)), easel: PrintLayout())!
         precondition(rotated.width == expected.width && rotated.height == expected.height)
         recipe.look.enabled = false
         _ = try await renderer.renderFilmEdge(recipe, maximum: 256)
@@ -619,13 +716,16 @@ import UniformTypeIdentifiers
         let quickMS = (ProcessInfo.processInfo.systemUptime - previewStart) * 1000
         let refineStart = ProcessInfo.processInfo.systemUptime
         let refined = try await large.renderFilmEdge(settled, maximum: 2160)
-        precondition(refined.width == 2160 && refined.height == 1519)  // 38.4 × 27.0 mm with the holder margin
+        // A negative print: the easel opening (98.5 %) plus its paper margin.
+        let settledGeometry = FilmEdgeGeometry(imageSize: CGSize(width: 2160, height: 1440), layout: settled.renderedFilmEdgeLayout!,
+                                               longEdge: 2160, easel: PrintLayout())!
+        precondition(refined.width == settledGeometry.width && refined.height == settledGeometry.height && refined.width == 2160)
         let refineMS = (ProcessInfo.processInfo.systemUptime - refineStart) * 1000
         do {
             _ = try await large.export(settled, size: .full, format: .png, quality: 1)
             preconditionFailure("Edge export silently substituted a preview when original bytes were missing")
         } catch PhotoExporter.Failure.decode {}
         print("PASS: grain-enabled 720→2160 full-support refinement. Quick ms \(quickMS), settled ms \(refineMS); no silent resolution reduction")
-        print("PASS: real source → four families → saved recipe → paper/B&W → matching PNG export; creative/LUT gate without rim or seam, leaks through LUT pictures; cancellation recovery; native output bounded. Workflow \((ProcessInfo.processInfo.systemUptime - started) * 1000) ms; proof PNGs \(folder.path)")
+        print("PASS: real source → four families → saved recipe → paper/B&W → matching PNG export; creative/LUT gate without rim or seam, leaks through LUT pictures; export sizes (crop, percent, long edge, print, native paper); cancellation recovery; native output bounded. Workflow \((ProcessInfo.processInfo.systemUptime - started) * 1000) ms; proof PNGs \(folder.path)")
     }
 }

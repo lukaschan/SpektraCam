@@ -15,10 +15,21 @@ nonisolated enum PrintCompositor {
         }
         return CGColor(colorSpace: space, components: [CGFloat(pixel[0]) / 255, CGFloat(pixel[1]) / 255, CGFloat(pixel[2]) / 255, 1])!
     }
-    static func render(_ image: CGImage, layout: PrintLayout, maximum: Int? = nil, paper: CGColor? = nil) throws -> CGImage {
+    /// The sheet at one source pixel per output pixel of the picture: a small picture on a large
+    /// sheet makes a large file, and a picture cropped by the sheet keeps only the pixels shown.
+    static func nativeSize(imageSize: CGSize, layout: PrintLayout) -> CGSize {
+        guard let reference = PrintGeometry(imageSize: imageSize, layout: layout, longEdge: 1000) else { return imageSize }
+        let factor = max(imageSize.width, imageSize.height) / max(reference.imageRect.width, reference.imageRect.height, 1)
+        return CGSize(width: (reference.paperSize.width * factor).rounded(), height: (reference.paperSize.height * factor).rounded())
+    }
+    /// `bladeEdge` softens the picture's boundary with the easel blade's penumbra: a clean print,
+    /// where the blades cut into the projected picture. A film-edge canvas carries its own easel.
+    static func render(_ image: CGImage, layout: PrintLayout, maximum: Int? = nil, paper: CGColor? = nil,
+                       bladeEdge: Bool = false) throws -> CGImage {
         try Task.checkCancellation()
-        let sourceLong = max(image.width, image.height)
-        let longEdge = min(sourceLong, maximum ?? sourceLong)
+        let native = nativeSize(imageSize: CGSize(width: image.width, height: image.height), layout: layout)
+        let nativeLong = Int(max(native.width, native.height))
+        let longEdge = min(nativeLong, maximum ?? nativeLong)
         guard longEdge > 0,
             let geometry = PrintGeometry(
                 imageSize: CGSize(width: image.width, height: image.height),
@@ -34,13 +45,41 @@ nonisolated enum PrintCompositor {
                 bitsPerComponent: 8, bytesPerRow: 0, space: space,
                 bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
         else { throw PhotoExporter.Failure.render }
-        context.setFillColor(paper ?? CGColor(gray: 1, alpha: 1))
+        let sheet = paper ?? CGColor(gray: 1, alpha: 1)
+        context.setFillColor(sheet)
         context.fill(CGRect(origin: .zero, size: geometry.paperSize))
         context.interpolationQuality = .high
-        // Centered placement is symmetric under CGContext's vertical coordinate convention.
-        context.draw(image, in: geometry.imageRect)
+        // PrintGeometry is top-left; CGContext is bottom-left.
+        let rect = geometry.imageRect
+        let placed = CGRect(x: rect.minX, y: geometry.paperSize.height - rect.maxY, width: rect.width, height: rect.height)
+        context.draw(image, in: placed)
+        if bladeEdge { blade(context, rect: placed, width: geometry.bladeBlur, paper: sheet) }
         try Task.checkCancellation()
         guard let output = context.makeImage() else { throw PhotoExporter.Failure.render }
         return output
+    }
+    /// Paper returns across each blade's penumbra (a disc-shaped pupil's ramp, `width` wide, inside
+    /// the opening). Overlapping bands at a corner multiply, as a rectangular aperture does.
+    static func blade(_ context: CGContext, rect: CGRect, width: CGFloat, paper: CGColor) {
+        guard width > 0.35, rect.width > 2 * width, rect.height > 2 * width else { return }
+        let r = Double(width) / 2, steps = 9
+        let locations = (0..<steps).map { CGFloat($0) / CGFloat(steps - 1) }
+        let colors = locations.map { t in
+            paper.copy(alpha: CGFloat(1 - FilmEdgeNoise.penumbra(r - Double(t) * 2 * r, r)))!
+        }
+        guard let ramp = CGGradient(colorsSpace: paper.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!,
+                                    colors: colors as CFArray, locations: locations) else { return }
+        let w = width
+        let sides: [(CGRect, CGPoint, CGPoint)] = [
+            (CGRect(x: rect.minX, y: rect.minY, width: w, height: rect.height), CGPoint(x: rect.minX, y: 0), CGPoint(x: rect.minX + w, y: 0)),
+            (CGRect(x: rect.maxX - w, y: rect.minY, width: w, height: rect.height), CGPoint(x: rect.maxX, y: 0), CGPoint(x: rect.maxX - w, y: 0)),
+            (CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: w), CGPoint(x: 0, y: rect.minY), CGPoint(x: 0, y: rect.minY + w)),
+            (CGRect(x: rect.minX, y: rect.maxY - w, width: rect.width, height: w), CGPoint(x: 0, y: rect.maxY), CGPoint(x: 0, y: rect.maxY - w)),
+        ]
+        for (band, start, end) in sides {
+            context.saveGState(); context.clip(to: band)
+            context.drawLinearGradient(ramp, start: start, end: end, options: [])
+            context.restoreGState()
+        }
     }
 }

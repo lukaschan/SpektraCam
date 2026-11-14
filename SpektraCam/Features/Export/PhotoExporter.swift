@@ -31,23 +31,57 @@ nonisolated enum PhotoExporter {
             }
         }
     }
-    enum Size: String, CaseIterable, Identifiable, Sendable {
-        case full = "Full", large = "L", medium = "M", small = "S"
-        var title: String {
+    /// Output size, as in professional editors: resolved against the picture's native size
+    /// (crop, film edge and paper at one source pixel per output pixel) and never enlarged.
+    enum Size: Hashable, Sendable, RawRepresentable {
+        /// Every native pixel of what is shown. On paper the picture keeps its own resolution.
+        case original
+        /// Long edge in pixels.
+        case longEdge(Int)
+        /// Percentage of the native size.
+        case percent(Int)
+        /// A paper layout at this many pixels per inch of the sheet.
+        case print(ppi: Int)
+        static let full = Self.original, large = Self.longEdge(4096), medium = Self.longEdge(2048), small = Self.longEdge(1080)
+        static let longEdgePresets = [1080, 2048, 3000, 4096, 6000]
+        static let percentPresets = [25, 50, 75]
+        static let ppiPresets = [240, 300, 360]
+
+        /// The longest output edge for a picture whose native long edge is `native`; nil keeps
+        /// it native. `paperLongInches` is the sheet's long side for `.print`, if there is one.
+        func longEdge(native: Int, paperLongInches: Double? = nil) -> Int? {
+            let target: Int?
             switch self {
-            case .full: String(localized: "export.size.full", defaultValue: "Full")
-            case .large: String(localized: "export.size.large", defaultValue: "L")
-            case .medium: String(localized: "export.size.medium", defaultValue: "M")
-            case .small: String(localized: "export.size.small", defaultValue: "S")
+            case .original: target = nil
+            case .longEdge(let pixels): target = pixels
+            case .percent(let percent): target = Int((Double(native) * Double(percent) / 100).rounded())
+            case .print(let ppi): target = paperLongInches.map { Int(($0 * Double(ppi)).rounded()) }
+            }
+            guard let target, target > 0, target < native else { return nil }
+            return target
+        }
+        /// A fixed cap that does not depend on the picture (`.longEdge` only).
+        var maximum: Int? {
+            if case .longEdge(let pixels) = self { return pixels }
+            return nil
+        }
+        var rawValue: String {
+            switch self {
+            case .original: "original"
+            case .longEdge(let pixels): "long:\(pixels)"
+            case .percent(let percent): "percent:\(percent)"
+            case .print(let ppi): "print:\(ppi)"
             }
         }
-        var id: Self { self }
-        var maximum: Int? {
-            switch self {
-            case .full: nil
-            case .large: 4096
-            case .medium: 2048
-            case .small: 1080
+        init?(rawValue: String) {
+            let parts = rawValue.split(separator: ":")
+            let value = parts.count == 2 ? Int(parts[1]) : nil
+            switch (parts.first, value) {
+            case ("original", _): self = .original
+            case ("long", let v?) where (64...65_536).contains(v): self = .longEdge(v)
+            case ("percent", let v?) where (1...100).contains(v): self = .percent(v)
+            case ("print", let v?) where (72...1200).contains(v): self = .print(ppi: v)
+            default: return nil
             }
         }
     }
@@ -158,13 +192,13 @@ actor OriginalPhotoExporter {
             let data = try Data(contentsOf: source, options: .mappedIfSafe)
             let dimensions = try PhotoExporter.sourceDimensions(
                 data, sourceType: PhotoSource.typeHint(for: source))
-            let scale = min(
-                1, Double(size.maximum ?? Int.max) / max(dimensions.width, dimensions.height))
+            let maximum = size.longEdge(native: Int(max(dimensions.width, dimensions.height)))
+            let scale = min(1, Double(maximum ?? Int.max) / max(dimensions.width, dimensions.height))
             try PhotoSource.checkDevelopmentMemory(
                 width: max(1, Int(ceil(dimensions.width * scale))),
                 height: max(1, Int(ceil(dimensions.height * scale))))
             image = try PhotoExporter.renderOriginal(
-                data, crop: CropSelection(), geometry: ImageGeometry(), maximum: size.maximum,
+                data, crop: CropSelection(), geometry: ImageGeometry(), maximum: maximum,
                 sourceType: PhotoSource.typeHint(for: source))
             self.size = size
         }
