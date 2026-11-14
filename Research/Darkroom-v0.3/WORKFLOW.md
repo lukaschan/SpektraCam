@@ -2,6 +2,22 @@
 
 Updated 2026-11-10. This file is the repository handoff point; read it before continuing Darkroom work. Changes are local and uncommitted. Preserve the preexisting Xcode project version/signing edits.
 
+## Nov 14 (evening) — Worn blade edges, easel border and Fill
+
+**Negative scan** (`FilmEdgeType.invertedScan`, shown after Negative print): the print route's positive (`scanFilm = false`, same material defaults as Negative print) with `enlargerPrint = false`, so the scanner holder replaces the easel. The holder blocks the exposure and comes out paper-light; the thin rebate is dark (navy on a colour negative, as in P1485659); clear holes are black. No sheet by default (`printedLayout == nil`). Auto never selects it. Checked: no easel/sheet, inverted, holder light vs rebate dark; included in the CPU/Metal parity loop.
+
+**Blade edge, measured on IMG_1670/1674** (≈ 25.7 px/mm on the print): the blade line is crisp, 10–90 % in about 3.5–5.5 px (0.14–0.21 mm including the phone lens), with fine nicks and small steps but no ruled straightness. The gate edge on 1670 is the soft, rough one.
+
+- **One edge profile.** `FilmEdgeNoise.wear` (Metal `fe_wear`: 0.65 × broad 0.9 mm + 0.35 × fine 0.16 mm value noise) now drives both the camera gate's wear and the easel blades. On a film-edge enlarger print the blade is the carrier with `carrierRoughness = Easel.Kind.wear` (CPU and Metal, parity checked). On a clean print `Easel.mask` computes the same profile and the penumbra into an 8-bit mask (edge bands only), used by `PrintCompositor`, the Darkroom preview and the loupe.
+- **Easel pills:** Precise / Natural / Worn = 0.004 / 0.009 / 0.02 mm on the film (× magnification on paper). Blade penumbra uses h = 4.5 mm and 0.05 mm paper spread (≈ 0.16 mm on a 4 × 6, matching the measured 0.14–0.21 mm). Proof: `Claude/Edge-proof-nov14/blade-edge_real-vs-precise-natural-worn.png` in the vault.
+- **SwiftUI mask fix:** SwiftUI masks by alpha, so the grey blade mask needs `.luminanceToAlpha()`; without it the clean-print preview and loupe showed a hard edge (exports were right). Preview and loupe now draw one `PrintSheet` view, clipped to the sheet, so a borderless sheet never shows a border under the loupe.
+- **Hand-set placement is unchanged** (0.8 % of the sheet, 0.3°, 0.18 mm) but now **off by default**.
+- **Border replaces Image scale.** `PrintLayout.margin` is the narrowest white border as a fraction of the sheet's long side (mm on sized paper, % as image). The sheet never moves or resizes with it; as image it keeps the picture's proportions and the picture is inset. Nil is automatic: none for a clean print as image, 4 % on a sized sheet and around every film-edge enlarger print. **Fill** is borderless (covers the sheet, no blades). Old saved `scale` decodes as a border (< 1) or Fill (> 1). The film-edge canvas is placed so its nominal easel opening (`FilmEdgeLayout.easelFrame`) sits at the border; `EditRecipe.printedLayout` / `printContent` decide the sheet and what is on it.
+- **Defaults:** new film edges are Natural gate + Lab scan (the gate choice is no longer remembered), enlarger zoom 97 %. **Negative direct scan** moved last in the type row. Explanatory notes under controls removed; the zoom readout is one line. Dark-mode accent darkened to #C8238E.
+- Planned export size on paper now comes from the same integer sheet as the export; native sheet size uses a fine reference to avoid one-pixel rounding.
+
+**Verification:** darkroom (incl. blade wander precise < natural < worn, determinism, legacy scale), film-edge (CPU/Metal parity with worn blades, easel wear bounded), orientation, session benchmark, recipe, library, Metal, geometry: all PASS with `--optimized`.
+
 ## Nov 14 (later) — Square gate corners, export sizes, a leaner Darkroom
 
 - **Gate corner:** IMG_1675 (two Multigrade prints with rebate bands) shows inner corners of about 0.08–0.1 mm on film at about 97 px/mm. The 35 mm gate corner went from 0.4 mm to 0.1 mm.

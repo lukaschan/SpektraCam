@@ -19,8 +19,8 @@ struct DarkroomLoupe: View {
     var fullWidth: CGFloat? = nil
     /// Native-resolution pixels for the area under the lens, when they have been rendered.
     var patch: PhotoRenderer.Detail? = nil
-    /// A clean print's easel-blade penumbra, as a fraction of the picture's width.
-    var bladeEdge: CGFloat = 0
+    /// A clean print's easel blades (`Easel.mask`), over the picture.
+    var blades: CGImage? = nil
     /// Reports the part of the photograph under the lens (unit coordinates of `imageFrame`).
     var onInspect: ((CGRect) -> Void)? = nil
     @Binding var center: CGPoint?
@@ -56,27 +56,16 @@ struct DarkroomLoupe: View {
     var body: some View {
         let c = resolvedCenter, z = zoom, d = Self.diameter
         let offset = { (p: CGPoint) in CGPoint(x: d / 2 + (p.x - c.x) * z, y: d / 2 + (p.y - c.y) * z) }
-        let paperOrigin = offset(paperFrame.origin), imageOrigin = offset(imageFrame.origin)
+        let paperOrigin = offset(paperFrame.origin)
         ZStack {
             ZStack(alignment: .topLeading) {
                 surround
-                Rectangle().fill(paper)
-                    .frame(width: paperFrame.width * z, height: paperFrame.height * z)
+                // The same sheet as the preview, magnified: nothing past the paper's edge shows.
+                PrintSheet(image: image, size: CGSize(width: paperFrame.width * z, height: paperFrame.height * z),
+                           imageRect: CGRect(x: (imageFrame.minX - paperFrame.minX) * z, y: (imageFrame.minY - paperFrame.minY) * z,
+                                             width: imageFrame.width * z, height: imageFrame.height * z),
+                           paper: paper, blades: blades, patch: patch)
                     .offset(x: paperOrigin.x, y: paperOrigin.y)
-                ZStack(alignment: .topLeading) {
-                    Image(uiImage: image).resizable().interpolation(.high)
-                        .frame(width: imageFrame.width * z, height: imageFrame.height * z)
-                    if let patch {
-                        Image(decorative: patch.image, scale: 1).resizable().interpolation(.high)
-                            .frame(width: patch.rect.width * imageFrame.width * z,
-                                   height: patch.rect.height * imageFrame.height * z)
-                            .offset(x: patch.rect.minX * imageFrame.width * z,
-                                    y: patch.rect.minY * imageFrame.height * z)
-                    }
-                }
-                .frame(width: imageFrame.width * z, height: imageFrame.height * z, alignment: .topLeading)
-                .modifier(BladeEdge(width: bladeEdge * imageFrame.width * z))
-                .offset(x: imageOrigin.x, y: imageOrigin.y)
             }
             .frame(width: d, height: d, alignment: .topLeading)
             .clipShape(Circle())
@@ -125,19 +114,57 @@ struct DarkroomLoupe: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "darkroom.loupe", defaultValue: "Loupe"))
-        .accessibilityValue(doubled ? "200 %" : "100 %")
+        .accessibilityValue(Text(verbatim: doubled ? "200 %" : "100 %"))
         .accessibilityHint(String(localized: "darkroom.loupe_hint", defaultValue: "Drag over the print to inspect it. Double-tap to change magnification."))
         .accessibilityAction(named: String(localized: "darkroom.loupe_zoom", defaultValue: "Change magnification")) { doubled.toggle() }
         .accessibilityIdentifier("darkroom.loupe")
     }
 }
 
-/// The easel blade's penumbra on a clean print (see `Easel`): the picture fades to paper across it.
+/// The print as it lies on the table: the sheet, and the picture placed on it, masked by the easel
+/// blades and clipped to the sheet's edge. The Darkroom preview and the loupe draw this one view,
+/// so the lens can never show anything the print does not (a borderless sheet crops the picture).
+struct PrintSheet: View {
+    let image: UIImage?
+    /// The sheet, in points.
+    let size: CGSize
+    /// The picture (or film-edge canvas) on the sheet, in points; it may extend past the sheet.
+    let imageRect: CGRect
+    var paper = Color.white
+    var blades: CGImage? = nil
+    /// Native-resolution pixels over part of the picture (unit coordinates of `imageRect`).
+    var patch: PhotoRenderer.Detail? = nil
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            paper
+            if let image {
+                ZStack(alignment: .topLeading) {
+                    Image(uiImage: image).resizable().interpolation(.high)
+                        .frame(width: imageRect.width, height: imageRect.height)
+                    if let patch {
+                        Image(decorative: patch.image, scale: 1).resizable().interpolation(.high)
+                            .frame(width: patch.rect.width * imageRect.width, height: patch.rect.height * imageRect.height)
+                            .offset(x: patch.rect.minX * imageRect.width, y: patch.rect.minY * imageRect.height)
+                    }
+                }
+                .frame(width: imageRect.width, height: imageRect.height, alignment: .topLeading)
+                .modifier(BladeEdge(mask: blades))
+                .offset(x: imageRect.minX, y: imageRect.minY)
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .clipped()
+    }
+}
+
+/// The easel blades on a clean print (see `Easel.mask`): the picture fades to paper across their
+/// penumbra and worn edges.
 struct BladeEdge: ViewModifier {
-    let width: CGFloat
+    let mask: CGImage?
     func body(content: Content) -> some View {
-        if width > 0.3 {
-            content.mask { Rectangle().inset(by: width / 2).blur(radius: width / 4) }
+        if let mask {
+            // The mask is grey coverage (as Core Graphics clips with it); SwiftUI masks by alpha.
+            content.mask { Image(decorative: mask, scale: 1).resizable().interpolation(.high).luminanceToAlpha() }
         } else {
             content
         }

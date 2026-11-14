@@ -40,22 +40,28 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
     /// by raising or lowering the enlarger head. 100 % puts the blades on the frame edge; below,
     /// the opening shows a black band of rebate (at 90 % the holes start to show); above, the
     /// blades crop into the picture. The blades keep the frame's proportions.
-    var printZoom = 0.985
+    var printZoom = 0.97
     static let printZoomRange = 0.9...1.1
+    /// Enlarger print: paper rendered around the easel opening, in fractions of the frame's long
+    /// side; room for a hand-set blade's miss and its penumbra. The rest of the sheet is composited.
+    static let easelMargin = 0.025
+    /// The nominal easel opening inside an enlarger-print canvas of `size`, in unit coordinates.
+    func easelFrame(canvas size: CGSize) -> CGRect {
+        let halfLong = max(gateAlong, gateAcross) / 2 / printZoom, halfShort = min(gateAlong, gateAcross) / 2 / printZoom
+        let margin = Self.easelMargin * max(gateAlong, gateAcross)
+        let long = halfLong / (halfLong + margin), short = halfShort / (halfShort + margin)
+        let (fx, fy) = size.width >= size.height ? (long, short) : (short, long)
+        return CGRect(x: (1 - fx) / 2, y: (1 - fy) / 2, width: fx, height: fy)
+    }
     /// Rebate shown beyond the frame on film (positive) or picture cropped (negative), in mm,
     /// at the frame's ends and along its sides.
     var easelBorder: (ends: Double, sides: Double) {
         (gateAlong / 2 * (1 / printZoom - 1), gateAcross / 2 * (1 / printZoom - 1))
     }
-    /// The last gate type a person chose becomes the default for their next film edge.
-    static let gateKindKey = "darkroom.gateKind"
-    static var preferredGate: FilmEdgeGate.Kind {
-        get { UserDefaults.standard.string(forKey: gateKindKey).flatMap(FilmEdgeGate.Kind.init(rawValue:)) ?? .natural }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: gateKindKey) }
-    }
+    /// A new film edge: Natural gate, Lab scan handling.
     static func newDefault() -> Self {
         var layout = Self()
-        layout.gate = FilmEdgeGate(preferredGate)
+        layout.distress.apply(.lab)
         return layout
     }
     /// Gate along and across the film, in mm.
@@ -98,8 +104,8 @@ nonisolated struct FilmEdgeLayout: Codable, Equatable, Sendable {
         rollGate = try values.decodeIfPresent(RollGate.self, forKey: .rollGate) ?? .hasselblad
         gate = (try? values.decodeIfPresent(FilmEdgeGate.self, forKey: .gate)) ?? FilmEdgeGate()
         distress = try values.decodeIfPresent(FilmEdgeDistress.self, forKey: .distress) ?? FilmEdgeDistress()
-        let zoom = try values.decodeIfPresent(Double.self, forKey: .printZoom) ?? 0.985
-        printZoom = zoom.isFinite ? min(max(zoom, Self.printZoomRange.lowerBound), Self.printZoomRange.upperBound) : 0.985
+        let zoom = try values.decodeIfPresent(Double.self, forKey: .printZoom) ?? 0.97
+        printZoom = zoom.isFinite ? min(max(zoom, Self.printZoomRange.lowerBound), Self.printZoomRange.upperBound) : 0.97
     }
 }
 
@@ -351,6 +357,11 @@ nonisolated enum FilmEdgeNoise {
         let u = min(max(d / max(r, 1e-9), -1), 1)
         return 0.5 - (asin(u) + u * (1 - u * u).squareRoot()) / .pi
     }
+    /// Seeded unevenness of a cut edge in [-1, 1], the same profile for the camera gate and the
+    /// easel blades: a broad wander (0.9 mm) and a fine tooth (0.16 mm), in film millimetres.
+    static func wear(_ x: Double, _ y: Double, _ broad: UInt32, _ fine: UInt32) -> Double {
+        0.65 * value(x / 0.9, y / 0.9, broad) + 0.35 * value(x / 0.16, y / 0.16, fine)
+    }
     static func box(_ px: Double, _ py: Double, _ hx: Double, _ hy: Double, _ r: Double) -> Double {
         let qx = abs(px) - (hx - r), qy = abs(py) - (hy - r)
         return hypot(max(qx, 0), max(qy, 0)) + min(max(qx, qy), 0) - r
@@ -462,6 +473,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let handSet = resolved.enlargerPrint && easel?.handSet == true
         let easelSeed = easel?.easelSeed ?? 1
         if handSet { resolved.tilt = min(max(resolved.tilt + 0.3 * Easel.jitter(easelSeed, 3), -3.3), 3.3) }
+        // The blades' worn edge: the gate's wear profile at the easel's amplitude.
+        if resolved.enlargerPrint { resolved.carrierRoughness = (easel?.blade ?? .natural).wear }
         distress = resolved
         easelOffset = handSet ? (0.18 * Easel.jitter(easelSeed, 4), 0.18 * Easel.jitter(easelSeed, 5)) : (0, 0)
         // `portrait` means the film runs vertically on the canvas. 6 × 4.5 frames lie across the
@@ -475,7 +488,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         let extent: CGSize
         if distress.enlargerPrint {
             carrierHalf = (long / 2 / layout.printZoom, short / 2 / layout.printZoom)
-            let margin = 0.025 * max(long, short)
+            let margin = FilmEdgeLayout.easelMargin * max(long, short)
             extent = CGSize(width: 2 * (carrierHalf.along + margin), height: 2 * (carrierHalf.across + margin))
         } else {
             let alongReveal = 0.8, acrossReveal = format == .film35 ? 1.1 : 0.8, holder = 0.4
@@ -597,9 +610,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         var d = base
         if wear > 0 {
             let (a, t) = strip(fx, fy)
-            let broad = FilmEdgeNoise.value(a / 0.9, t / 0.9, seed(1))
-            let fine = FilmEdgeNoise.value(a / 0.16, t / 0.16, seed(2))
-            d += wear * (0.65 * broad + 0.35 * fine)
+            d += wear * FilmEdgeNoise.wear(a, t, seed(1), seed(2))
         }
         return erodesGate ? FilmEdgeNoise.penumbra(d + shift, pixelRadius) : FilmEdgeNoise.penumbra(d, r)
     }
@@ -787,6 +798,8 @@ nonisolated struct FilmEdgeGeometry: Sendable {
             + distress.carrierWave * FilmEdgeNoise.value(a / 11, t / 11, seed(52))
         let amplitude = distress.carrierRoughness
         guard amplitude > 0, base > -(amplitude * 1.6 + pixelRadius + distress.carrierBlur) else { return base }
+        // Easel blades: the gate's wear profile, centred on the blade's line.
+        if distress.enlargerPrint { return base + amplitude * FilmEdgeNoise.wear(a, t, seed(54), seed(55)) }
         let scale = distress.carrierScale
         // Mostly smooth filing with a little file-tooth texture and a few sparse nicks.
         let broad = 0.5 + 0.5 * (0.85 * FilmEdgeNoise.value(a / scale, t / scale, seed(6))
@@ -1077,6 +1090,17 @@ extension EditRecipe {
         guard var layout = filmEdgeLayout else { return nil }
         layout.distress.enlargerPrint = resolvedFilmEdgeType == .negativePrint
         return layout
+    }
+    /// The sheet this edit is printed on, or nil when the picture is shown as itself. A film-edge
+    /// enlarger print always has one: the easel's border is part of it.
+    nonisolated var printedLayout: PrintLayout? {
+        if renderedFilmEdgeLayout?.distress.enlargerPrint == true { return printLayout ?? PrintLayout() }
+        return printLayout.flatMap { $0.isIdentity ? nil : $0 }
+    }
+    /// What goes on the sheet, for a picture or film-edge canvas of `size`.
+    nonisolated func printContent(canvas size: CGSize) -> PrintGeometry.Content {
+        guard let layout = renderedFilmEdgeLayout else { return .picture }
+        return layout.distress.enlargerPrint ? .enlarger(frame: layout.easelFrame(canvas: size)) : .scan
     }
     /// Normalize old adaptive v5 recipes as well as live crop edits. Never mutate Develop.
     nonisolated mutating func constrainFilmEdgeCrop(imageSize: CGSize) {

@@ -187,7 +187,7 @@ import UniformTypeIdentifiers
         edgeRecipe.filmEdgeLayout = FilmEdgeLayout()
         var edgeChoice = FilmEdgeSelection(); edgeChoice.mode = .manual; edgeChoice.manualType = .reversalScan
         edgeRecipe.filmEdgeSelection = edgeChoice
-        var paper = PrintLayout(); paper.paper = .eightByTen; paper.scale = 0.75
+        var paper = PrintLayout(); paper.paper = .eightByTen; paper.margin = 0.125
         edgeRecipe.printLayout = paper
         edgeRecipe.tone.monochrome = true
         try await library!.finishEditing(photo.id, recipe: edgeRecipe)

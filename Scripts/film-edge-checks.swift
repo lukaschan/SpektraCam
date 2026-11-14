@@ -180,7 +180,7 @@ import UniformTypeIdentifiers
         // Enlarger print on a hand-set easel: offset opening, square blades, rotated projection.
         do {
             var printed = all; printed.enlargerPrint = true
-            var easel = PrintLayout(); easel.easelSeed = 9
+            var easel = PrintLayout(); easel.easelSeed = 9; easel.handSet = true
             selection.manualType = .negativePrint
             var recipe = base; recipe.filmEdgeSelection = selection
             let pipeline = try FilmPipeline(library: library, recipe: FilmEdgeRenderer.materialRecipe(recipe))
@@ -202,6 +202,25 @@ import UniformTypeIdentifiers
                 if error > 1e-3 { bad += 1 }
             }}
             precondition(bad == 0, "Enlarger print CPU/Metal disagreement: \(bad) values")
+        }
+        // Negative scan: the print's positive inside the scanner holder. The holder blocks the light
+        // and comes out light like paper, the thin rebate dark; no easel and no sheet by default.
+        do {
+            selection.manualType = .invertedScan
+            var recipe = base; recipe.filmEdgeSelection = selection; recipe.filmEdgeLayout = FilmEdgeLayout()
+            precondition(recipe.renderedFilmEdgeLayout?.distress.enlargerPrint == false && recipe.printedLayout == nil
+                && recipe.printContent(canvas: size) == .scan, "Negative scan used an easel or a sheet")
+            let pipeline = try FilmPipeline(library: library, recipe: FilmEdgeRenderer.materialRecipe(recipe))
+            precondition(!FilmEdgeRenderer.materialRecipe(recipe).scanFilm, "Negative scan was not inverted")
+            let g = geometry(FilmEdgeDistress(), longEdge: 1024, gate: FilmEdgeGate(.natural))
+            let scene = (0..<(g.width * g.height)).map { _ in RGB(0.18, 0.18, 0.18) }
+            let out = try pipeline.process(scene, width: g.width, height: g.height, stochastic: false, edge: g, autoExposureEV: 0)
+            let mm = g.millimetersPerPixel
+            let holderRow = (0..<g.height).first { g.carrierCoverage(x: g.width / 2, y: $0) > 0.02 }! / 2
+            let holder = out[holderRow * g.width + g.width / 2]
+            let rebate = out[Int(g.gate.minY - 0.5 / mm) * g.width + g.width / 2]
+            precondition(holder.sum() > 2.0 && rebate.sum() < 0.6 && holder.sum() > rebate.sum() + 1.5,
+                         "Negative scan holder \(holder) not light against the rebate \(rebate)")
         }
         // Amount 0 is exactly the clean edge; positions do not move with strength.
         var muted = all; muted.amount = 0
@@ -490,10 +509,13 @@ import UniformTypeIdentifiers
         precondition(abs(Double(exact.width) * exact.millimetersPerPixel - 2 * (18 / 0.95 + 0.9)) < 2 * exact.millimetersPerPixel,
             "Enlarger canvas is not the opening plus its paper margin")
         let row = Int((Double(exact.height) / 2 - exact.carrierHalf.across / exact.millimetersPerPixel).rounded())
+        // The blade is straight but worn like the gate: the line wanders by no more than its wear.
         let edgeDistances = stride(from: exact.width / 4, to: exact.width * 3 / 4, by: 7).map { exact.carrierDistance(x: $0, y: row) }
-        precondition(edgeDistances.allSatisfy { abs($0 - edgeDistances[0]) < 1e-9 }, "Easel blade is not straight")
+        let wear = Easel.Kind.natural.wear, spread = edgeDistances.max()! - edgeDistances.min()!
+        precondition(exact.distress.carrierRoughness == wear && spread > 0.1 * wear && spread <= 2 * wear + 1e-9,
+                     "Easel blade wear \(spread) mm for amplitude \(wear)")
         // Hand-set: up to 0.3° extra rotation and 0.18 mm offset, seeded; off is square and centred.
-        var easel = PrintLayout(); easel.easelSeed = 5
+        var easel = PrintLayout(); easel.easelSeed = 5; easel.handSet = true
         let set = geometry(hand, gate: FilmEdgeGate(.precise), easel: easel)
         easel.handSet = false
         let machine = geometry(hand, gate: FilmEdgeGate(.precise), easel: easel)
@@ -618,7 +640,7 @@ import UniformTypeIdentifiers
         }
         recipe.filmEdgeSelection = nil
         recipe.flags["camera.auto_exposure"] = true
-        var paper = PrintLayout(); paper.paper = .eightByTen; paper.scale = 0.75
+        var paper = PrintLayout(); paper.paper = .eightByTen; paper.margin = 0.125
         recipe.printLayout = paper
         recipe.tone.monochrome = true
         let restored = try JSONDecoder().decode(EditRecipe.self, from: JSONEncoder().encode(recipe))
@@ -656,14 +678,14 @@ import UniformTypeIdentifiers
                              "\(size.rawValue) on a crop gave \(w)×\(h), planned \(planned)")
             }
             var sheet = PrintLayout(); sheet.paper = .fourBySix; sheet.handSet = false
-            sheet.scale = 0.5
+            sheet.margin = 1.0 / 6
             plain.printLayout = sheet
             let small = await renderer.exportDimensions(plain, size: .original)
             precondition(max(small.width, small.height) == 900, "Half-scale picture on paper was not kept at native resolution: \(small)")
-            sheet.scale = 2
+            sheet.fill = true
             plain.printLayout = sheet
             let cropped = await renderer.exportDimensions(plain, size: .original)
-            precondition(max(cropped.width, cropped.height) == 225, "Picture cropped by the sheet was enlarged: \(cropped)")
+            precondition(max(cropped.width, cropped.height) == 450, "A borderless sheet resampled the picture: \(cropped)")
             let printed = await renderer.exportDimensions(plain, size: .print(ppi: 300))
             precondition(printed == cropped, "Print size enlarged a small picture: \(printed)")
             precondition(PhotoExporter.Size(rawValue: "long:2048") == .longEdge(2048) && PhotoExporter.Size(rawValue: "print:300") == .print(ppi: 300)
@@ -699,7 +721,16 @@ import UniformTypeIdentifiers
         let fixedCrop = recipe.crop.pixelRect(in: CGSize(width: 600, height: 900))
         let expected = FilmEdgeGeometry(imageSize: recipe.crop.pixelRect(in: CGSize(width: 600, height: 900)).size,
             layout: recipe.renderedFilmEdgeLayout!, longEdge: Int(max(fixedCrop.width, fixedCrop.height)), easel: PrintLayout())!
-        precondition(rotated.width == expected.width && rotated.height == expected.height)
+        // A negative print sits on its sheet with the easel's automatic border; a scan is the canvas.
+        if let sheetLayout = recipe.printedLayout {
+            let canvas = CGSize(width: expected.width, height: expected.height)
+            let sheet = PrintGeometry(imageSize: canvas, layout: sheetLayout, longEdge: CGFloat(max(rotated.width, rotated.height)),
+                                      content: recipe.printContent(canvas: canvas))!
+            precondition(rotated.width == Int(sheet.paperSize.width) && rotated.height == Int(sheet.paperSize.height),
+                         "Rotated print \(rotated.width)×\(rotated.height), sheet \(sheet.paperSize)")
+        } else {
+            precondition(rotated.width == expected.width && rotated.height == expected.height)
+        }
         recipe.look.enabled = false
         _ = try await renderer.renderFilmEdge(recipe, maximum: 256)
         recipe.look.enabled = true; recipe.look.mode = .lut

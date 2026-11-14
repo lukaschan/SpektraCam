@@ -21,7 +21,7 @@ struct ExportPanel: View {
         return chosen
     }
     private var hasPaper: Bool {
-        session?.recipe.printLayout.map { !$0.isIdentity && $0.paper != .asImage } ?? false
+        session?.recipe.printedLayout.map { $0.paper != .asImage } ?? false
     }
     @State private var expected = ""
     @State private var quality = 1.0

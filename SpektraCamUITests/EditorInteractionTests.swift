@@ -1305,26 +1305,32 @@ final class EditorInteractionTests: XCTestCase {
     @MainActor func testDarkroomLayoutHistoryAndReopening() {
         let app = openPhoto(activateLook: false, expanded: false)
         app.buttons["editor.export"].tap()
-        let scale = app.sliders["darkroom.scale"]
-        XCTAssertTrue(scale.waitForExistence(timeout: 5))
-        let fitScale = app.buttons["darkroom.scale.value"].value as? String
+        let border = app.sliders["darkroom.border"]
+        XCTAssertTrue(border.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["export.save"].exists, "Darkroom entry started the export sheet")
         XCTAssertTrue(app.buttons["darkroom.filmEdge"].isEnabled)
         app.buttons["8 × 10"].tap()
-        drag(scale, to: 0.3)
-        let chosenScale = app.buttons["darkroom.scale.value"].value as? String
-        XCTAssertNotEqual(chosenScale, fitScale)
+        let paperBorder = app.buttons["darkroom.border.value"].value as? String
+        drag(border, to: 0.3)
+        let chosenScale = app.buttons["darkroom.border.value"].value as? String
+        XCTAssertNotEqual(chosenScale, paperBorder)
         app.buttons["editor.history"].tap()
         app.buttons["Undo"].tap()
-        XCTAssertEqual(app.buttons["darkroom.scale.value"].value as? String, fitScale)
+        XCTAssertEqual(app.buttons["darkroom.border.value"].value as? String, paperBorder)
         app.buttons["editor.history"].tap()
         app.buttons["Redo"].tap()
-        XCTAssertEqual(app.buttons["darkroom.scale.value"].value as? String, chosenScale)
+        XCTAssertEqual(app.buttons["darkroom.border.value"].value as? String, chosenScale)
         let preview = XCTAttachment(screenshot: app.screenshot())
-        preview.name = "Darkroom fixed paper with image scale"
+        preview.name = "Darkroom fixed paper with easel border"
         preview.lifetime = .keepAlways
         add(preview)
-        app.buttons["darkroom.expand"].tap()
+        // Borderless: the loupe shows the same cropped sheet as the preview, never a border.
+        app.buttons["darkroom.fill"].tap()
+        let borderless = XCTAttachment(screenshot: app.screenshot())
+        borderless.name = "Darkroom borderless sheet under the loupe"
+        borderless.lifetime = .keepAlways
+        add(borderless)
+        app.buttons["darkroom.fill"].tap()
         XCTAssertTrue(app.buttons["darkroom.rotatePaper"].waitForExistence(timeout: 5))
         app.buttons["darkroom.rotatePaper"].tap()
         let expanded = XCTAttachment(screenshot: app.screenshot())
@@ -1334,13 +1340,13 @@ final class EditorInteractionTests: XCTestCase {
         app.buttons["editor.tool.develop"].tap()
         XCTAssertTrue(app.buttons["develop.mode.spektrafilm"].waitForExistence(timeout: 5))
         app.buttons["editor.export"].tap()
-        XCTAssertEqual(app.buttons["darkroom.scale.value"].value as? String, chosenScale)
+        XCTAssertEqual(app.buttons["darkroom.border.value"].value as? String, chosenScale)
         app.buttons["darkroom.back"].tap()
         XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 15))
         app.buttons["photo.develop"].tap()
         XCTAssertTrue(app.buttons["editor.export"].waitForExistence(timeout: 15))
         app.buttons["editor.export"].tap()
-        XCTAssertEqual(app.buttons["darkroom.scale.value"].value as? String, chosenScale)
+        XCTAssertEqual(app.buttons["darkroom.border.value"].value as? String, chosenScale)
     }
 
     @MainActor func testDarkroomPortraitPaperFollowsCrop() {
@@ -1465,10 +1471,10 @@ final class EditorInteractionTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["暗房"].waitForExistence(timeout: 5))
         app.buttons["8 × 10"].tap()
         app.buttons["darkroom.expand"].tap()
-        let scale = app.sliders["darkroom.scale"]
-        XCTAssertTrue(scale.waitForExistence(timeout: 5))
-        XCTAssertTrue(scale.isHittable)
-        XCTAssertLessThanOrEqual(scale.frame.maxX, app.frame.width - 12)
+        let border = app.sliders["darkroom.border"]
+        XCTAssertTrue(border.waitForExistence(timeout: 5))
+        XCTAssertTrue(border.isHittable)
+        XCTAssertLessThanOrEqual(border.frame.maxX, app.frame.width - 12)
         let capture = XCTAttachment(screenshot: app.screenshot())
         capture.name = "Darkroom Chinese accessibility text"
         capture.lifetime = .keepAlways

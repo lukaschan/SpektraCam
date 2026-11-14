@@ -47,13 +47,13 @@ struct ExportSizePicker: View {
             case .percent(let percent):
                 Picker(String(localized: "export.size.percent", defaultValue: "Percent"),
                        selection: Binding(get: { percent }, set: { size = .percent($0) })) {
-                    ForEach(PhotoExporter.Size.percentPresets, id: \.self) { Text("\($0) %").tag($0) }
+                    ForEach(PhotoExporter.Size.percentPresets, id: \.self) { Text(verbatim: "\($0) %").tag($0) }
                 }
                 .pickerStyle(.segmented).accessibilityIdentifier("export.size.percent")
             case .print(let ppi):
                 Picker(String(localized: "export.size.print", defaultValue: "Print"),
                        selection: Binding(get: { ppi }, set: { size = .print(ppi: $0) })) {
-                    ForEach(PhotoExporter.Size.ppiPresets, id: \.self) { Text("\($0) ppi").tag($0) }
+                    ForEach(PhotoExporter.Size.ppiPresets, id: \.self) { Text(verbatim: "\($0) ppi").tag($0) }
                 }
                 .pickerStyle(.segmented).accessibilityIdentifier("export.size.print")
                 caption(String(localized: "export.size.print_note", defaultValue: "The paper size at this resolution. Never enlarged."))

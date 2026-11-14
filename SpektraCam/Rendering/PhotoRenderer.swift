@@ -535,9 +535,9 @@ actor PhotoRenderer {
             else { throw PhotoExporter.Failure.render }
             photograph = cropped
         }
-        if let layout = recipe.printLayout, !layout.isIdentity {
+        if let layout = recipe.printedLayout {
             return try PrintCompositor.render(photograph, layout: layout, maximum: maximum, paper: Self.paper(recipe, photograph),
-                                              bladeEdge: recipe.filmEdgeLayout == nil)
+                                              content: recipe.printContent(canvas: CGSize(width: photograph.width, height: photograph.height)))
         }
         return photograph
     }
@@ -743,14 +743,20 @@ actor PhotoRenderer {
                                           easel: recipe.printLayout ?? PrintLayout()) {
             picture = CGSize(width: geometry.width, height: geometry.height)
         }
-        guard let layout = recipe.printLayout, recipe.filmEdgeLayout != nil || !layout.isIdentity else { return (picture, picture) }
-        return (picture, PrintCompositor.nativeSize(imageSize: picture, layout: layout))
+        guard let layout = recipe.printedLayout else { return (picture, picture) }
+        return (picture, PrintCompositor.nativeSize(imageSize: picture, layout: layout, content: recipe.printContent(canvas: picture)))
     }
     /// The file's pixel size for this export size, known before rendering.
     func exportDimensions(_ recipe: EditRecipe, size: PhotoExporter.Size) -> (width: Int, height: Int) {
-        let (_, output) = nativeExportSizes(recipe)
+        let (picture, output) = nativeExportSizes(recipe)
         let long = max(output.width, output.height)
         let target = exportLongEdges(recipe, size: size).output.map(Double.init) ?? long
+        // On paper, the same integer sheet the compositor will make at that long edge.
+        if let layout = recipe.printedLayout,
+           let sheet = PrintGeometry(imageSize: picture, layout: layout, longEdge: CGFloat(target.rounded()),
+                                     content: recipe.printContent(canvas: picture)) {
+            return (Int(sheet.paperSize.width), Int(sheet.paperSize.height))
+        }
         let factor = target / max(long, 1)
         return (max(1, Int((output.width * factor).rounded())), max(1, Int((output.height * factor).rounded())))
     }
@@ -758,7 +764,7 @@ actor PhotoRenderer {
     private func exportLongEdges(_ recipe: EditRecipe, size: PhotoExporter.Size) -> (picture: Int?, output: Int?) {
         let (picture, output) = nativeExportSizes(recipe)
         let outputLong = max(output.width, output.height), pictureLong = max(picture.width, picture.height)
-        let paper = recipe.printLayout.flatMap { $0.isIdentity ? nil : $0.paper.longMillimetres.map { $0 / 25.4 } }
+        let paper = recipe.printedLayout?.paper.longMillimetres.map { $0 / 25.4 }
         guard let cap = size.longEdge(native: Int(outputLong), paperLongInches: paper) else { return (nil, nil) }
         return (Int(ceil(Double(cap) * pictureLong / max(outputLong, 1))), cap)
     }
@@ -781,8 +787,9 @@ actor PhotoRenderer {
             await gpu.releaseWorkingCaches()
             do {
                 let edged = try await renderFilmEdge(recipe, maximum: caps.picture, allowOvercommit: allowOvercommit)
-                image = try recipe.printLayout.map {
-                    try PrintCompositor.render(edged, layout: $0, maximum: caps.output, paper: Self.paper(recipe, edged))
+                image = try recipe.printedLayout.map {
+                    try PrintCompositor.render(edged, layout: $0, maximum: caps.output, paper: Self.paper(recipe, edged),
+                                               content: recipe.printContent(canvas: CGSize(width: edged.width, height: edged.height)))
                 } ?? edged
             } catch {
                 await gpu.releaseWorkingCaches()
@@ -844,8 +851,8 @@ actor PhotoRenderer {
                     to: recipe.crop.pixelRect(
                         in: CGSize(width: transformed.width, height: transformed.height)))
             else { throw PhotoExporter.Failure.render }
-            if let layout = recipe.printLayout, !layout.isIdentity {
-                image = try PrintCompositor.render(cropped, layout: layout, maximum: caps.output, bladeEdge: true)
+            if let layout = recipe.printedLayout {
+                image = try PrintCompositor.render(cropped, layout: layout, maximum: caps.output)
             } else {
                 image = try Self.resize(cropped, maximum: caps.output)
             }

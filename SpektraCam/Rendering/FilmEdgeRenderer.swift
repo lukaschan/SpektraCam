@@ -19,7 +19,8 @@ nonisolated enum FilmEdgeRenderer {
         let positive = FilmStock.films.first { $0.id == recipe.filmID }?.isPositive == true
         let cinema = FilmStock.prints.first { $0.id == recipe.printID }?.support == "film"
         switch original.resolvedFilmEdgeType {
-        case .negativePrint:
+        // An inverted scan makes the same positive as a print; only the frame around it differs.
+        case .negativePrint, .invertedScan:
             if positive { recipe.filmID = "fujifilm_c200" }
             if cinema { recipe.printID = "fujifilm_crystal_archive_typeii" }
             recipe.scanFilm = false

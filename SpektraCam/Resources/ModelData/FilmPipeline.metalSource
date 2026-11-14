@@ -19,6 +19,8 @@ inline float fe_value(float x,float y,uint s){
     float c=fe_unit(fe_hash2(ix,iy+1,s)),d=fe_unit(fe_hash2(ix+1,iy+1,s));
     return ((a+(b-a)*ux)*(1-uy)+(c+(d-c)*ux)*uy)*2-1;
 }
+// The gate's and the easel blades' shared wear profile (FilmEdgeNoise.wear).
+inline float fe_wear(float2 s,uint broad,uint fine){return 0.65f*fe_value(s.x/0.9f,s.y/0.9f,broad)+0.35f*fe_value(s.x/0.16f,s.y/0.16f,fine);}
 inline float fe_penumbra(float d,float r){float u=clamp(d/max(r,1e-9f),-1.0f,1.0f);return 0.5f-(asin(u)+u*sqrt(max(1-u*u,0.0f)))/M_PI_F;}
 inline float fe_box(float2 p,float2 h,float r){float2 q=abs(p)-(h-r);return length(max(q,float2(0)))+min(max(q.x,q.y),0.0f)-r;}
 inline uint fe_seed(constant float4 *e,uint stream){uint seed=uint(e[4].x)|(uint(e[4].y)<<16);return fe_hash(seed^(stream*0x9e3779b9u));}
@@ -97,7 +99,7 @@ inline float edge_gate(float2 px,constant float4 *e){
     if(base+shift< -(r+wear))return 1;
     if(base+shift>r+wear)return 0;
     float d=base;
-    if(wear>0){float2 s=fe_strip(f,e);d+=wear*(0.65f*fe_value(s.x/0.9f,s.y/0.9f,fe_seed(e,1))+0.35f*fe_value(s.x/0.16f,s.y/0.16f,fe_seed(e,2)));}
+    if(wear>0){float2 s=fe_strip(f,e);d+=wear*fe_wear(s,fe_seed(e,1),fe_seed(e,2));}
     return e[3].y!=0?fe_penumbra(d+shift,pr):fe_penumbra(d,r);
 }
 inline float edge_leak_field(float2 f,constant float4 *e){
@@ -156,6 +158,8 @@ inline float edge_carrier_distance(float2 px,constant float4 *e){
     float2 s=fe_strip(c,e);float scale=1.2f;
     float base=fe_box(c,opening,e[11].x)+e[9].w*fe_value(s.x/11,s.y/11,fe_seed(e,52));float amplitude=e[5].x;
     if(amplitude<=0||base<= -(amplitude*1.6f+pr+e[14].x))return base;
+    // Easel blades (e[15].w < 0): the gate's wear profile, centred on the blade's line.
+    if(e[15].w<0)return base+amplitude*fe_wear(s,fe_seed(e,54),fe_seed(e,55));
     float broad=0.5f+0.5f*(0.85f*fe_value(s.x/scale,s.y/scale,fe_seed(e,6))+0.15f*fe_value(s.x/(0.2f*scale),s.y/(0.2f*scale),fe_seed(e,7)));
     float n=fe_value(s.x/(0.35f*scale),s.y/(0.35f*scale),fe_seed(e,8));
     float notch=clamp((n-0.6f)/0.3f,0.0f,1.0f);
