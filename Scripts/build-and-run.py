@@ -38,4 +38,4 @@ if "--run" in sys.argv and not ui_tests:
     device = devices[0]["udid"]
     app = OUTPUT / "Build/Products/Debug-iphonesimulator/SpektraCam.app"
     subprocess.run([SIM, "install", device, str(app)], env=ENV, check=True)
-    subprocess.run([SIM, "launch", "--terminate-running-process", device, "io.github.runzeni.andreavolpato-spektrafilm"], env=ENV, check=True)
+    subprocess.run([SIM, "launch", "--terminate-running-process", device, "io.github.runzeni.spektracam"], env=ENV, check=True)

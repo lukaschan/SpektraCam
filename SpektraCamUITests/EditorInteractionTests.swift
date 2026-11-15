@@ -3,7 +3,7 @@ import XCTest
 /// Native gestures catch integration faults that pixel/reference checks cannot observe.
 final class EditorInteractionTests: XCTestCase {
     @MainActor func testHorizontalCameraExposureControl() {
-        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.andreavolpato-spektrafilm")
+        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.spektracam")
         app.launchArguments = ["--ui-test-camera-controls"]
         app.launch()
         let slider = app.sliders["camera.exposure"]
@@ -775,7 +775,7 @@ final class EditorInteractionTests: XCTestCase {
     @MainActor private func importPhoto(count: Int = 1) -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
-        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.andreavolpato-spektrafilm")
+        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.spektracam")
         app.launchArguments = ["--ui-test-library", "--reset-test-library"]
         app.launch()
         XCTAssertTrue(app.buttons["library.import"].waitForExistence(timeout: 15))

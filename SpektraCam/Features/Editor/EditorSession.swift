@@ -22,7 +22,7 @@ import SwiftUI
     var filmRenderFailed = false
     @ObservationIgnored private var failureTask: Task<Void, Never>?
     @ObservationIgnored private static let logger = Logger(
-        subsystem: "io.github.runzeni.andreavolpato-spektrafilm", category: "Rendering")
+        subsystem: "io.github.runzeni.spektracam", category: "Rendering")
     var hasFilmPreview = false
     var isBusy: Bool { (isRendering || isProcessingFilm) && !isRefiningPreview }
     @ObservationIgnored private let filmRenderer: PhotoRenderer
