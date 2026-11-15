@@ -22,6 +22,12 @@ struct PhotoDetailView: View {
     @State private var working = false
     @State private var failure: String?
     @State private var layout = WorkspaceLayout.stacked
+    @State private var systemVerticalBar = false
+    /// A tap on the photo clears everything but the photo; another brings it back.
+    @State private var immersive = false
+    @State private var confirmRevert = false
+    @State private var confirmDelete = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private struct ExportRequest: Identifiable {
         let id = UUID()
         let session: EditorSession?
@@ -38,28 +44,37 @@ struct PhotoDetailView: View {
     }
     var body: some View {
         ZStack {
-            AlbumPager(photos: photos, images: library.images, selection: $selectedID)
+            AlbumPager(photos: photos, images: library.images, selection: $selectedID) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { immersive.toggle() }
+            }
             if working { ProgressView().padding().background(.regularMaterial, in: .capsule) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(PhotoTheme.canvas)
+        .background(immersive ? Color.black : PhotoTheme.canvas)
         .overlay(alignment: .bottom) {
             PhotoViewerControls(
                 photos: photos, images: library.images, selection: $selectedID,
                 working: working, develop: { prepareEditor(exporting: false) },
                 export: { prepareEditor(exporting: true) }, revert: revertPhoto,
-                canRevert: photo?.hasEdits == true, delete: deletePhoto, layout: layout
+                canRevert: photo?.hasEdits == true, delete: deletePhoto, layout: layout,
+                showsActions: !systemVerticalBar
             )
             .padding(.horizontal, 16).padding(.bottom, 12)
+            .opacity(immersive ? 0 : 1).allowsHitTesting(!immersive)
         }
+        .onSystemVerticalBar { systemVerticalBar = $0 }
+        .toolbarVisibility(immersive ? .hidden : .automatic, for: .navigationBar, .bottomBar)
+        .statusBarHidden(immersive)
         .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .overlay(alignment: .top) {
             if let photo {
+                let recipe = savedRecipe
                 PhotoInfoPanel(
-                    title: filmTitle, subtitle: printTitle, metadata: displayMetadata,
+                    title: filmTitle(recipe), subtitle: printTitle(recipe), metadata: displayMetadata,
                     location: photo.locationName, histogram: histogram, identifier: "photo"
                 )
                 .padding(.horizontal, 12).padding(.top, 4)
+                .opacity(immersive ? 0 : 1).allowsHitTesting(!immersive)
             }
         }
         .navigationTitle(String(localized: "photo.photo", defaultValue: "Photo"))
@@ -70,6 +85,31 @@ struct PhotoDetailView: View {
                 if let photo { PhotoBanner(photo: photo) }
             }
             PhotoWorkspaceCameraToolbar()
+            // Where the system keeps a bar on the side, the actions live in it.
+            if systemVerticalBar { sideBarActions }
+        }
+        .confirmationDialog(
+            String(localized: "photo.revert_confirm", defaultValue: "Revert to original?"),
+            isPresented: $confirmRevert, titleVisibility: .visible
+        ) {
+            Button(
+                String(localized: "library.revert_to_original", defaultValue: "Revert to Original"),
+                role: .destructive, action: revertPhoto)
+        }
+        .confirmationDialog(
+            String(localized: "photo.delete_confirm", defaultValue: "Delete Photo?"),
+            isPresented: $confirmDelete, titleVisibility: .visible
+        ) {
+            Button(
+                String(localized: "photo.delete_app_copy", defaultValue: "Delete App Copy"),
+                role: .destructive, action: deletePhoto)
+        } message: {
+            Text(
+                String(
+                    localized: "photo.delete_message",
+                    defaultValue:
+                        "This removes the app copy and its edits. Your source photo stays unchanged."
+                ))
         }
         .task(id: "\(selectedID)-\(photo?.renderKey ?? "")-\(previewMaximum)") {
             await loadPreview()
@@ -102,19 +142,43 @@ struct PhotoDetailView: View {
         }
         .failureAlert(String(localized: "photo.photo", defaultValue: "Photo"), message: $failure)
     }
+    @ToolbarContentBuilder private var sideBarActions: some ToolbarContent {
+        ToolbarItem(placement: .bottomBar) {
+            Button(String(localized: "editor.develop", defaultValue: "Develop"), systemImage: "camera.filters") {
+                prepareEditor(exporting: false)
+            }
+            .tint(Color.accentColor).disabled(working).accessibilityIdentifier("photo.develop")
+        }
+        ToolbarSpacer(.fixed, placement: .bottomBar)
+        ToolbarItemGroup(placement: .bottomBar) {
+            Button(String(localized: "common.export", defaultValue: "Export"), systemImage: "square.and.arrow.up") {
+                prepareEditor(exporting: true)
+            }
+            .disabled(working).accessibilityIdentifier("photo.export")
+            Button(String(localized: "common.revert", defaultValue: "Revert"), systemImage: "arrow.uturn.backward") {
+                confirmRevert = true
+            }
+            .disabled(working || photo?.hasEdits != true).accessibilityIdentifier("photo.revert")
+            Button(String(localized: "common.delete", defaultValue: "Delete"), systemImage: "trash", role: .destructive) {
+                confirmDelete = true
+            }
+            .disabled(working).accessibilityIdentifier("photo.delete")
+        }
+    }
     private var savedRecipe: EditRecipe? {
         photo?.recipeData.flatMap { try? JSONDecoder().decode(EditRecipe.self, from: $0) }
     }
-    private var filmTitle: String {
-        guard let recipe = savedRecipe, recipe.look.enabled else {
+    // The saved recipe is decoded once per update and shared by both titles.
+    private func filmTitle(_ saved: EditRecipe?) -> String {
+        guard let recipe = saved, recipe.look.enabled else {
             return String(localized: "photo.original", defaultValue: "Original")
         }
         if recipe.look.mode == .lut { return "3D LUT" }
         return FilmStock.films.first { $0.id == recipe.filmID }?.name
             ?? String(localized: "film_stock.film", defaultValue: "Film")
     }
-    private var printTitle: String {
-        guard let recipe = savedRecipe, recipe.look.enabled else {
+    private func printTitle(_ saved: EditRecipe?) -> String {
+        guard let recipe = saved, recipe.look.enabled else {
             return photo?.isRAW == true
                 ? "RAW"
                 : photo?.metadata.formatLabel
@@ -270,9 +334,17 @@ private struct PhotoViewerControls: View {
     let canRevert: Bool
     let delete: () -> Void
     var layout = WorkspaceLayout.stacked
+    /// False where the system's side bar already carries the actions.
+    var showsActions = true
     @State private var confirmRevert = false
     var body: some View {
-        if layout == .sideBySide { sideBySide } else { stacked }
+        if !showsActions {
+            PhotoFilmstrip(photos: photos, images: images, selection: $selection).disabled(working)
+        } else if layout == .sideBySide {
+            sideBySide
+        } else {
+            stacked
+        }
     }
     /// With width to spare, the actions run down the trailing edge and leave the photo its height.
     private var sideBySide: some View {
@@ -412,6 +484,7 @@ struct AlbumPhotoPage: View {
     @AppStorage(PreviewQuality.libraryKey) private var previewMaximum = PreviewQuality.defaultMaximum
     let photo: LibraryPhoto
     let images: LibraryImages
+    var onTap: (() -> Void)? = nil
     @State private var image: UIImage?
     @State private var failure: String?
     @State private var retry = 0
@@ -419,7 +492,8 @@ struct AlbumPhotoPage: View {
         Group {
             if let image {
                 PhotoViewport(image: image, topInset: PhotoInfoPanel.collapsedHeight + 4,
-                    edited: photo.hasEdits, topAligned: false, usePortraitReference: true)
+                    edited: photo.hasEdits, topAligned: false, usePortraitReference: true,
+                    onTap: { _ in onTap?() })
             } else if let failure {
                 ContentUnavailableView {
                     Label(

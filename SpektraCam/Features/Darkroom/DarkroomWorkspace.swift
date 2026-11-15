@@ -7,6 +7,9 @@ struct DarkroomWorkspace: View {
     var layout = WorkspaceLayout.stacked
     var adjustCrop: () -> Void = {}
     @State private var image: UIImage?
+    /// The edit and quality `image` shows, so an unchanged edit is never rendered again.
+    @State private var imageKey: EditRecipe?
+    @State private var imageMaximum = 0
     @State private var pending = false
     @State private var failure: String?
     @State private var retry = 0
@@ -95,13 +98,20 @@ struct DarkroomWorkspace: View {
             failure = nil
             guard !suspended, renderKey.filmEdgeLayout != nil else { return }
             let recipe = renderKey
+            // While a distress slider moves, keep to the quick preview; refine once it settles.
+            // Closing the export sheet or ending a drag restarts this task with the same edit:
+            // only render what is sharper than the frame already on screen.
+            let shown = imageKey == recipe ? imageMaximum : 0
+            let steps = (interacting ? [720] : [720, PreviewQuality.editorMaximum]).filter { $0 > shown }
+            guard !steps.isEmpty else { return }
             pending = true
             do {
-                // While a distress slider moves, keep to the quick preview; refine once it settles.
-                for maximum in interacting ? [720] : [720, PreviewQuality.editorMaximum] {
+                for maximum in steps {
                     let frame = try await session.filmEdgePreview(recipe, maximum: maximum)
                     try Task.checkCancellation()
                     image = UIImage(cgImage: frame)
+                    imageKey = recipe
+                    imageMaximum = maximum
                 }
                 pending = false
             } catch is CancellationError {

@@ -226,7 +226,7 @@ import SwiftData
             }
         }
         luts.clearReferences(to: ids)
-        await images.discardMemory()
+        await images.discardPreviews()
         try await luts.remove(ids, protected: usedLUTIdentifiers)
     }
     func revert(_ ids: Set<UUID>) async throws {
@@ -239,7 +239,7 @@ import SwiftData
                 photos[index] = try record.snapshot()
             }
         }
-        await images.discardMemory()
+        await images.discardPreviews()
     }
     func finishEditing(_ id: UUID, recipe: EditRecipe?) async throws {
         guard let record = records[id] else { throw LibraryFiles.Failure.missing }
@@ -270,7 +270,7 @@ import SwiftData
         // Caches are replaceable. A cache failure must not undo a durable recipe save.
         // Viewer previews have their own resolution and color policy. Rebuild from the source,
         // rather than storing an editor interaction proxy under a higher-quality cache key.
-        await images.discardMemory()
+        await images.discardPreviews()
         if let index = photos.firstIndex(where: { $0.id == id }) { photos[index] = saved }
     }
     func recipe(_ id: UUID) throws -> EditRecipe? {
@@ -309,6 +309,6 @@ import SwiftData
             photos.removeAll { $0.id == id }
             await files.finishRemoval(staged, photo: photo)
         }
-        await images.discardMemory()
+        await images.discardPreviews()
     }
 }

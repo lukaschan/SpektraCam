@@ -8,7 +8,7 @@ final class AdaptiveLayoutTests: XCTestCase {
     private var shots: String? { ProcessInfo.processInfo.environment["SPEKTRACAM_LAYOUT_SHOTS"] }
 
     @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
-        let screenshot = XCUIScreen.main.screenshot()
+        let screenshot = app.windows.firstMatch.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways

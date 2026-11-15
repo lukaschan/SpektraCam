@@ -19,3 +19,21 @@ nonisolated enum WorkspaceLayout: Equatable, Sendable {
         min(420, max(300, width * 0.38))
     }
 }
+
+extension View {
+    /// Report whether the system is showing its bars vertically along a side, as iPhone Duo
+    /// does on its outer display and on its inner display in landscape. Toolbar items made of a
+    /// title and a symbol move there on their own; custom views do not.
+    @ViewBuilder func onSystemVerticalBar(_ action: @escaping (Bool) -> Void) -> some View {
+        if #available(iOS 27.1, *) { modifier(VerticalBarProbe(action: action)) } else { self }
+    }
+}
+
+@available(iOS 27.1, *)
+private struct VerticalBarProbe: ViewModifier {
+    @Environment(\.toolbarVerticalEdge) private var edge
+    let action: (Bool) -> Void
+    func body(content: Content) -> some View {
+        content.onChange(of: edge != nil, initial: true) { _, vertical in action(vertical) }
+    }
+}

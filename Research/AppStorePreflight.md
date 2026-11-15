@@ -156,6 +156,44 @@ container that would align it. The camera layout could only be checked with the 
 App Store consequences: iPad screenshots (13-inch set) are now required, and the earlier iPad
 compatibility-mode warning no longer applies.
 
+### Duo side bar, library and photo page (second pass)
+
+- Where the system shows its bars vertically (`toolbarVerticalEdge`, iOS 27.1+), the editor
+  tools, library actions and photo-page actions are plain title-and-symbol toolbar items, so the
+  system stacks them in its own side bar. The custom tool rail remains only where there is no
+  system side bar (iPad, iPhone landscape).
+- Photo page: a tap on the photo hides all chrome on black; a second tap restores it.
+- Library: long-press a thumbnail for Select and Delete; day grouping is one pass over the
+  already-sorted photos instead of a dictionary grouping plus two sorts per update.
+- Image cache: thumbnails (48 MB) and viewer previews (3 images) are cached separately. Before,
+  one 32 MB cache held both, and three 2160 px previews evicted the whole grid. Edits, reverts
+  and deletes now drop only the previews.
+- Darkroom: an unchanged edit is no longer re-rendered (low then high quality) when the export
+  sheet closes or a drag ends.
+
+Checked: layout test on the unfolded Duo (landscape), 17 editor/library/Darkroom UI tests on
+iPhone, library and request-pool checks, editor-session benchmark in the simulator.
+`testFilmstripAndEditedBadge` and `testPhotoPinchThenPage` fail, and fail the same way on `main`.
+
+### Performance and bit depth
+
+Mac GPU (M5 Max), 1080 x 810 full film graph: about 12.5 ms GPU, 18 ms wall per frame. This is
+not a phone measurement. An optimized benchmark build is installed on the iPhone 15 Pro Max but
+could not be launched while the phone was locked:
+
+```sh
+xcrun devicectl device process launch --device 00008130-001651AA3AA2001C --terminate-existing io.github.runzeni.spektracam --check-performance --performance-run base
+xcrun devicectl device process launch --device 00008130-001651AA3AA2001C --terminate-existing io.github.runzeni.spektracam --check-performance --performance-sliders --performance-run sliders
+```
+
+Each writes `performance-<label>.json` to the app's Caches directory.
+
+The film graph works in 32-bit float (16 bytes per pixel in Metal buffers; grading textures are
+`rgba32Float`). Keep it: densities, FFT diffusion and Poisson grain need the range and
+precision, and tiling already bounds peak memory by the tile, not the image. Half float would
+only pay off for the file-backed scene-linear stores of a full-size export (16 to 8 bytes per
+pixel on disk); that is a measured follow-up, not a pre-release change.
+
 ## Order of work from here
 
 1. Get Andrea Volpato's written permission for App Store distribution; add the notice.

@@ -32,6 +32,8 @@ enum EditorTool: String, CaseIterable, Identifiable {
 struct EditorToolbar: ToolbarContent {
     @Binding var activeTool: EditorTool?
     var darkroomActive = false
+    /// The system stacks plain title-and-symbol items in its side bar; labelled tiles stay in a row.
+    var systemVerticalBar = false
     let openDarkroom: () -> Void
     let export: () -> Void
     private var actionTitle: String {
@@ -40,7 +42,27 @@ struct EditorToolbar: ToolbarContent {
             : String(localized: "darkroom.title", defaultValue: "Darkroom")
     }
     private var actionSymbol: String { darkroomActive ? "square.and.arrow.up" : "lightbulb" }
-    var body: some ToolbarContent {
+    @ToolbarContentBuilder var body: some ToolbarContent {
+        if systemVerticalBar { plainItems } else { tiles }
+    }
+    @ToolbarContentBuilder private var plainItems: some ToolbarContent {
+        ToolbarItemGroup(placement: .bottomBar) {
+            ForEach(EditorTool.allCases) { tool in
+                Button(tool.title, systemImage: tool.symbolName) {
+                    activeTool = activeTool == tool ? nil : tool
+                }
+                .tint(activeTool == tool ? Color.accentColor : Color.primary)
+                .accessibilityAddTraits(activeTool == tool ? .isSelected : [])
+                .accessibilityIdentifier("editor.tool." + tool.rawValue)
+            }
+        }
+        ToolbarSpacer(.fixed, placement: .bottomBar)
+        ToolbarItem(placement: .bottomBar) {
+            Button(actionTitle, systemImage: actionSymbol, action: darkroomActive ? export : openDarkroom)
+                .accessibilityIdentifier(darkroomActive ? "darkroom.export" : "editor.export")
+        }
+    }
+    @ToolbarContentBuilder private var tiles: some ToolbarContent {
         ToolbarItem(placement: .bottomBar) {
             ControlGroup {
                 ForEach(EditorTool.allCases) { tool in

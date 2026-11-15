@@ -22,15 +22,28 @@ struct LibraryView: View {
     @State private var handledCameraRequest = 0
     @State private var scrollRevision = 0
     @State private var batchRequest: BatchRequest?
+    @State private var systemVerticalBar = false
+    @Environment(\.openCamera) private var openCamera
     private struct BatchRequest: Identifiable {
         let id = UUID()
         let items: [BatchExportItem]
     }
     private enum ImportSource { case photos, files }
     private var visible: [LibraryPhoto] { library.photos.filter { filter.includes($0) } }
+    /// Newest day first, newest photo first. The library keeps its photos in date order, so
+    /// one pass from the end groups them without hashing or sorting.
     private var sections: [(day: Date, photos: [LibraryPhoto])] {
-        Dictionary(grouping: visible, by: { Calendar.current.startOfDay(for: $0.date) })
-            .map { (day: $0.key, photos: $0.value) }.sorted { $0.day > $1.day }
+        let calendar = Calendar.current
+        var result: [(day: Date, photos: [LibraryPhoto])] = []
+        for photo in visible.reversed() {
+            let day = calendar.startOfDay(for: photo.date)
+            if result.last?.day == day {
+                result[result.count - 1].photos.append(photo)
+            } else {
+                result.append((day, [photo]))
+            }
+        }
+        return result
     }
     private func presented(_ source: ImportSource) -> Binding<Bool> {
         Binding(
@@ -47,9 +60,13 @@ struct LibraryView: View {
         NavigationStack(path: $path) {
             gallery
                 .overlay(alignment: .bottomTrailing) {
-                    CameraButton(prominent: true)
-                        .padding(.trailing, 26).padding(.bottom, 12)
+                    // Where the system keeps a bar on the side, the camera joins it.
+                    if !systemVerticalBar {
+                        CameraButton(prominent: true)
+                            .padding(.trailing, 26).padding(.bottom, 12)
+                    }
                 }
+                .onSystemVerticalBar { systemVerticalBar = $0 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     Text(
                         selecting
@@ -111,8 +128,13 @@ struct LibraryView: View {
                             selecting.toggle()
                             selection.removeAll()
                         } label: {
+                            // A side bar shows symbols; a top bar has room for the word.
                             if selecting {
                                 Image(systemName: "xmark")
+                            } else if systemVerticalBar {
+                                Label(
+                                    String(localized: "common.select", defaultValue: "Select"),
+                                    systemImage: "checkmark.circle")
                             } else {
                                 Text(String(localized: "common.select", defaultValue: "Select"))
                             }
@@ -207,10 +229,27 @@ struct LibraryView: View {
                     }
                     ToolbarSpacer(.flexible, placement: .bottomBar)
                     ToolbarItem(placement: .bottomBar) {
-                        Button(
-                            String(localized: "lut.manager", defaultValue: "LUT Manager")
-                        ) { showLUTs = true }
+                        Button {
+                            showLUTs = true
+                        } label: {
+                            if systemVerticalBar {
+                                Label(
+                                    String(localized: "lut.manager", defaultValue: "LUT Manager"),
+                                    systemImage: "cube")
+                            } else {
+                                Text(String(localized: "lut.manager", defaultValue: "LUT Manager"))
+                            }
+                        }
                         .accessibilityIdentifier("library.luts").disabled(working)
+                    }
+                    if systemVerticalBar {
+                        ToolbarItem(placement: .bottomBar) {
+                            Button(
+                                String(localized: "camera.camera", defaultValue: "Camera"),
+                                systemImage: "camera"
+                            ) { openCamera?() }
+                            .tint(Color.accentColor).accessibilityIdentifier("camera.open")
+                        }
                     }
                     ToolbarSpacer(.flexible, placement: .bottomBar)
                     ToolbarItem(placement: .bottomBar) {
@@ -309,7 +348,7 @@ struct LibraryView: View {
                         ) {
                             ForEach(sections, id: \.day) { section in
                                 Section {
-                                    ForEach(section.photos.sorted { $0.date > $1.date }) { photo in
+                                    ForEach(section.photos) { photo in
                                         Button {
                                             if selecting {
                                                 if selection.contains(photo.id) {
@@ -348,6 +387,23 @@ struct LibraryView: View {
                                         )
                                         .accessibilityIdentifier("library.photo.\(photo.id)")
                                         .id(photo.id)
+                                        .contextMenu {
+                                            Button(
+                                                String(localized: "common.select", defaultValue: "Select"),
+                                                systemImage: "checkmark.circle"
+                                            ) {
+                                                selecting = true
+                                                selection = [photo.id]
+                                            }
+                                            Button(
+                                                String(localized: "common.delete", defaultValue: "Delete"),
+                                                systemImage: "trash", role: .destructive
+                                            ) {
+                                                selecting = true
+                                                selection = [photo.id]
+                                                confirmDelete = true
+                                            }
+                                        }
                                     }
                                 } header: {
                                     Text(dayTitle(section.day)).font(.headline).frame(

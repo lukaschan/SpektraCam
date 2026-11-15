@@ -27,6 +27,7 @@ struct EditorView: View {
     @State private var showResetConfirmation = false
     @State private var showRenderProgress = false
     @State private var layout = WorkspaceLayout.stacked
+    @State private var systemVerticalBar = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -39,7 +40,7 @@ struct EditorView: View {
                     editorWorkspace
                 }
             }
-            if layout == .sideBySide {
+            if layout == .sideBySide && !systemVerticalBar {
                 EditorToolRail(
                     activeTool: toolSelection, darkroomActive: showDarkroom,
                     openDarkroom: openDarkroom, export: { showExport = true }
@@ -49,6 +50,7 @@ struct EditorView: View {
         }
         .background(PhotoTheme.canvas)
         .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
+        .onSystemVerticalBar { systemVerticalBar = $0 }
         .background(EditorNavigationGuard().allowsHitTesting(false))
         .navigationTitle(
             showDarkroom
@@ -58,9 +60,11 @@ struct EditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            if layout == .stacked {
+            // A wide space has its own tool rail, unless the system already keeps a bar on the side.
+            if layout == .stacked || systemVerticalBar {
                 EditorToolbar(
                     activeTool: toolSelection, darkroomActive: showDarkroom,
+                    systemVerticalBar: systemVerticalBar,
                     openDarkroom: openDarkroom, export: { showExport = true })
             }
             ToolbarItem(placement: .topBarLeading) {

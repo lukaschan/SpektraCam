@@ -5,7 +5,10 @@ import Foundation
 actor LibraryImages {
     let files: LibraryFiles
     private let directory: URL
-    private let memory = NSCache<NSString, CGImage>()
+    /// Grid thumbnails and viewer previews are cached apart. A 2160 px preview is thirty times a
+    /// thumbnail; in one cache, paging through three photos evicted the whole grid.
+    private let thumbnails = NSCache<NSString, CGImage>()
+    private let previews = NSCache<NSString, CGImage>()
     private let requests = ImageRequestPool<CGImage>()
     private var tail: (id: UUID, task: Task<CGImage, Error>)?
     nonisolated let resources: FilmRenderResources
@@ -15,7 +18,8 @@ actor LibraryImages {
         self.files = files
         self.directory = directory
         resources = FilmRenderResources(directory: directory)
-        memory.totalCostLimit = 32 * 1024 * 1024
+        thumbnails.totalCostLimit = 48 * 1024 * 1024  // About 120 thumbnails at 384 px.
+        previews.countLimit = 3  // The photo on screen and a neighbour on each side.
     }
     func image(_ photo: LibraryPhoto, thumbnail: Bool) async throws -> CGImage {
         let maximum =
@@ -29,12 +33,13 @@ actor LibraryImages {
     /// This path never starts a RAW decode or rebuilds a missing thumbnail.
     func cachedThumbnail(_ photo: LibraryPhoto) async -> CGImage? {
         let key = "\(photo.id)-\(photo.renderKey)-true-\(ImportedPhoto.thumbnailMaximumPixelSize)" as NSString
-        if let image = memory.object(forKey: key) { return image }
+        if let image = thumbnails.object(forKey: key) { return image }
         return await files.cachedImage(photo, thumbnail: true)
     }
     private func load(_ photo: LibraryPhoto, thumbnail: Bool, maximum: Int) async throws -> CGImage
     {
         let key = "\(photo.id)-\(photo.renderKey)-\(thumbnail)-\(maximum)" as NSString
+        let memory = thumbnail ? thumbnails : previews
         if let image = memory.object(forKey: key) { return image }
         if let image = await files.cachedImage(photo, thumbnail: thumbnail, maximum: maximum) {
             memory.setObject(image, forKey: key, cost: image.width * image.height * 4)
@@ -107,10 +112,17 @@ actor LibraryImages {
     }
     func store(_ image: CGImage, photo: LibraryPhoto) async throws {
         try await files.storePreview(image, photo: photo)
-        memory.removeAllObjects()
+        discardMemory()
+    }
+    /// After an edit, revert or delete: every key carries the photo's render key, so a changed
+    /// photo can never hit a stale entry. Only the large previews are worth dropping; the grid
+    /// keeps its thumbnails instead of reloading every cell from disk.
+    func discardPreviews() {
+        previews.removeAllObjects()
     }
     func discardMemory() {
-        memory.removeAllObjects()
+        thumbnails.removeAllObjects()
+        previews.removeAllObjects()
     }
     func beginEditing(owner: UUID) async { await requests.pause(owner: owner) }
     func endEditing(owner: UUID) async { await requests.resume(owner: owner) }
@@ -119,7 +131,7 @@ actor LibraryImages {
         await requests.pause(owner: exportOwner)
         await files.discardPreparedPhoto()
         tail = nil
-        memory.removeAllObjects()
+        discardMemory()
         if !Task.isCancelled, let (_, gpu) = try? await resources.load() {
             await gpu.releaseWorkingCaches()
         }
