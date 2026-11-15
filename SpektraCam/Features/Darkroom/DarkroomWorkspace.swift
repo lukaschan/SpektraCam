@@ -4,6 +4,7 @@ import SwiftUI
 struct DarkroomWorkspace: View {
     let session: EditorSession
     var suspended = false
+    var layout = WorkspaceLayout.stacked
     var adjustCrop: () -> Void = {}
     @State private var image: UIImage?
     @State private var pending = false
@@ -57,7 +58,7 @@ struct DarkroomWorkspace: View {
         abs(log((displayedImage.size.width / displayedImage.size.height) / (expectedSize.width / expectedSize.height))) < 0.015
     }
     var body: some View {
-        DarkroomView(image: displayedImage,
+        DarkroomView(image: displayedImage, workspace: layout,
             layout: session.binding(\.printLayout, key: "darkroom.layout"),
             edge: Binding(get: { session.recipe.filmEdgeLayout }, set: { layout in
                 let needsCrop = layout.map { !$0.matchesGate(cropSize) } ?? false

@@ -39,6 +39,15 @@ struct ContentView: View {
                         }
                     }
                     .task {
+                        #if DEBUG && targetEnvironment(simulator)
+                            // Layout checks import a host file directly, without the system picker.
+                            let arguments = ProcessInfo.processInfo.arguments
+                            if let flag = arguments.firstIndex(of: "--ui-test-import"), flag + 1 < arguments.count,
+                                library.photos.isEmpty
+                            {
+                                _ = try? await library.importPhoto(URL(fileURLWithPath: arguments[flag + 1]))
+                            }
+                        #endif
                         await recoverCaptures(library)
                         try? await library.luts.load()
                         try? await library.repairRAWDimensions()
@@ -100,7 +109,7 @@ struct ContentView: View {
                 String(
                     localized: "camera.capture_kept_with_error",
                     defaultValue:
-                        "The capture is kept on this iPhone. \(captureImportFailure ?? "")"))
+                        "The capture is kept on this device. \(captureImportFailure ?? "")"))
         }
         .alert(
             String(localized: "editor.couldn_t_save_edits", defaultValue: "Couldn’t save edits"),

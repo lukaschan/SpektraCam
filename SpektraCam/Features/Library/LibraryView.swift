@@ -304,7 +304,7 @@ struct LibraryView: View {
                     ScrollView {
                         Color.clear.frame(height: 0).id("library.latest")
                         LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3),
+                            columns: [GridItem(.adaptive(minimum: 118), spacing: 2)],
                             spacing: 2
                         ) {
                             ForEach(sections, id: \.day) { section in

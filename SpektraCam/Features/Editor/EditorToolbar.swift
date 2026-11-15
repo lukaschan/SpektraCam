@@ -70,9 +70,61 @@ struct EditorToolbar: ToolbarContent {
         }
     }
     private func toolLabel(_ title: String, symbol: String, selected: Bool) -> some View {
+        EditorToolLabel(title: title, symbol: symbol, selected: selected)
+    }
+}
+
+/// The same tools as the bottom bar, top to bottom on the trailing edge of a wide workspace.
+struct EditorToolRail: View {
+    @Binding var activeTool: EditorTool?
+    var darkroomActive = false
+    let openDarkroom: () -> Void
+    let export: () -> Void
+    private var actionTitle: String {
+        darkroomActive
+            ? String(localized: "common.export", defaultValue: "Export")
+            : String(localized: "darkroom.title", defaultValue: "Darkroom")
+    }
+    private var actionSymbol: String { darkroomActive ? "square.and.arrow.up" : "lightbulb" }
+    var body: some View {
+        GlassEffectContainer(spacing: 12) {
+            VStack(spacing: 12) {
+                VStack(spacing: 6) {
+                    ForEach(EditorTool.allCases) { tool in
+                        Button {
+                            activeTool = activeTool == tool ? nil : tool
+                        } label: {
+                            EditorToolLabel(title: tool.title, symbol: tool.symbolName, selected: activeTool == tool)
+                        }
+                        .accessibilityAddTraits(activeTool == tool ? .isSelected : [])
+                        .accessibilityIdentifier("editor.tool." + tool.rawValue)
+                        .accessibilityShowsLargeContentViewer { Label(tool.title, systemImage: tool.symbolName) }
+                    }
+                }
+                .padding(.vertical, 8).padding(.horizontal, 6)
+                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 28))
+                Button(action: darkroomActive ? export : openDarkroom) {
+                    EditorToolLabel(title: actionTitle, symbol: actionSymbol, selected: false)
+                }
+                .accessibilityLabel(actionTitle)
+                .accessibilityIdentifier(darkroomActive ? "darkroom.export" : "editor.export")
+                .accessibilityShowsLargeContentViewer { Label(actionTitle, systemImage: actionSymbol) }
+                .padding(.vertical, 8).padding(.horizontal, 6)
+                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 28))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+struct EditorToolLabel: View {
+    let title: String
+    let symbol: String
+    let selected: Bool
+    var body: some View {
         VStack(spacing: 3) {
-            Image(systemName: symbol).font(.system(size: 18, weight: .medium)).frame(
-                width: 24, height: 22)
+            Image(systemName: symbol).font(.system(size: 18, weight: .medium))
+                .frame(width: 24, height: 22)
             Text(title).font(.system(size: 11, weight: .medium)).lineLimit(1)
                 .minimumScaleFactor(0.8).frame(height: 12)
         }

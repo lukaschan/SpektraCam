@@ -8,6 +8,7 @@ struct CameraView: View {
     @Environment(\.openURL) private var openURL
     private let cameraButtonSize: CGFloat = 44
     private let bubbleDiameter: CGFloat = 38
+    @State private var layout = WorkspaceLayout.stacked
     init(library: PhotoLibrary, onLibrary: @escaping () -> Void) {
         _model = State(initialValue: CameraModel(library: library))
         self.onLibrary = onLibrary
@@ -16,7 +17,7 @@ struct CameraView: View {
         NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
-                CameraViewfinder(model: model)
+                CameraViewfinder(model: model, landscape: layout == .sideBySide)
                 if model.state == .ready {
                     VStack {
                         Spacer()
@@ -61,7 +62,7 @@ struct CameraView: View {
                                 Text(
                                     String(
                                         localized: "camera.capture_kept",
-                                        defaultValue: "The capture is kept on this iPhone.")
+                                        defaultValue: "The capture is kept on this device.")
                                 ).font(.footnote)
                                 Button(
                                     String(
@@ -73,76 +74,33 @@ struct CameraView: View {
                             }
                         }.padding().glassEffect(in: .rect(cornerRadius: 20))
                     }
-                    ZStack {
-                        HStack {
-                            Button {
-                                onLibrary()
-                            } label: {
-                                if let photo = model.library.photos.last {
-                                    PhotoThumbnail(
-                                        photo: photo, images: model.library.images,
-                                        showsBadges: false
-                                    )
-                                    .frame(width: cameraButtonSize, height: cameraButtonSize)
-                                    .clipShape(
-                                        .circle)
-                                } else {
-                                    Image(systemName: "photo.on.rectangle").frame(
-                                        width: cameraButtonSize, height: cameraButtonSize)
-                                }
+                    if layout == .stacked {
+                        ZStack {
+                            HStack {
+                                libraryButton
+                                Spacer()
+                                flipButton
                             }
-                            .buttonStyle(.glass).buttonBorderShape(.circle).disabled(model.busy)
-                            .accessibilityLabel(
-                                String(
-                                    localized: "camera.open_library", defaultValue: "Open Library")
-                            ).accessibilityIdentifier(
-                                "camera.library")
-                            Spacer()
-                            Button {
-                                Task { await model.flip() }
-                            } label: {
-                                cameraBubble(
-                                    Image(systemName: "arrow.triangle.2.circlepath.camera").font(
-                                        .system(size: 16)))
-                            }
-                            .labelStyle(.iconOnly).buttonStyle(.plain)
-                            .accessibilityLabel(
-                                String(localized: "camera.flip_camera", defaultValue: "Flip Camera")
-                            )
-                            .disabled(model.busy || !model.lenses.contains(where: \.front))
-                            .accessibilityIdentifier("camera.flip")
+                            shutterButton
                         }
-                        Button {
-                            Task { await model.takePhoto() }
-                        } label: {
-                            Image(systemName: "circle.inset.filled")
-                                .font(.system(size: 58, weight: .regular)).frame(
-                                    width: 76, height: 76)
-                        }
-                        .buttonStyle(.glass).buttonBorderShape(.circle).tint(.white)
-                        .disabled(!model.canCapture)
-                        .accessibilityLabel(
-                            String(
-                                localized: "camera.take_raw_photo", defaultValue: "Take RAW Photo")
-                        ).accessibilityIdentifier(
-                            "camera.shutter"
-                        )
-                        .overlay { if model.busy { ProgressView().allowsHitTesting(false) } }
                     }
-                    Text(
-                        model.savedCount > 0
-                            ? String(
-                                localized: "camera.saved_to_library",
-                                defaultValue: "Saved to Library: \(model.savedCount)")
-                            : String(
-                                localized: "camera.saves_to_library_note",
-                                defaultValue: "RAW photos save to the app library.")
-                    )
-                    .font(.footnote).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("camera.saved")
+                    savedCaption
                 }.padding(.horizontal).padding(.bottom, 12)
             }
+            .safeAreaInset(edge: .trailing) {
+                // Wider than tall: the shutter moves under the thumb on the trailing edge.
+                if layout == .sideBySide {
+                    VStack {
+                        flipButton
+                        Spacer()
+                        shutterButton
+                        Spacer()
+                        libraryButton
+                    }.padding(.vertical).padding(.trailing, 12)
+                }
+            }
         }
+        .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .preferredColorScheme(.dark)
         .interactiveDismissDisabled(model.busy)
         .task {
@@ -156,6 +114,76 @@ struct CameraView: View {
             if phase != .inactive { Task { await model.setActive(phase == .active) } }
         }
         .onDisappear { Task { await model.close() } }
+    }
+    private var libraryButton: some View {
+        Button {
+            onLibrary()
+        } label: {
+            if let photo = model.library.photos.last {
+                PhotoThumbnail(
+                    photo: photo, images: model.library.images,
+                    showsBadges: false
+                )
+                .frame(width: cameraButtonSize, height: cameraButtonSize)
+                .clipShape(
+                    .circle)
+            } else {
+                Image(systemName: "photo.on.rectangle").frame(
+                    width: cameraButtonSize, height: cameraButtonSize)
+            }
+        }
+        .buttonStyle(.glass).buttonBorderShape(.circle).disabled(model.busy)
+        .accessibilityLabel(
+            String(
+                localized: "camera.open_library", defaultValue: "Open Library")
+        ).accessibilityIdentifier(
+            "camera.library")
+    }
+    private var flipButton: some View {
+        Button {
+            Task { await model.flip() }
+        } label: {
+            cameraBubble(
+                Image(systemName: "arrow.triangle.2.circlepath.camera").font(
+                    .system(size: 16)))
+        }
+        .labelStyle(.iconOnly).buttonStyle(.plain)
+        .accessibilityLabel(
+            String(localized: "camera.flip_camera", defaultValue: "Flip Camera")
+        )
+        .disabled(model.busy || !model.lenses.contains(where: \.front))
+        .accessibilityIdentifier("camera.flip")
+    }
+    private var shutterButton: some View {
+        Button {
+            Task { await model.takePhoto() }
+        } label: {
+            Image(systemName: "circle.inset.filled")
+                .font(.system(size: 58, weight: .regular)).frame(
+                    width: 76, height: 76)
+        }
+        .buttonStyle(.glass).buttonBorderShape(.circle).tint(.white)
+        .disabled(!model.canCapture)
+        .accessibilityLabel(
+            String(
+                localized: "camera.take_raw_photo", defaultValue: "Take RAW Photo")
+        ).accessibilityIdentifier(
+            "camera.shutter"
+        )
+        .overlay { if model.busy { ProgressView().allowsHitTesting(false) } }
+    }
+    private var savedCaption: some View {
+        Text(
+            model.savedCount > 0
+                ? String(
+                    localized: "camera.saved_to_library",
+                    defaultValue: "Saved to Library: \(model.savedCount)")
+                : String(
+                    localized: "camera.saves_to_library_note",
+                    defaultValue: "RAW photos save to the app library.")
+        )
+        .font(.footnote).foregroundStyle(.secondary)
+        .accessibilityIdentifier("camera.saved")
     }
     @ViewBuilder private var formatControl: some View {
         if !model.formats.isEmpty {
@@ -258,7 +286,7 @@ struct CameraView: View {
                 description: Text(
                     String(
                         localized: "camera.raw_needs_device",
-                        defaultValue: "RAW capture needs a physical iPhone."))
+                        defaultValue: "RAW capture needs a physical device."))
             )
             .accessibilityIdentifier("camera.unavailable")
         case .denied:

@@ -129,13 +129,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Change the app language in iPhone Settings."
+            "value" : "Change the app language in Settings."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在 iPhone 设置中更改 App 语言。"
+            "value" : "在“设置”中更改 App 语言。"
           }
         }
       }
@@ -1190,13 +1190,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The capture is kept on this iPhone."
+            "value" : "The capture is kept on this device."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拍摄的照片仍保留在此 iPhone 上。"
+            "value" : "拍摄的照片仍保留在此设备上。"
           }
         }
       }
@@ -1208,13 +1208,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The capture is kept on this iPhone. %@"
+            "value" : "The capture is kept on this device. %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拍摄的照片仍保留在此 iPhone 上。%@"
+            "value" : "拍摄的照片仍保留在此设备上。%@"
           }
         }
       }
@@ -1262,13 +1262,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Camera capture needs a physical iPhone."
+            "value" : "Camera capture needs a physical device."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拍照需要使用实体 iPhone。"
+            "value" : "拍照需要使用实体设备。"
           }
         }
       }
@@ -1730,13 +1730,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RAW capture needs a physical iPhone."
+            "value" : "RAW capture needs a physical device."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拍摄 RAW 照片需要使用实体 iPhone。"
+            "value" : "拍摄 RAW 照片需要使用实体设备。"
           }
         }
       }

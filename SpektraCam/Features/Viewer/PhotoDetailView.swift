@@ -21,6 +21,7 @@ struct PhotoDetailView: View {
     @State private var export: ExportRequest?
     @State private var working = false
     @State private var failure: String?
+    @State private var layout = WorkspaceLayout.stacked
     private struct ExportRequest: Identifiable {
         let id = UUID()
         let session: EditorSession?
@@ -47,10 +48,11 @@ struct PhotoDetailView: View {
                 photos: photos, images: library.images, selection: $selectedID,
                 working: working, develop: { prepareEditor(exporting: false) },
                 export: { prepareEditor(exporting: true) }, revert: revertPhoto,
-                canRevert: photo?.hasEdits == true, delete: deletePhoto
+                canRevert: photo?.hasEdits == true, delete: deletePhoto, layout: layout
             )
             .padding(.horizontal, 16).padding(.bottom, 12)
         }
+        .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .overlay(alignment: .top) {
             if let photo {
                 PhotoInfoPanel(
@@ -267,8 +269,49 @@ private struct PhotoViewerControls: View {
     let revert: () -> Void
     let canRevert: Bool
     let delete: () -> Void
+    var layout = WorkspaceLayout.stacked
     @State private var confirmRevert = false
     var body: some View {
+        if layout == .sideBySide { sideBySide } else { stacked }
+    }
+    /// With width to spare, the actions run down the trailing edge and leave the photo its height.
+    private var sideBySide: some View {
+        GlassEffectContainer(spacing: 12) {
+            HStack(alignment: .bottom, spacing: 12) {
+                Color.clear.frame(width: 104, height: 1)
+                PhotoFilmstrip(photos: photos, images: images, selection: $selection)
+                    .frame(maxWidth: .infinity)
+                VStack(spacing: 10) {
+                    exportButton
+                    Button(String(localized: "editor.develop", defaultValue: "Develop"),
+                           systemImage: "camera.filters", action: develop)
+                        .labelStyle(.iconOnly).font(.system(size: 20, weight: .medium))
+                        .buttonStyle(.glassProminent).buttonBorderShape(.circle).controlSize(.large)
+                        .foregroundStyle(.white).frame(width: 56, height: 56)
+                        .accessibilityIdentifier("photo.develop")
+                    Button {
+                        confirmRevert = true
+                    } label: {
+                        Label(String(localized: "common.revert", defaultValue: "Revert"), systemImage: "arrow.uturn.backward")
+                    }
+                    .accessibilityLabel(String(localized: "common.revert", defaultValue: "Revert"))
+                    .photoActionStyle()
+                    .disabled(!canRevert).accessibilityIdentifier("photo.revert")
+                    .confirmationDialog(
+                        String(localized: "photo.revert_confirm", defaultValue: "Revert to original?"),
+                        isPresented: $confirmRevert, titleVisibility: .visible
+                    ) {
+                        Button(
+                            String(localized: "library.revert_to_original", defaultValue: "Revert to Original"),
+                            role: .destructive, action: revert)
+                    }
+                    deleteButton
+                }
+                .frame(width: 104, alignment: .trailing)
+            }
+        }.disabled(working)
+    }
+    private var stacked: some View {
         GlassEffectContainer(spacing: 12) {
             VStack(spacing: 12) {
                 ViewThatFits(in: .horizontal) {

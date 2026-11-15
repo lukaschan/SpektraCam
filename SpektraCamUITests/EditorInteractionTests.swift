@@ -748,17 +748,14 @@ final class EditorInteractionTests: XCTestCase {
         image.name = "Native zoom and guarded exit"
         image.lifetime = .keepAlways
         add(image)
+        // The interface follows the device and keeps the edit; portrait comes back as it was.
         let portraitPhoto = photo.frame
         XCUIDevice.shared.orientation = .landscapeLeft
-        defer { XCUIDevice.shared.orientation = .portrait }
-        XCTAssertGreaterThan(
-            app.frame.height, app.frame.width, "The iPhone interface rotated out of portrait")
-        XCTAssertEqual(photo.frame.height, portraitPhoto.height, accuracy: 1)
-        XCTAssertEqual(photo.frame.width, portraitPhoto.width, accuracy: 1)
-        let locked = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        locked.name = "iPhone portrait orientation lock"
-        locked.lifetime = .keepAlways
-        add(locked)
+        XCTAssertTrue(app.buttons["editor.back"].waitForExistence(timeout: 5))
+        XCUIDevice.shared.orientation = .portrait
+        let restored = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in abs(photo.frame.width - portraitPhoto.width) < 1 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
         app.buttons["editor.back"].tap()
         XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 30))
         XCTAssertFalse(app.sheets["Return to Photo?"].exists)

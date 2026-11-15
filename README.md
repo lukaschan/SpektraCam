@@ -1,21 +1,21 @@
 # SpektraCam
 
-**v0.3 · iPhone · iOS 26+**
+**v0.3 · iPhone · iPad · iOS 26+**
 
-此App是基于 Andrea Volpato 的 [spektrafilm][upstream] 原生移植的 iPhone 照片编辑器。
+此App是基于 Andrea Volpato 的 [spektrafilm][upstream] 原生移植的 iPhone 与 iPad 照片编辑器。
 免费、开源，支持简体中文与英文。
 
-This App is a free, open-source iPhone photo editor built on a native port of Andrea Volpato’s [spektrafilm][upstream]. Supports Simplified Chinese and English.
+This App is a free, open-source photo editor for iPhone and iPad built on a native port of Andrea Volpato’s [spektrafilm][upstream]. Supports Simplified Chinese and English.
 
 ## 功能 / Features
 
 从“照片”或“文件”导入，保留原始文件并且单独保存编辑。
 有裁切、胶片与印相模拟、调整、颗粒、光晕和柔光，以及 JPEG/PNG 导出功能。
-界面目前仅支持 iPhone 竖屏。
+界面随可用空间调整：竖向时控制面板位于照片下方；横向时（iPad、iPhone Duo 及 iPhone 横屏）控制面板位于照片右侧，工具栏纵向排列在最右侧。
 
 Import from Photos or Files. Keep originals and save edits separately. 
 Crop, simulate film and prints, adjust color and tone, add grain, halation and diffusion, then export JPEG or PNG. 
-The interface currently supports iPhone in portrait only.
+The interface follows the space it is given: taller than wide, controls sit below the photo; wider than tall (iPad, iPhone Duo, iPhone in landscape), controls sit in a column beside the photo with the tools in a rail on the trailing edge.
 
 简单的RAW 相机：拍摄 DNG；Apple ProRAW 和镜头支持取决于设备。
 也可以跳过spektrafilm管线，直接使用最多两个独立混合的 `.cube` 3D LUT。

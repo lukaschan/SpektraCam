@@ -4,6 +4,8 @@ import UIKit
 /// A feature-local workspace; the owning editor retains the session, history and export lifecycle.
 struct DarkroomView: View {
     let image: UIImage
+    /// Stacked puts the controls under the print; side by side puts them in a column beside it.
+    var workspace = WorkspaceLayout.stacked
     @Binding var layout: PrintLayout?
     @Binding var edge: FilmEdgeLayout?
     @Binding var edgeSelection: FilmEdgeSelection?
@@ -39,24 +41,19 @@ struct DarkroomView: View {
     }
 
     var body: some View {
-        GeometryReader { workspace in
-            VStack(spacing: 12) {
-                PrintPreview(image: imageReady ? image : nil, imageSize: sourceSize, layout: current, content: content,
-                             paperColor: edge != nil && resolvedType == .negativePrint ? PaperTone.color(of: image) : .white,
-                             loupeImage: loupeImage, loupeRefining: loupeRefining, loupeWidth: loupeWidth,
-                             loupePatch: loupePatch, onLoupeInspect: onLoupeInspect,
-                             showLoupe: showLoupe, tableLit: tableLit, loupeCenter: $loupeCenter)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay(alignment: .bottomLeading) { LightTableSwitch(lit: $tableLit) }
-                    .overlay(alignment: .topLeading) {
-                        Button(showLoupe ? String(localized: "darkroom.hide_loupe", defaultValue: "Hide loupe")
-                                         : String(localized: "darkroom.show_loupe", defaultValue: "Show loupe"),
-                               systemImage: showLoupe ? "magnifyingglass.circle.fill" : "magnifyingglass.circle") {
-                            showLoupe.toggle()
-                        }
-                        .glassIconButton().accessibilityIdentifier("darkroom.loupe.toggle")
+        GeometryReader { proxy in
+            Group {
+                if workspace == .sideBySide {
+                    HStack(spacing: 12) {
+                        preview
+                        inspector(height: nil).frame(width: WorkspaceLayout.panelWidth(in: proxy.size.width))
                     }
-                inspector(height: min(expanded ? 360 : 202, max(160, workspace.size.height * 0.55)))
+                } else {
+                    VStack(spacing: 12) {
+                        preview
+                        inspector(height: min(expanded ? 360 : 202, max(160, proxy.size.height * 0.55)))
+                    }
+                }
             }
             .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -65,7 +62,26 @@ struct DarkroomView: View {
         .onDisappear { onEditingChanged(false) }
     }
 
-    private func inspector(height: CGFloat) -> some View {
+    private var preview: some View {
+        PrintPreview(image: imageReady ? image : nil, imageSize: sourceSize, layout: current, content: content,
+                     paperColor: edge != nil && resolvedType == .negativePrint ? PaperTone.color(of: image) : .white,
+                     loupeImage: loupeImage, loupeRefining: loupeRefining, loupeWidth: loupeWidth,
+                     loupePatch: loupePatch, onLoupeInspect: onLoupeInspect,
+                     showLoupe: showLoupe, tableLit: tableLit, loupeCenter: $loupeCenter)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .bottomLeading) { LightTableSwitch(lit: $tableLit) }
+            .overlay(alignment: .topLeading) {
+                Button(showLoupe ? String(localized: "darkroom.hide_loupe", defaultValue: "Hide loupe")
+                                 : String(localized: "darkroom.show_loupe", defaultValue: "Show loupe"),
+                       systemImage: showLoupe ? "magnifyingglass.circle.fill" : "magnifyingglass.circle") {
+                    showLoupe.toggle()
+                }
+                .glassIconButton().accessibilityIdentifier("darkroom.loupe.toggle")
+            }
+    }
+
+    /// `height` is nil when the controls fill their column and have nothing to expand into.
+    private func inspector(height: CGFloat?) -> some View {
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 8) {
                 HStack(spacing: 10) {
@@ -76,7 +92,7 @@ struct DarkroomView: View {
                         ],
                         selection: Binding(get: { edge == nil ? .cleanPrint : .filmEdge },
                             set: { edge = $0 == .filmEdge ? (edge ?? FilmEdgeLayout.newDefault()) : nil }), prefix: "darkroom.")
-                    PanelExpansionButton(expanded: $expanded, identifier: "darkroom.expand")
+                    if height != nil { PanelExpansionButton(expanded: $expanded, identifier: "darkroom.expand") }
                 }
                 .dynamicTypeSize(...DynamicTypeSize.large)
                 ScrollView {
@@ -87,7 +103,7 @@ struct DarkroomView: View {
                     }
                     .font(.footnote).padding(16)
                 }
-                .frame(height: height)
+                .frame(height: height).frame(maxHeight: height == nil ? .infinity : nil)
                 .glassEffect(.regular, in: .rect(cornerRadius: 24))
             }
         }

@@ -20,7 +20,7 @@ nonisolated enum CameraFailure: LocalizedError {
         case .unavailable:
             String(
                 localized: "camera.error.needs_device",
-                defaultValue: "Camera capture needs a physical iPhone.")
+                defaultValue: "Camera capture needs a physical device.")
         case .denied:
             String(
                 localized: "camera.access_denied",

@@ -87,6 +87,8 @@ struct CameraPreview: UIViewRepresentable {
 /// The preview remains borderless. Grid marks do not intercept touch or accessibility.
 struct CameraViewfinder: SwiftUI.View {
     let model: CameraModel
+    /// The sensor's long side follows the long side of the space.
+    var landscape = false
     @State private var focusPoint: CGPoint?
     @State private var focusRevision = UUID()
     var body: some SwiftUI.View {
@@ -102,7 +104,8 @@ struct CameraViewfinder: SwiftUI.View {
                 Color.black
             }
         }
-        .aspectRatio(3.0 / 4, contentMode: .fit).frame(maxWidth: .infinity)
+        .aspectRatio(landscape ? 4.0 / 3 : 3.0 / 4, contentMode: .fit)
+        .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
         .overlay {
             if model.source != nil {
                 GeometryReader { proxy in

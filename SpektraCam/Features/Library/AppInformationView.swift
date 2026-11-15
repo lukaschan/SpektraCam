@@ -80,7 +80,7 @@ struct AppInformationView: View {
                     .accessibilityHint(
                         String(
                             localized: "about.language_settings_hint",
-                            defaultValue: "Change the app language in iPhone Settings."))
+                            defaultValue: "Change the app language in Settings."))
                     previewPicker(
                         String(localized: "about.library_preview", defaultValue: "Library preview"),
                         selection: $libraryMaximum, identifier: "about.libraryPreview")

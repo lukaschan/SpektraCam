@@ -26,15 +26,29 @@ struct EditorView: View {
     @State private var showOriginal = false
     @State private var showResetConfirmation = false
     @State private var showRenderProgress = false
+    @State private var layout = WorkspaceLayout.stacked
 
     var body: some View {
-        Group {
-            if showDarkroom {
-                DarkroomWorkspace(session: session, suspended: showExport, adjustCrop: openDarkroomCrop)
-            } else {
-                editorWorkspace
+        HStack(spacing: 0) {
+            Group {
+                if showDarkroom {
+                    DarkroomWorkspace(
+                        session: session, suspended: showExport, layout: layout,
+                        adjustCrop: openDarkroomCrop)
+                } else {
+                    editorWorkspace
+                }
+            }
+            if layout == .sideBySide {
+                EditorToolRail(
+                    activeTool: toolSelection, darkroomActive: showDarkroom,
+                    openDarkroom: openDarkroom, export: { showExport = true }
+                )
+                .padding(.horizontal, 8)
             }
         }
+        .background(PhotoTheme.canvas)
+        .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .background(EditorNavigationGuard().allowsHitTesting(false))
         .navigationTitle(
             showDarkroom
@@ -44,16 +58,11 @@ struct EditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            EditorToolbar(activeTool: Binding(
-                get: { showDarkroom ? nil : activeTool },
-                set: { tool in
-                    cropReturnsToDarkroom = tool == .crop && showDarkroom && session.recipe.filmEdgeLayout != nil
-                    if cropReturnsToDarkroom { toolBeforeDarkroomCrop = activeTool }
-                    activeTool = tool
-                    showDarkroom = false
-                }), darkroomActive: showDarkroom,
-                openDarkroom: { setExpanded(false); cropReturnsToDarkroom = false; showDarkroom = true },
-                export: { showExport = true })
+            if layout == .stacked {
+                EditorToolbar(
+                    activeTool: toolSelection, darkroomActive: showDarkroom,
+                    openDarkroom: openDarkroom, export: { showExport = true })
+            }
             ToolbarItem(placement: .topBarLeading) {
                 // Darkroom is the last step: back saves the edit and returns to the photo, like Close.
                 Button(closeTitle, systemImage: showDarkroom ? "chevron.left" : "xmark", action: finish)
@@ -168,7 +177,46 @@ struct EditorView: View {
             ? String(localized: "editor.show_edited", defaultValue: "Show Edited")
             : String(localized: "editor.show_original", defaultValue: "Show Original")
     }
-    private var editorWorkspace: some View {
+    /// Choosing a tool leaves Darkroom; choosing Crop from a film edge returns there afterwards.
+    private var toolSelection: Binding<EditorTool?> {
+        Binding(
+            get: { showDarkroom ? nil : activeTool },
+            set: { tool in
+                cropReturnsToDarkroom = tool == .crop && showDarkroom && session.recipe.filmEdgeLayout != nil
+                if cropReturnsToDarkroom { toolBeforeDarkroomCrop = activeTool }
+                activeTool = tool
+                showDarkroom = false
+            })
+    }
+    private func openDarkroom() {
+        setExpanded(false)
+        cropReturnsToDarkroom = false
+        showDarkroom = true
+    }
+    @ViewBuilder private var editorWorkspace: some View {
+        if layout == .sideBySide { sideBySideWorkspace } else { stackedWorkspace }
+    }
+    /// The photo keeps the leading side; the open tool's controls fill a column beside it.
+    private var sideBySideWorkspace: some View {
+        GeometryReader { workspace in
+            HStack(spacing: 0) {
+                canvas
+                if activeTool == .crop {
+                    ScrollView { toolPanel.padding(.top, 12) }
+                        .scrollBounceBehavior(.basedOnSize)
+                        .background(.background, in: .rect(cornerRadius: 24))
+                        .clipShape(.rect(cornerRadius: 24))
+                        .frame(width: WorkspaceLayout.panelWidth(in: workspace.size.width))
+                        .padding(.leading, 8).padding(.vertical, 8)
+                } else if activeTool != nil {
+                    inspector(height: nil)
+                        .frame(width: WorkspaceLayout.panelWidth(in: workspace.size.width))
+                        .padding(.leading, 8).padding(.vertical, 8)
+                }
+            }
+        }
+    }
+    private var stackedWorkspace: some View {
         VStack(spacing: 0) {
             GeometryReader { workspace in
                 canvas.overlay(alignment: .bottom) {
@@ -220,6 +268,8 @@ struct EditorView: View {
                 PhotoViewport(
                     image: showOriginal
                         ? UIImage(cgImage: session.photo.preview) : session.displayImage,
+                    // Beside its controls the photo has the full height, so it sits in the middle.
+                    topAligned: layout == .stacked,
                     onTap: { point in
                         if panelExpanded && point.y < inspectorFrame.minY - 44 {
                             setExpanded(false)
@@ -359,7 +409,8 @@ struct EditorView: View {
     private func setExpanded(_ expanded: Bool) {
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { panelExpanded = expanded }
     }
-    private func inspector(height: CGFloat) -> some View {
+    /// `height` is nil when the panel fills its column and has nothing to expand into.
+    private func inspector(height: CGFloat?) -> some View {
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
@@ -386,11 +437,16 @@ struct EditorView: View {
                             selection: $effectsSection, prefix: "effects.section.")
                     case .crop, nil: Spacer()
                     }
-                    PanelExpansionButton(expanded: $panelExpanded, identifier: "editor.expand")
+                    if height != nil {
+                        PanelExpansionButton(expanded: $panelExpanded, identifier: "editor.expand")
+                    }
                 }
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                toolPanel.font(.footnote).frame(height: height).glassEffect(
-                    .regular, in: .rect(cornerRadius: 24))
+                // In a column the pills scroll inside the panel's width instead of running past it.
+                .clipShape(height == nil ? AnyShape(.rect) : AnyShape(.rect.inset(by: -40)))
+                toolPanel.font(.footnote)
+                    .frame(height: height).frame(maxHeight: height == nil ? .infinity : nil, alignment: .top)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 24))
             }
         }
     }

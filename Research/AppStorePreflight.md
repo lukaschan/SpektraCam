@@ -131,6 +131,31 @@ called for touching them.
   `MinimumOSVersion 26.0`, carries both manifest reasons, and contains no UI-test launch hooks.
 - Not done: signed archive, Validate App, device run, TestFlight upload.
 
+## iPad and iPhone Duo (branch `codex/ipad-iphone-duo`)
+
+The target is now universal (`TARGETED_DEVICE_FAMILY = 1,2`); iPad supports all four orientations
+and iPhone adds landscape. Following Apple's Duo guidance, layout follows the size of the space,
+never the device or orientation (`WorkspaceLayout`):
+
+| Space | Editor and Darkroom | Viewer | Camera |
+| --- | --- | --- | --- |
+| Taller than wide (iPhone, iPad portrait, Duo outer display, Duo inner portrait) | The existing layout: controls over the bottom of the photo, tools in the bottom bar | Actions and filmstrip at the bottom | Shutter row at the bottom |
+| Wider than tall and at least 560 pt (iPad landscape, Duo inner landscape, iPhone landscape) | Photo on the leading side, controls in an always-open column beside it with the section pills in a row on top, tools top-to-bottom in a rail on the trailing edge | Actions down the trailing edge, filmstrip at the bottom | Shutter column on the trailing edge, 4:3 viewfinder |
+
+Verified by `AdaptiveLayoutTests` (two tests, both orientations) on iPhone, iPad Pro 11-inch and
+the iPhone Duo outer display, plus twelve existing editor tests on iPhone. Screenshots are in the
+vault under `Claude/Adaptive-proof-nov15`.
+
+**Not verified:** the Duo's inner display. The simulator boots folded and neither `simctl` nor
+XCTest can open it; use Device Hub in Xcode. By size it takes the same two layouts as iPad
+(669 × 951 pt portrait, 951 × 669 pt landscape). The half-folded pose is the open question: the
+photo/controls split is not at the hinge, and `ArrangementView` (iOS 27.1+) is the system
+container that would align it. The camera layout could only be checked with the simulator's
+"unavailable" state.
+
+App Store consequences: iPad screenshots (13-inch set) are now required, and the earlier iPad
+compatibility-mode warning no longer applies.
+
 ## Order of work from here
 
 1. Get Andrea Volpato's written permission for App Store distribution; add the notice.
