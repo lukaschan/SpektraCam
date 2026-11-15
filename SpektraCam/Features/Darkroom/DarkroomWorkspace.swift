@@ -27,11 +27,15 @@ struct DarkroomWorkspace: View {
         key.printLayout = key.printLayout?.easelOnly
         return key
     }
-    private var expectedSize: CGSize {
+    /// The cropped photograph's pixel size after its quarter turns.
+    private var cropSize: CGSize {
         let upright = session.recipe.geometry.quarterTurns % 2 == 0
             ? CGSize(width: session.photo.width, height: session.photo.height)
             : CGSize(width: session.photo.height, height: session.photo.width)
-        let crop = session.recipe.crop.pixelRect(in: upright).size
+        return session.recipe.crop.pixelRect(in: upright).size
+    }
+    private var expectedSize: CGSize {
+        let crop = cropSize
         if let layout = session.recipe.renderedFilmEdgeLayout,
            let geometry = FilmEdgeGeometry(imageSize: crop, layout: layout, longEdge: 1000) {
             return CGSize(width: geometry.width, height: geometry.height)
@@ -42,10 +46,7 @@ struct DarkroomWorkspace: View {
     /// while that frame is still rendering. A film edge renders up to the loupe maximum; a clean
     /// print is limited by the editor preview.
     private var loupeWidth: CGFloat? {
-        let upright = session.recipe.geometry.quarterTurns % 2 == 0
-            ? CGSize(width: session.photo.width, height: session.photo.height)
-            : CGSize(width: session.photo.height, height: session.photo.width)
-        let crop = session.recipe.crop.pixelRect(in: upright).size
+        let crop = cropSize
         guard crop.width > 0, crop.height > 0, expectedSize.width > 0, expectedSize.height > 0 else { return nil }
         // Patches are rendered at the photo's own resolution, so 100 % means its real pixels.
         let long = max(crop.width, crop.height)
@@ -59,10 +60,7 @@ struct DarkroomWorkspace: View {
         DarkroomView(image: displayedImage,
             layout: session.binding(\.printLayout, key: "darkroom.layout"),
             edge: Binding(get: { session.recipe.filmEdgeLayout }, set: { layout in
-                let imageSize = session.recipe.geometry.quarterTurns % 2 == 0
-                    ? CGSize(width: session.photo.width, height: session.photo.height)
-                    : CGSize(width: session.photo.height, height: session.photo.width)
-                let needsCrop = layout.map { !$0.matchesGate(session.recipe.crop.pixelRect(in: imageSize).size) } ?? false
+                let needsCrop = layout.map { !$0.matchesGate(cropSize) } ?? false
                 session.update(key: "darkroom.edge.layout") { $0.filmEdgeLayout = layout }
                 if needsCrop { adjustCrop() }
             }),

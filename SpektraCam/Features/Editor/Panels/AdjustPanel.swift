@@ -17,25 +17,25 @@ struct AdjustPanel: View {
     var section: Section = .exposure
     @State private var extendedBalance = false
     @State private var extendedLiftGain = false
-    private var wideLiftGain: Bool {
-        extendedLiftGain || abs(session.recipe.tone.highlights) > 2
-            || abs(session.recipe.tone.shadows) > 2
+    /// A value outside ±2 keeps the wide range on, so the slider can always show it.
+    private var liftGainNeedsWideRange: Bool {
+        abs(session.recipe.tone.highlights) > 2 || abs(session.recipe.tone.shadows) > 2
     }
+    private var wideLiftGain: Bool { extendedLiftGain || liftGainNeedsWideRange }
+    /// Film controls do nothing with the look off or in LUT mode; print controls also need a print.
+    private var filmDisabled: Bool { !session.recipe.look.enabled || session.recipe.look.mode == .lut }
+    private var printDisabled: Bool { filmDisabled || session.recipe.bypassesPrint }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             switch section {
             case .exposure:
                 NumericControl(
                     title: String(localized: "adjust.exposure", defaultValue: "Exposure"),
-                    value: Binding(
-                        get: { session.recipe.tone.exposureEV },
-                        set: { value in
-                            session.update(key: "tone.exposure") { $0.tone.exposureEV = value }
-                        }),
+                    value: session.binding(\.tone.exposureEV, key: "tone.exposure"),
                     range: -5...5, step: 0.05, minimum: -10, maximum: 10, unit: "EV",
                     identifier: "tone.exposure",
                     onEditingChanged: { session.setInteraction(key: "tone.exposure", active: $0) })
-                field("camera.exposure_compensation_ev").disabled(!session.recipe.look.enabled || session.recipe.look.mode == .lut)
+                field("camera.exposure_compensation_ev").disabled(filmDisabled)
                 DisclosureGroup {
                     VStack(alignment: .leading, spacing: 16) {
                         field("camera.auto_exposure")
@@ -62,13 +62,13 @@ struct AdjustPanel: View {
                                     title: String(
                                         localized: "adjust.input_exposure",
                                         defaultValue: "Input exposure"),
-                                    value: sourceBinding(\.exposureEV, key: "source.exposure"),
+                                    value: session.binding(\.source.exposureEV, key: "source.exposure"),
                                     range: -5...5,
                                     step: 0.05, minimum: -10, maximum: 10, unit: "EV",
                                     identifier: "source.exposure")
                                 field("enlarger.normalize_print_exposure").padding(.top, 8)
                             }
-                        }.disabled(!session.recipe.look.enabled || session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
+                        }.disabled(printDisabled)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12)
                 } label: {
                     Text(
@@ -79,7 +79,7 @@ struct AdjustPanel: View {
                         .accessibilityIdentifier(
                             "adjust.exposureStages")
                 }
-                .disabled(!session.recipe.look.enabled || session.recipe.look.mode == .lut)
+                .disabled(filmDisabled)
                 Divider()
                 toneControl(
                     String(localized: "adjust.s_curve", defaultValue: "S-curve"), path: \.contrast,
@@ -99,9 +99,7 @@ struct AdjustPanel: View {
                             defaultValue: "Change highlights and shadows range"),
                         identifier: "adjust.liftGainRange"
                     ) { extendedLiftGain = !wideLiftGain }
-                    .disabled(
-                        abs(session.recipe.tone.highlights) > 2
-                            || abs(session.recipe.tone.shadows) > 2)
+                    .disabled(liftGainNeedsWideRange)
                 }
                 toneControl(
                     String(localized: "adjust.highlights", defaultValue: "Highlights"),
@@ -127,7 +125,7 @@ struct AdjustPanel: View {
                 } else {
                     NumericControl(
                         title: String(localized: "adjust.warmth", defaultValue: "Warmth"),
-                        value: sourceBinding(\.warmth, key: "source.warmth"),
+                        value: session.binding(\.source.warmth, key: "source.warmth"),
                         range: -50...50, step: 1, minimum: -100, maximum: 100,
                         identifier: "source.warmth",
                         onEditingChanged: {
@@ -136,7 +134,7 @@ struct AdjustPanel: View {
                 }
                 NumericControl(
                     title: String(localized: "adjust.tint", defaultValue: "Tint"),
-                    value: sourceBinding(\.tint, key: "source.tint"),
+                    value: session.binding(\.source.tint, key: "source.tint"),
                     range: -50...50, step: 1, minimum: -100, maximum: 100,
                     identifier: "source.tint",
                     onEditingChanged: { session.setInteraction(key: "source.tint", active: $0) })
@@ -156,11 +154,7 @@ struct AdjustPanel: View {
                     })
                 AdaptiveToggle(
                     String(localized: "adjust.black_white", defaultValue: "Black & White"),
-                    isOn: Binding(
-                        get: { session.recipe.tone.monochrome },
-                        set: { value in
-                            session.update(key: "tone.monochrome") { $0.tone.monochrome = value }
-                        })
+                    isOn: session.binding(\.tone.monochrome, key: "tone.monochrome")
                 )
                 .accessibilityIdentifier("tone.monochrome")
                 printBalance
@@ -174,8 +168,8 @@ struct AdjustPanel: View {
                         prominent: ["amount"],
                         session: session
                     ).padding(.top, 8)
-                }.disabled(!session.recipe.look.enabled || session.recipe.look.mode == .lut)
-                DisclosureGroup(String(localized: "adjust.details", defaultValue: "Details")) {
+                }.disabled(filmDisabled)
+                DisclosureGroup(String(localized: "common.details", defaultValue: "Details")) {
                     VStack(alignment: .leading, spacing: 12) {
                         ParameterFields(session: session, prefix: "scanner")
                         ParameterFields(
@@ -193,8 +187,7 @@ struct AdjustPanel: View {
                             names: ["lens_blur_um", "film_format_mm", "filter_uv", "filter_ir"])
                     }.padding(.top, 8)
                 }
-                .disabled(!session.recipe.look.enabled || session.recipe.look.mode == .lut)
-
+                .disabled(filmDisabled)
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -233,16 +226,16 @@ struct AdjustPanel: View {
                         prominent: ["gamma_factor"], session: session, printOnly: true
                     ).padding(.top, 12)
                 }
-            }.disabled(!session.recipe.look.enabled || session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
+            }
             if session.recipe.bypassesPrint {
                 Text(
                     String(
-                        localized: "adjust.direct_scan_skips_print_controls",
+                        localized: "adjust.direct_scan_note",
                         defaultValue: "Direct scan skips print controls.")
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
-        }.disabled(!session.recipe.look.enabled || session.recipe.bypassesPrint || session.recipe.look.mode == .lut)
+        }.disabled(printDisabled)
     }
     private func toneControl(
         _ title: String, path: WritableKeyPath<EditRecipe.Tone, Double>, range: ClosedRange<Double>,
@@ -264,15 +257,6 @@ struct AdjustPanel: View {
             maximum: id == "highlights" || id == "shadows" ? 5 : range.upperBound,
             identifier: "tone." + id, defaultValue: defaultValue,
             onEditingChanged: { session.setInteraction(key: "tone." + id, active: $0) })
-    }
-    private func sourceBinding(_ path: WritableKeyPath<EditRecipe.Source, Double>, key: String)
-        -> Binding<
-            Double
-        >
-    {
-        Binding(
-            get: { session.recipe.source[keyPath: path] },
-            set: { value in session.update(key: key) { $0.source[keyPath: path] = value } })
     }
     private func balance(_ path: String, title: String) -> some View {
         NumericControl(

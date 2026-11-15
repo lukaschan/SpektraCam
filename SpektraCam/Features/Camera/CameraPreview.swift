@@ -159,12 +159,12 @@ struct CameraHistogram: SwiftUI.View {
         }
         .accessibilityLabel(
             String(
-                localized: "camera_preview.preview_brightness_histogram",
+                localized: "camera.histogram",
                 defaultValue: "Preview brightness histogram")
         )
         .accessibilityHint(
             String(
-                localized: "camera_preview.shows_the_processed_camera_preview_not_raw",
+                localized: "camera.histogram_hint",
                 defaultValue: "Shows the processed camera preview, not RAW clipping."))
     }
 }
@@ -184,9 +184,9 @@ struct CameraExposureReadout: SwiftUI.View {
             Text(
                 reading.iso > 0
                     ? String(
-                        localized: "camera_preview.iso",
-                        defaultValue: "ISO\(Int(reading.iso.rounded()))")
-                    : String(localized: "camera_preview.iso_87650f", defaultValue: "ISO—"))
+                        localized: "camera.iso",
+                        defaultValue: "ISO \(Int(reading.iso.rounded()))")
+                    : String(localized: "camera.iso_unknown", defaultValue: "ISO —"))
         }
         .font(.caption2.weight(.medium)).monospacedDigit().lineLimit(1).foregroundStyle(.secondary)
         .dynamicTypeSize(...DynamicTypeSize.large)

@@ -67,7 +67,7 @@ for key, (files, arguments) in checks.items():
  if 'LibraryImages' in files and 'ImageRequestPool' not in files:
   files.append('ImageRequestPool')
 checks['image-requests'] = (['ImageRequestPool'], [])
-checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','EditorDefaults','PhotoHistogram','LUTLibrary','PhotoCanvas','PhotoInfoPanel'])), ['.'])
+checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','Log','EditorDefaults','PhotoHistogram','LUTLibrary','PhotoCanvas','PhotoInfoPanel'])), ['.'])
 checks['editor-benchmark'] = (checks['processed-export'][0], ['.'])
 checks['lut-grain'] = (checks['processed-export'][0], ['.'])
 checks['film-edge'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer', 'BatchPhotoExporter'])), ['.'])
@@ -94,7 +94,7 @@ if args.simulator:
  if env.get('SPEKTRACAM_SIMULATOR_ID'): booted=[d for d in booted if d==env['SPEKTRACAM_SIMULATOR_ID']]
  if not booted: raise SystemExit('Boot a Simulator before using --simulator.')
  simulator = [simctl,'spawn',booted[0]]
- compiler += ['-target',platform.machine()+'-apple-ios27.2-simulator']
+ compiler += ['-target',platform.machine()+'-apple-ios26.0-simulator']
 for name in args.checks or [key for key in checks if not key.startswith('metal-') and not key.endswith('-benchmark') and key not in ['raw-input','processed-export','stress-export','bypass','tone-response']]:
  files,arguments=checks[name];binary=out/(name+'-checks'+('-simulator' if args.simulator else ''))
  subprocess.run(compiler+(['-O','-assert-config','Debug'] if args.optimized else ['-O'] if name.endswith('-benchmark') and not args.debug_benchmarks else [])+[str(sources[f]) for f in files]+[str(root/'Scripts'/(name+'-checks.swift')),'-o',str(binary)],env=env,check=True)

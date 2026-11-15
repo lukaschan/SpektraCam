@@ -56,7 +56,7 @@ struct ContentView: View {
                 ContentUnavailableView {
                     Label(
                         String(
-                            localized: "app.couldn_t_open_library",
+                            localized: "library.open_failed",
                             defaultValue: "Couldn’t open library"),
                         systemImage: "exclamationmark.triangle")
                 } description: {
@@ -68,7 +68,7 @@ struct ContentView: View {
                 }
             } else {
                 ProgressView(
-                    String(localized: "app.opening_library", defaultValue: "Opening library…"))
+                    String(localized: "library.opening", defaultValue: "Opening library…"))
             }
         }
         .task { if !checkingCameraControl && library == nil { openLibrary() } }
@@ -81,15 +81,11 @@ struct ContentView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active {
-                do { try library?.flushPending() } catch {
-                    library?.saveFailure = error.localizedDescription
-                }
-            }
+            if phase != .active { library?.savePending() }
         }
         .alert(
             String(
-                localized: "app.couldn_t_import_capture", defaultValue: "Couldn’t import capture"),
+                localized: "camera.import_failed", defaultValue: "Couldn’t import capture"),
             isPresented: Binding(
                 get: { captureImportFailure != nil },
                 set: { if !$0 { captureImportFailure = nil } }
@@ -98,16 +94,16 @@ struct ContentView: View {
             Button(String(localized: "common.retry", defaultValue: "Retry")) {
                 if let library { Task { await recoverCaptures(library) } }
             }
-            Button(String(localized: "app.later", defaultValue: "Later"), role: .cancel) {}
+            Button(String(localized: "common.later", defaultValue: "Later"), role: .cancel) {}
         } message: {
             Text(
                 String(
-                    localized: "app.capture_kept_with_error",
+                    localized: "camera.capture_kept_with_error",
                     defaultValue:
                         "The capture is kept on this iPhone. \(captureImportFailure ?? "")"))
         }
         .alert(
-            String(localized: "app.couldn_t_save_edits", defaultValue: "Couldn’t save edits"),
+            String(localized: "editor.couldn_t_save_edits", defaultValue: "Couldn’t save edits"),
             isPresented: Binding(
                 get: { library?.saveFailure != nil },
                 set: {
@@ -115,9 +111,7 @@ struct ContentView: View {
                 })
         ) {
             Button(String(localized: "common.retry", defaultValue: "Retry")) {
-                do { try library?.flushPending() } catch {
-                    library?.saveFailure = error.localizedDescription
-                }
+                library?.savePending()
             }
         } message: {
             Text(library?.saveFailure ?? "")

@@ -37,7 +37,7 @@ struct EffectsPanel: View {
                 )
                 .confirmationDialog(
                     String(
-                        localized: "effects.use_stock_grain_settings",
+                        localized: "effects.use_stock_grain_confirm",
                         defaultValue: "Use stock grain settings?"), isPresented: $confirmStockGrain,
                     titleVisibility: .visible
                 ) {
@@ -69,7 +69,7 @@ struct EffectsPanel: View {
             case .diffusion:
                 Text(
                     String(
-                        localized: "effects.diffusion_can_require_substantial_memory_during_full",
+                        localized: "effects.diffusion_memory_note",
                         defaultValue:
                             "Diffusion can require substantial memory during full-size export.")
                 ).font(.caption)

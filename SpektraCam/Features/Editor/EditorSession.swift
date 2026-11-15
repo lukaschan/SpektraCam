@@ -1,7 +1,7 @@
 import CoreGraphics
-import OSLog
 import Observation
 import SwiftUI
+import OSLog
 
 /// One source, one recipe, and bounded recipe history; never copies source bytes for undo.
 @MainActor @Observable final class EditorSession: Identifiable, Hashable {
@@ -21,8 +21,6 @@ import SwiftUI
     var isRefiningPreview = false
     var filmRenderFailed = false
     @ObservationIgnored private var failureTask: Task<Void, Never>?
-    @ObservationIgnored private static let logger = Logger(
-        subsystem: "io.github.runzeni.spektracam", category: "Rendering")
     var hasFilmPreview = false
     var isBusy: Bool { (isRendering || isProcessingFilm) && !isRefiningPreview }
     @ObservationIgnored private let filmRenderer: PhotoRenderer
@@ -480,7 +478,7 @@ import SwiftUI
                     guard !Task.isCancelled, filmEpoch == epoch else { return }
                     frameTask = nil
                     if revision != filmRevision { continue }
-                    Self.logger.error(
+                    Log.rendering.error(
                         "Preview failed: \(String(describing: error), privacy: .public), film \(requested.filmID, privacy: .public)"
                     )
                     if interactionKey == nil {

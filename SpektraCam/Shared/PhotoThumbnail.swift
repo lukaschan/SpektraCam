@@ -39,11 +39,11 @@ struct CameraButton: View {
     }
     private var action: some View {
         Button(
-            String(localized: "photo_thumbnail.camera", defaultValue: "Camera"),
+            String(localized: "camera.camera", defaultValue: "Camera"),
             systemImage: "camera"
         ) { openCamera?() }
         .buttonBorderShape(.circle)
-        .accessibilityLabel(String(localized: "photo_thumbnail.camera", defaultValue: "Camera"))
+        .accessibilityLabel(String(localized: "camera.camera", defaultValue: "Camera"))
     }
 }
 
@@ -101,7 +101,7 @@ struct PhotoBadge: View {
             }
         }
         .accessibilityLabel(
-            text ?? String(localized: "photo_thumbnail.edited", defaultValue: "Edited")
+            text ?? String(localized: "photo.edited", defaultValue: "Edited")
         )
         .accessibilityIdentifier(symbol == nil ? "photo.badge.raw" : "photo.badge.edited")
         .font(.system(.caption2, design: .monospaced).weight(.semibold))

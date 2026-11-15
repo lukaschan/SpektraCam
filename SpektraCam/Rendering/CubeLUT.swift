@@ -10,16 +10,16 @@ nonisolated struct CubeLUT: Sendable {
             switch self {
             case .format(let reason):
                 String(
-                    localized: "cube_lut.invalid_with_reason",
+                    localized: "cube_lut.error.invalid",
                     defaultValue: "Invalid 3D LUT: \(reason)")
             case .size:
                 String(
-                    localized: "cube_lut.use_a_3d_cube_file_with_2",
+                    localized: "cube_lut.error.requirements",
                     defaultValue:
                         "Use a 3D .cube file with 2 to 65 points per axis and no more than 16 MB.")
             case .missing:
                 String(
-                    localized: "cube_lut.this_edit_s_lut_file_is_not",
+                    localized: "cube_lut.error.file_missing",
                     defaultValue: "This edit’s LUT file is not available.")
             }
         }
@@ -39,7 +39,7 @@ nonisolated struct CubeLUT: Sendable {
         guard data.count <= 16 * 1024 * 1024 else { throw Failure.size }
         guard let text = String(data: data, encoding: .utf8) else {
             throw Failure.format(
-                String(localized: "cube_lut.use_utf_8_text", defaultValue: "Use UTF-8 text."))
+                String(localized: "cube_lut.error.encoding", defaultValue: "Use UTF-8 text."))
         }
         var size: Int?
         var name: String?
@@ -64,7 +64,7 @@ nonisolated struct CubeLUT: Sendable {
                     first < last
                 else {
                     throw Failure.format(
-                        String(localized: "cube_lut.check_title", defaultValue: "Check TITLE."))
+                        String(localized: "cube_lut.error.title", defaultValue: "Check TITLE."))
                 }
                 name = String(line[line.index(after: first)..<last].prefix(200))
             } else if key == "LUT_3D_SIZE" {
@@ -79,7 +79,7 @@ nonisolated struct CubeLUT: Sendable {
                 else {
                     throw Failure.format(
                         String(
-                            localized: "cube_lut.check_the_input_domain",
+                            localized: "cube_lut.error.input_domain",
                             defaultValue: "Check the input domain."))
                 }
                 let vector = try Self.vector(Array(words.dropFirst()))
@@ -91,7 +91,7 @@ nonisolated struct CubeLUT: Sendable {
                 else {
                     throw Failure.format(
                         String(
-                            localized: "cube_lut.check_the_input_range",
+                            localized: "cube_lut.error.input_range",
                             defaultValue: "Check the input range."))
                 }
                 low = SIMD3(repeating: a)
@@ -99,13 +99,13 @@ nonisolated struct CubeLUT: Sendable {
             } else if key.hasPrefix("LUT_") {
                 throw Failure.format(
                     String(
-                        localized: "cube_lut.only_3d_tables_without_1d_shapers_are",
+                        localized: "cube_lut.error.shaper_unsupported",
                         defaultValue: "Only 3D tables without 1D shapers are supported."))
             } else {
                 guard let count = size, rows.count < count * count * count else {
                     throw Failure.format(
                         String(
-                            localized: "cube_lut.check_the_table_length",
+                            localized: "cube_lut.error.table_length",
                             defaultValue: "Check the table length."))
                 }
                 let v = try Self.vector(words)
@@ -115,13 +115,13 @@ nonisolated struct CubeLUT: Sendable {
         guard let size, rows.count == size * size * size else {
             throw Failure.format(
                 String(
-                    localized: "cube_lut.the_table_is_incomplete",
+                    localized: "cube_lut.error.incomplete",
                     defaultValue: "The table is incomplete."))
         }
         guard low.x < high.x, low.y < high.y, low.z < high.z else {
             throw Failure.format(
                 String(
-                    localized: "cube_lut.domain_minimum_must_be_below_maximum",
+                    localized: "cube_lut.error.domain_order",
                     defaultValue: "Domain minimum must be below maximum."))
         }
         id = Self.hash(data)
@@ -143,14 +143,14 @@ nonisolated struct CubeLUT: Sendable {
         guard words.count == 3 else {
             throw Failure.format(
                 String(
-                    localized: "cube_lut.each_table_row_needs_three_numbers",
+                    localized: "cube_lut.error.row_format",
                     defaultValue: "Each table row needs three numbers."))
         }
         let numbers = words.compactMap { Float($0) }
         guard numbers.count == 3, numbers.allSatisfy(\.isFinite) else {
             throw Failure.format(
                 String(
-                    localized: "cube_lut.all_values_must_be_finite_numbers",
+                    localized: "cube_lut.error.non_finite",
                     defaultValue: "All values must be finite numbers."))
         }
         return SIMD3(numbers[0], numbers[1], numbers[2])
@@ -163,7 +163,7 @@ nonisolated struct CubeLUT: Sendable {
         guard hash(data) == id else {
             throw Failure.format(
                 String(
-                    localized: "cube_lut.the_stored_file_changed",
+                    localized: "cube_lut.error.file_changed",
                     defaultValue: "The stored file changed."))
         }
         return try Self(data: data, filename: url.lastPathComponent)

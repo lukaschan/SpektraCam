@@ -29,7 +29,7 @@ struct DevelopPanel: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         categoryControl(
-                            String(localized: "develop.film", defaultValue: "Film"), id: "film",
+                            String(localized: "film_stock.film", defaultValue: "Film"), id: "film",
                             categories: FilmStock.Category.films, selection: $filmCategory)
                         stockRows(
                             FilmStock.films, category: filmCategory,
@@ -52,7 +52,7 @@ struct DevelopPanel: View {
             } else {
                 HStack(alignment: .top, spacing: 12) {
                     column(
-                        String(localized: "develop.film", defaultValue: "Film"),
+                        String(localized: "film_stock.film", defaultValue: "Film"),
                         categories: FilmStock.Category.films, selection: $filmCategory,
                         stocks: FilmStock.films, selected: session.recipe.filmID, film: true)
                     column(
@@ -96,7 +96,7 @@ struct DevelopPanel: View {
             if session.recipe.bypassesPrint {
                 Text(
                     String(
-                        localized: "develop.print_settings_are_bypassed",
+                        localized: "develop.direct_scan_note",
                         defaultValue: "Print settings are bypassed.")
                 ).font(.caption2).foregroundStyle(.secondary)
             }

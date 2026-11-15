@@ -226,19 +226,19 @@ nonisolated enum CropCorner: String, CaseIterable, Identifiable, Codable, Sendab
         switch self {
         case .topLeft:
             String(
-                localized: "crop_selection.top_left_crop_corner",
+                localized: "crop.corner.top_left",
                 defaultValue: "Top left crop corner")
         case .topRight:
             String(
-                localized: "crop_selection.top_right_crop_corner",
+                localized: "crop.corner.top_right",
                 defaultValue: "Top right crop corner")
         case .bottomLeft:
             String(
-                localized: "crop_selection.bottom_left_crop_corner",
+                localized: "crop.corner.bottom_left",
                 defaultValue: "Bottom left crop corner")
         case .bottomRight:
             String(
-                localized: "crop_selection.bottom_right_crop_corner",
+                localized: "crop.corner.bottom_right",
                 defaultValue: "Bottom right crop corner")
         }
     }

@@ -9,7 +9,7 @@ nonisolated enum ToneRenderer {
         case parameters, render
         var errorDescription: String? {
             String(
-                localized: "tone.the_image_adjustment_could_not_be_rendered",
+                localized: "render.error.adjustment",
                 defaultValue: "The image adjustment could not be rendered.")
         }
     }

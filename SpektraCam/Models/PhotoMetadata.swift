@@ -8,11 +8,11 @@ nonisolated struct PhotoMetadata: Codable, Equatable, Sendable {
     var colorSpace = "Unknown profile"
     var formatLabel: String {
         format == "Photo"
-            ? String(localized: "photo_metadata.photo", defaultValue: "Photo") : format
+            ? String(localized: "photo.photo", defaultValue: "Photo") : format
     }
     var colorSpaceLabel: String {
         colorSpace == "Unknown profile"
-            ? String(localized: "photo_metadata.unknown_profile", defaultValue: "Unknown profile")
+            ? String(localized: "photo_info.unknown_profile", defaultValue: "Unknown profile")
             : colorSpace
     }
     var camera: String?
@@ -35,8 +35,8 @@ nonisolated struct PhotoMetadata: Codable, Equatable, Sendable {
         }
         let facing =
             cleaned.localizedCaseInsensitiveContains("front")
-            ? String(localized: "photo_metadata.front", defaultValue: "Front")
-            : String(localized: "photo_metadata.rear", defaultValue: "Rear")
+            ? String(localized: "camera.front", defaultValue: "Front")
+            : String(localized: "camera.rear", defaultValue: "Rear")
         return "\(facing) · \(cleaned[focal]) mm ƒ/\(cleaned[aperture])"
     }
     var exposure: String?

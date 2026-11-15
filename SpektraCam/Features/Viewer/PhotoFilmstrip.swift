@@ -28,9 +28,9 @@ struct PhotoFilmstrip: View {
                         .accessibilityValue(
                             photo.hasEdits
                                 ? String(
-                                    localized: "photo_filmstrip.edited", defaultValue: "Edited")
+                                    localized: "photo.edited", defaultValue: "Edited")
                                 : String(
-                                    localized: "photo_filmstrip.original", defaultValue: "Original")
+                                    localized: "photo.original", defaultValue: "Original")
                         )
                         .accessibilityAddTraits(photo.id == selection ? .isSelected : [])
                         .accessibilityIdentifier("photo.filmstrip.\(photo.id)")

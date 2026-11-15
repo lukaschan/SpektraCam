@@ -11,7 +11,7 @@ struct EditorInfoBar: View {
         }
         if session.recipe.look.mode == .lut { return "3D LUT" }
         return FilmStock.films.first { $0.id == session.recipe.filmID }?.name
-            ?? String(localized: "editor_info_bar.film", defaultValue: "Film")
+            ?? String(localized: "film_stock.film", defaultValue: "Film")
     }
     private var printName: String {
         if !session.recipe.look.enabled { return session.photo.metadata.formatLabel }
@@ -21,13 +21,13 @@ struct EditorInfoBar: View {
             }
             return names.isEmpty
                 ? String(
-                    localized: "editor_info_bar.no_lut_selected", defaultValue: "No LUT selected")
+                    localized: "lut.none_selected", defaultValue: "No LUT selected")
                 : names.joined(separator: " · ")
         }
         return session.recipe.bypassesPrint
-            ? String(localized: "editor_info_bar.direct_scan", defaultValue: "Direct scan")
+            ? String(localized: "develop.direct_scan", defaultValue: "Direct scan")
             : FilmStock.prints.first { $0.id == session.recipe.printID }?.name
-                ?? String(localized: "editor_info_bar.print", defaultValue: "Print")
+                ?? String(localized: "develop.print", defaultValue: "Print")
     }
     var body: some View {
         VStack(spacing: 2) {

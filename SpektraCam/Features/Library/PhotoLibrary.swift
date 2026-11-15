@@ -166,6 +166,10 @@ import SwiftData
         }
     }
     func flushPending() throws { for id in Array(pending.keys) { try flush(id) } }
+    /// Flush, and surface a failure through `saveFailure` instead of throwing.
+    func savePending() {
+        do { try flushPending() } catch { saveFailure = error.localizedDescription }
+    }
     /// Publish saved editor changes when returning through Camera, without rebuilding
     /// gallery thumbnails on every slider update while the editor is still open.
     func flushForLibrary() throws {

@@ -17,7 +17,7 @@ nonisolated enum FilmEdgeType: String, Codable, CaseIterable, Sendable {
         case .invertedScan: String(localized: "darkroom.edge.inverted_scan", defaultValue: "Negative scan")
         case .negativeScan: String(localized: "darkroom.edge.negative_scan", defaultValue: "Negative direct scan")
         case .reversalScan: String(localized: "darkroom.edge.slide_scan", defaultValue: "Slide scan")
-        case .cinemaPrint: String(localized: "darkroom.edge.cinema_print", defaultValue: "Cinema print film")
+        case .cinemaPrint: String(localized: "film_stock.cinema_print_film", defaultValue: "Cinema print film")
         }
     }
 }

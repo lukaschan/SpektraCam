@@ -1,9 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%lld px" : {
-
-    },
     "%lld³" : {
       "comment" : "Fixed brand, acronym or mathematical notation. Do not translate.",
       "extractionState" : "manual",
@@ -35,38 +32,20 @@
         }
       }
     },
-    "about.andrea_volpato_spektrafilm" : {
+    "about.author_website" : {
       "comment" : "About interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Andrea Volpato · Spektrafilm"
+            "value" : "Runze · Website"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Andrea Volpato · Spektrafilm"
-          }
-        }
-      }
-    },
-    "about.app_icon" : {
-      "comment" : "About interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App icon"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App 图标"
+            "value" : "Runze · 个人主页"
           }
         }
       }
@@ -107,25 +86,7 @@
         }
       }
     },
-    "about.export_uses_the_original_preview_quality_does" : {
-      "comment" : "About interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Export uses the original. Preview quality does not reduce the stored photo."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导出使用原图。预览画质不会降低导出画质。"
-          }
-        }
-      }
-    },
-    "about.free_and_open_source_all_editing_features" : {
+    "about.free_and_open_source" : {
       "comment" : "About interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -179,6 +140,24 @@
         }
       }
     },
+    "about.legal" : {
+      "comment" : "About interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "法律信息"
+          }
+        }
+      }
+    },
     "about.library_preview" : {
       "comment" : "Preview and batch export interface text. New copy; human editorial review pending.",
       "extractionState" : "manual",
@@ -193,6 +172,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "图库预览"
+          }
+        }
+      }
+    },
+    "about.licenses" : {
+      "comment" : "About interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Licenses"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "许可协议"
           }
         }
       }
@@ -214,38 +211,74 @@
         }
       }
     },
-    "about.preview" : {
+    "about.preview_quality_note" : {
       "comment" : "About interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Preview"
+            "value" : "Export uses the original. Preview quality does not reduce the stored photo."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "预览"
+            "value" : "导出始终使用原图。预览画质不影响已存储的照片。"
           }
         }
       }
     },
-    "about.runze_website" : {
+    "about.privacy_policy" : {
       "comment" : "About interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Runze · Website"
+            "value" : "Privacy Policy"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "我的主页"
+            "value" : "隐私政策"
+          }
+        }
+      }
+    },
+    "about.privacy_summary" : {
+      "comment" : "About interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No accounts, ads or tracking. Photos, edits and LUTs stay on this device."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有账户、广告或跟踪。照片、编辑和 LUT 仅保留在此设备上。"
+          }
+        }
+      }
+    },
+    "about.project_link" : {
+      "comment" : "About interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SpektraCam · Project"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SpektraCam · 项目"
           }
         }
       }
@@ -268,20 +301,74 @@
         }
       }
     },
-    "about.spektracam_project" : {
+    "about.simulation_disclaimer" : {
       "comment" : "About interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "SpektraCam · Project"
+            "value" : "Film and paper names identify the published data each simulation is modelled on. SpektraCam is not affiliated with or endorsed by their manufacturers."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "SpektraCam · 项目"
+            "value" : "胶片与相纸名称仅用于标明各模拟所依据的公开数据。SpektraCam 与相关厂商无关联，也未获其认可。"
+          }
+        }
+      }
+    },
+    "about.source_code" : {
+      "comment" : "About interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source Code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源代码"
+          }
+        }
+      }
+    },
+    "about.spektrafilm_link" : {
+      "comment" : "About interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andrea Volpato · Spektrafilm"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andrea Volpato · Spektrafilm"
+          }
+        }
+      }
+    },
+    "about.support" : {
+      "comment" : "About interface text. Opens the public issue tracker.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Support"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支持与反馈"
           }
         }
       }
@@ -430,25 +517,7 @@
         }
       }
     },
-    "adjust.details" : {
-      "comment" : "Adjust interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Details"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "详细设置"
-          }
-        }
-      }
-    },
-    "adjust.direct_scan_skips_print_controls" : {
+    "adjust.direct_scan_note" : {
       "comment" : "Adjust interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -659,7 +728,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "印相对比度"
+            "value" : "印相反差"
           }
         }
       }
@@ -826,114 +895,6 @@
         }
       }
     },
-    "app.capture_kept_with_error" : {
-      "comment" : "App interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The capture is kept on this iPhone. %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拍摄的照片仍保存在此 iPhone 上。%@"
-          }
-        }
-      }
-    },
-    "app.couldn_t_import_capture" : {
-      "comment" : "App interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t import capture"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法导入拍摄的照片"
-          }
-        }
-      }
-    },
-    "app.couldn_t_open_library" : {
-      "comment" : "App interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t open library"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法打开图库"
-          }
-        }
-      }
-    },
-    "app.couldn_t_save_edits" : {
-      "comment" : "App interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t save edits"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法保存编辑"
-          }
-        }
-      }
-    },
-    "app.later" : {
-      "comment" : "App interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Later"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "稍后"
-          }
-        }
-      }
-    },
-    "app.opening_library" : {
-      "comment" : "App interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opening library…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在打开图库…"
-          }
-        }
-      }
-    },
     "batch.clear_prepared" : {
       "comment" : "Preview and batch export interface text. New copy; human editorial review pending.",
       "extractionState" : "manual",
@@ -965,7 +926,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "照片将逐张导出。如某张照片所需内存不足，其余照片仍会继续导出。请选择较小尺寸以重试失败的照片；已完成的照片不会重复导出。"
+            "value" : "照片将逐张导出。如果某张照片内存不足，其余照片仍会继续导出。请选择较小尺寸以重试失败的照片；已完成的照片不会重复导出。"
           }
         }
       }
@@ -1096,114 +1057,6 @@
         }
       }
     },
-    "camera_meter.front" : {
-      "comment" : "Camera meter interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Front"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前置"
-          }
-        }
-      }
-    },
-    "camera_preview.camera_exposure" : {
-      "comment" : "Camera preview interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Camera exposure"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "相机曝光"
-          }
-        }
-      }
-    },
-    "camera_preview.iso" : {
-      "comment" : "Camera preview interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO%lld"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO %lld"
-          }
-        }
-      }
-    },
-    "camera_preview.iso_87650f" : {
-      "comment" : "Camera preview interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO—"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ISO —"
-          }
-        }
-      }
-    },
-    "camera_preview.preview_brightness_histogram" : {
-      "comment" : "Camera preview interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preview brightness histogram"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "预览亮度直方图"
-          }
-        }
-      }
-    },
-    "camera_preview.shows_the_processed_camera_preview_not_raw" : {
-      "comment" : "Camera preview interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shows the processed camera preview, not RAW clipping."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示经过处理的相机预览，无法据此判断 RAW 数据是否溢出。"
-          }
-        }
-      }
-    },
     "camera.12_mp" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1222,7 +1075,7 @@
         }
       }
     },
-    "camera.allow_camera_access_in_settings_to_take" : {
+    "camera.access_denied" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -1240,20 +1093,20 @@
         }
       }
     },
-    "camera.another_app_is_using_the_camera" : {
-      "comment" : "Camera interface text.",
+    "camera.camera" : {
+      "comment" : "Photo thumbnail interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Another app is using the camera."
+            "value" : "Camera"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "另一个 App 正在使用相机。"
+            "value" : "相机"
           }
         }
       }
@@ -1272,24 +1125,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "相机访问权限"
-          }
-        }
-      }
-    },
-    "camera.camera_capture_needs_a_physical_iphone" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Camera capture needs a physical iPhone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拍照需要使用实体 iPhone。"
           }
         }
       }
@@ -1348,6 +1183,42 @@
         }
       }
     },
+    "camera.capture_kept" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The capture is kept on this iPhone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拍摄的照片仍保留在此 iPhone 上。"
+          }
+        }
+      }
+    },
+    "camera.capture_kept_with_error" : {
+      "comment" : "App interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The capture is kept on this iPhone. %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拍摄的照片仍保留在此 iPhone 上。%@"
+          }
+        }
+      }
+    },
     "camera.close_camera" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1380,6 +1251,132 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "DNG RAW"
+          }
+        }
+      }
+    },
+    "camera.error.needs_device" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera capture needs a physical iPhone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拍照需要使用实体 iPhone。"
+          }
+        }
+      }
+    },
+    "camera.error.no_raw_data" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera did not return a RAW photo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机未返回 RAW 照片。"
+          }
+        }
+      }
+    },
+    "camera.error.not_ready" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera is not ready. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机尚未就绪，请重试。"
+          }
+        }
+      }
+    },
+    "camera.error.raw_unsupported" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This camera does not support RAW capture."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此摄像头不支持拍摄 RAW 照片。"
+          }
+        }
+      }
+    },
+    "camera.error.start_failed" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera could not start."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法启动相机。"
+          }
+        }
+      }
+    },
+    "camera.error.stopped" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera stopped. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机已停止，请重试。"
+          }
+        }
+      }
+    },
+    "camera.exposure" : {
+      "comment" : "Camera preview interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera exposure"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机曝光"
           }
         }
       }
@@ -1420,6 +1417,24 @@
         }
       }
     },
+    "camera.front" : {
+      "comment" : "Camera meter interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Front"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前置"
+          }
+        }
+      }
+    },
     "camera.front_camera" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1438,7 +1453,97 @@
         }
       }
     },
-    "camera.ios_paused_camera_access_while_another_view" : {
+    "camera.histogram" : {
+      "comment" : "Camera preview interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview brightness histogram"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览亮度直方图"
+          }
+        }
+      }
+    },
+    "camera.histogram_hint" : {
+      "comment" : "Camera preview interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the processed camera preview, not RAW clipping."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示经过处理的相机预览，无法据此判断 RAW 数据是否溢出。"
+          }
+        }
+      }
+    },
+    "camera.import_failed" : {
+      "comment" : "App interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t import capture"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法导入拍摄的照片"
+          }
+        }
+      }
+    },
+    "camera.interrupted.generic" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera will resume when it is available."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机可用时将自动恢复。"
+          }
+        }
+      }
+    },
+    "camera.interrupted.in_use" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another app is using the camera."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另一个 App 正在使用相机。"
+          }
+        }
+      }
+    },
+    "camera.interrupted.multitasking" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -1451,12 +1556,12 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iOS 因其他界面处于前台而暂停了相机访问。停止屏幕共享以恢复。"
+            "value" : "iOS 因其他界面处于前台而暂停了相机访问。请停止屏幕共享以恢复。"
           }
         }
       }
     },
-    "camera.ios_paused_the_camera_to_reduce_system" : {
+    "camera.interrupted.system_pressure" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -1470,6 +1575,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "iOS 已暂停相机，以降低系统负载。"
+          }
+        }
+      }
+    },
+    "camera.iso" : {
+      "comment" : "Camera preview interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ISO %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ISO %lld"
+          }
+        }
+      }
+    },
+    "camera.iso_unknown" : {
+      "comment" : "Camera preview interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ISO —"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ISO —"
           }
         }
       }
@@ -1564,24 +1705,6 @@
         }
       }
     },
-    "camera.raw_capture_needs_a_physical_iphone" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RAW capture needs a physical iPhone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拍摄 RAW 照片需要使用实体 iPhone。"
-          }
-        }
-      }
-    },
     "camera.raw_format" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1600,20 +1723,38 @@
         }
       }
     },
-    "camera.raw_photos_save_to_the_app_library" : {
+    "camera.raw_needs_device" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RAW photos save to the app library."
+            "value" : "RAW capture needs a physical iPhone."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RAW 照片会保存在 App 图库中。"
+            "value" : "拍摄 RAW 照片需要使用实体 iPhone。"
+          }
+        }
+      }
+    },
+    "camera.rear" : {
+      "comment" : "Photo metadata interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rear"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后置"
           }
         }
       }
@@ -1672,6 +1813,24 @@
         }
       }
     },
+    "camera.saves_to_library_note" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAW photos save to the app library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAW 照片存储在 App 图库中。"
+          }
+        }
+      }
+    },
     "camera.starting_camera" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1708,132 +1867,6 @@
         }
       }
     },
-    "camera.the_camera_could_not_start" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The camera could not start."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法启动相机。"
-          }
-        }
-      }
-    },
-    "camera.the_camera_did_not_return_a_raw" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The camera did not return a RAW photo."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "相机未返回 RAW 照片。"
-          }
-        }
-      }
-    },
-    "camera.the_camera_is_not_ready_try_again" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The camera is not ready. Try again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "相机尚未就绪，请重试。"
-          }
-        }
-      }
-    },
-    "camera.the_camera_stopped_try_again" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The camera stopped. Try again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "相机已停止，请重试。"
-          }
-        }
-      }
-    },
-    "camera.the_camera_will_resume_when_it_is" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The camera will resume when it is available."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "相机可用时将自动恢复。"
-          }
-        }
-      }
-    },
-    "camera.the_capture_is_kept_on_this_iphone" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The capture is kept on this iPhone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拍摄的照片仍保存在此 iPhone 上。"
-          }
-        }
-      }
-    },
-    "camera.this_camera_does_not_support_raw_capture" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This camera does not support RAW capture."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此摄像头不支持拍摄 RAW 照片。"
-          }
-        }
-      }
-    },
     "common.auto" : {
       "comment" : "Darkroom copy; human editorial review pending.",
       "localizations" : {
@@ -1849,7 +1882,8 @@
             "value" : "自动"
           }
         }
-      }
+      },
+      "extractionState" : "manual"
     },
     "common.cancel" : {
       "comment" : "Common interface text.",
@@ -1865,6 +1899,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消"
+          }
+        }
+      }
+    },
+    "common.close" : {
+      "comment" : "Lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        }
+      }
+    },
+    "common.collapsed" : {
+      "comment" : "Editor interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapsed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已收起"
           }
         }
       }
@@ -1887,6 +1957,24 @@
         }
       }
     },
+    "common.details" : {
+      "comment" : "Adjust interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "详细设置"
+          }
+        }
+      }
+    },
     "common.done" : {
       "comment" : "Common interface text.",
       "extractionState" : "manual",
@@ -1901,6 +1989,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成"
+          }
+        }
+      }
+    },
+    "common.expanded" : {
+      "comment" : "Editor interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expanded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已展开"
           }
         }
       }
@@ -1959,6 +2065,24 @@
         }
       }
     },
+    "common.later" : {
+      "comment" : "App interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "稍后"
+          }
+        }
+      }
+    },
     "common.mix" : {
       "comment" : "Common interface text.",
       "extractionState" : "manual",
@@ -1978,12 +2102,18 @@
       }
     },
     "common.off" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "Off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关"
           }
         }
       }
@@ -2007,12 +2137,18 @@
       }
     },
     "common.on" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "On"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开"
           }
         }
       }
@@ -2049,6 +2185,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还原"
+          }
+        }
+      }
+    },
+    "common.save" : {
+      "comment" : "Lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存储"
           }
         }
       }
@@ -2107,24 +2261,6 @@
         }
       }
     },
-    "control.details" : {
-      "comment" : "Control interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Details"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "详细设置"
-          }
-        }
-      }
-    },
     "control.enter" : {
       "comment" : "VoiceOver action to enter a value; the placeholder is the already-localized control title.",
       "extractionState" : "manual",
@@ -2174,7 +2310,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "还原为默认值"
+            "value" : "重置为默认值"
           }
         }
       }
@@ -2197,7 +2333,7 @@
         }
       }
     },
-    "crop_canvas.crop_area" : {
+    "crop.area" : {
       "comment" : "Crop canvas interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -2210,12 +2346,12 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "裁剪区域"
+            "value" : "裁切区域"
           }
         }
       }
     },
-    "crop_canvas.int_selection_normalizedrect_width_100_percent_wide" : {
+    "crop.area_summary" : {
       "comment" : "Crop canvas interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -2229,150 +2365,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "宽度 %lld%%，高度 %lld%%；构图偏移：水平 %lld，垂直 %lld"
-          }
-        }
-      }
-    },
-    "crop_canvas.move_down" : {
-      "comment" : "Crop canvas interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move down"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向下移动"
-          }
-        }
-      }
-    },
-    "crop_canvas.move_left" : {
-      "comment" : "Crop canvas interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move left"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向左移动"
-          }
-        }
-      }
-    },
-    "crop_canvas.move_right" : {
-      "comment" : "Crop canvas interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move right"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向右移动"
-          }
-        }
-      }
-    },
-    "crop_canvas.move_up" : {
-      "comment" : "Crop canvas interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move up"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向上移动"
-          }
-        }
-      }
-    },
-    "crop_selection.bottom_left_crop_corner" : {
-      "comment" : "Crop selection interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bottom left crop corner"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "裁剪框左下角"
-          }
-        }
-      }
-    },
-    "crop_selection.bottom_right_crop_corner" : {
-      "comment" : "Crop selection interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bottom right crop corner"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "裁剪框右下角"
-          }
-        }
-      }
-    },
-    "crop_selection.top_left_crop_corner" : {
-      "comment" : "Crop selection interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Top left crop corner"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "裁剪框左上角"
-          }
-        }
-      }
-    },
-    "crop_selection.top_right_crop_corner" : {
-      "comment" : "Crop selection interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Top right crop corner"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "裁剪框右上角"
           }
         }
       }
@@ -2467,24 +2459,6 @@
         }
       }
     },
-    "crop.aspect.super8Camera" : {
-      "comment" : "Crop interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Super 8 · camera 5.79×4.01 mm"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Super 8 · 摄影画幅 5.79×4.01 mm"
-          }
-        }
-      }
-    },
     "crop.aspect.super16ARRI" : {
       "comment" : "Crop interface text.",
       "extractionState" : "manual",
@@ -2517,6 +2491,96 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Super 35 · ANSI 24.9×18.7 mm"
+          }
+        }
+      }
+    },
+    "crop.aspect.super8Camera" : {
+      "comment" : "Crop interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Super 8 · camera 5.79×4.01 mm"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Super 8 · 摄影画幅 5.79×4.01 mm"
+          }
+        }
+      }
+    },
+    "crop.corner.bottom_left" : {
+      "comment" : "Crop selection interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bottom left crop corner"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裁切框左下角"
+          }
+        }
+      }
+    },
+    "crop.corner.bottom_right" : {
+      "comment" : "Crop selection interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bottom right crop corner"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裁切框右下角"
+          }
+        }
+      }
+    },
+    "crop.corner.top_left" : {
+      "comment" : "Crop selection interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Top left crop corner"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裁切框左上角"
+          }
+        }
+      }
+    },
+    "crop.corner.top_right" : {
+      "comment" : "Crop selection interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Top right crop corner"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "裁切框右上角"
           }
         }
       }
@@ -2611,6 +2675,78 @@
         }
       }
     },
+    "crop.move_down" : {
+      "comment" : "Crop canvas interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move down"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向下移动"
+          }
+        }
+      }
+    },
+    "crop.move_left" : {
+      "comment" : "Crop canvas interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move left"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向左移动"
+          }
+        }
+      }
+    },
+    "crop.move_right" : {
+      "comment" : "Crop canvas interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move right"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向右移动"
+          }
+        }
+      }
+    },
+    "crop.move_up" : {
+      "comment" : "Crop canvas interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move up"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向上移动"
+          }
+        }
+      }
+    },
     "crop.portrait" : {
       "comment" : "Crop interface text.",
       "extractionState" : "manual",
@@ -2642,7 +2778,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "重置拉直"
+            "value" : "重置校正"
           }
         }
       }
@@ -2678,7 +2814,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "旋转"
+            "value" : "校正"
           }
         }
       }
@@ -2701,97 +2837,7 @@
         }
       }
     },
-    "cube_lut.all_values_must_be_finite_numbers" : {
-      "comment" : "Cube lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All values must be finite numbers."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "所有数值都必须为有限数。"
-          }
-        }
-      }
-    },
-    "cube_lut.check_the_input_domain" : {
-      "comment" : "Cube lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check the input domain."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请检查输入定义域。"
-          }
-        }
-      }
-    },
-    "cube_lut.check_the_input_range" : {
-      "comment" : "Cube lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check the input range."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请检查输入范围。"
-          }
-        }
-      }
-    },
-    "cube_lut.check_the_table_length" : {
-      "comment" : "Cube lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check the table length."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请检查查找表长度。"
-          }
-        }
-      }
-    },
-    "cube_lut.check_title" : {
-      "comment" : "Cube lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check TITLE."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请检查 TITLE 字段。"
-          }
-        }
-      }
-    },
-    "cube_lut.domain_minimum_must_be_below_maximum" : {
+    "cube_lut.error.domain_order" : {
       "comment" : "Cube lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -2809,61 +2855,25 @@
         }
       }
     },
-    "cube_lut.each_table_row_needs_three_numbers" : {
+    "cube_lut.error.encoding" : {
       "comment" : "Cube lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Each table row needs three numbers."
+            "value" : "Use UTF-8 text."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "查找表每行须包含三个数值。"
+            "value" : "请使用 UTF-8 编码的文本。"
           }
         }
       }
     },
-    "cube_lut.invalid_with_reason" : {
-      "comment" : "Cube lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Invalid 3D LUT: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无效的 3D LUT：%@"
-          }
-        }
-      }
-    },
-    "cube_lut.only_3d_tables_without_1d_shapers_are" : {
-      "comment" : "Cube lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only 3D tables without 1D shapers are supported."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仅支持不含1D shaper的3D LUT"
-          }
-        }
-      }
-    },
-    "cube_lut.the_stored_file_changed" : {
+    "cube_lut.error.file_changed" : {
       "comment" : "Cube lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -2881,25 +2891,7 @@
         }
       }
     },
-    "cube_lut.the_table_is_incomplete" : {
-      "comment" : "Cube lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The table is incomplete."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查找表不完整。"
-          }
-        }
-      }
-    },
-    "cube_lut.this_edit_s_lut_file_is_not" : {
+    "cube_lut.error.file_missing" : {
       "comment" : "Cube lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -2917,7 +2909,97 @@
         }
       }
     },
-    "cube_lut.use_a_3d_cube_file_with_2" : {
+    "cube_lut.error.incomplete" : {
+      "comment" : "Cube lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The table is incomplete."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查找表不完整。"
+          }
+        }
+      }
+    },
+    "cube_lut.error.input_domain" : {
+      "comment" : "Cube lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the input domain."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请检查输入定义域。"
+          }
+        }
+      }
+    },
+    "cube_lut.error.input_range" : {
+      "comment" : "Cube lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the input range."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请检查输入范围。"
+          }
+        }
+      }
+    },
+    "cube_lut.error.invalid" : {
+      "comment" : "Cube lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid 3D LUT: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无效的 3D LUT：%@"
+          }
+        }
+      }
+    },
+    "cube_lut.error.non_finite" : {
+      "comment" : "Cube lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All values must be finite numbers."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所有数值都必须为有限数。"
+          }
+        }
+      }
+    },
+    "cube_lut.error.requirements" : {
       "comment" : "Cube lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -2935,20 +3017,74 @@
         }
       }
     },
-    "cube_lut.use_utf_8_text" : {
+    "cube_lut.error.row_format" : {
       "comment" : "Cube lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Use UTF-8 text."
+            "value" : "Each table row needs three numbers."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请使用 UTF-8 编码的文本。"
+            "value" : "查找表每行须包含三个数值。"
+          }
+        }
+      }
+    },
+    "cube_lut.error.shaper_unsupported" : {
+      "comment" : "Cube lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only 3D tables without 1D shapers are supported."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅支持不含1D shaper的3D LUT。"
+          }
+        }
+      }
+    },
+    "cube_lut.error.table_length" : {
+      "comment" : "Cube lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the table length."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请检查查找表长度。"
+          }
+        }
+      }
+    },
+    "cube_lut.error.title" : {
+      "comment" : "Cube lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check TITLE."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请检查 TITLE 字段。"
           }
         }
       }
@@ -3506,7 +3642,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "大面积泛光"
+            "value" : "泛光"
           }
         }
       }
@@ -3524,7 +3660,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "光晕"
+            "value" : "晕光"
           }
         }
       }
@@ -3724,7 +3860,8 @@
             "value" : "调整裁切"
           }
         }
-      }
+      },
+      "extractionState" : "manual"
     },
     "darkroom.edge.cine35" : {
       "comment" : "Darkroom copy; human editorial review pending.",
@@ -3739,24 +3876,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "35 mm 电影卷"
-          }
-        }
-      }
-    },
-    "darkroom.edge.cinema_print" : {
-      "comment" : "Darkroom copy; human editorial review pending.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cinema print film"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "电影正片"
+            "value" : "35 mm 电影胶片"
           }
         }
       }
@@ -3773,10 +3893,11 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "固定片窗"
+            "value" : "固定片门"
           }
         }
-      }
+      },
+      "extractionState" : "manual"
     },
     "darkroom.edge.from_develop" : {
       "comment" : "Darkroom copy; human editorial review pending.",
@@ -3793,7 +3914,8 @@
             "value" : "跟随冲洗设置"
           }
         }
-      }
+      },
+      "extractionState" : "manual"
     },
     "darkroom.edge.inverted_scan" : {
       "comment" : "Darkroom copy; human editorial review pending.",
@@ -3825,10 +3947,11 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "负片相纸印放"
+            "value" : "负片印相"
           }
         }
-      }
+      },
+      "extractionState" : "manual"
     },
     "darkroom.edge.negative_scan" : {
       "comment" : "Darkroom copy; human editorial review pending.",
@@ -3842,10 +3965,11 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "负片直扫"
+            "value" : "负片直接扫描"
           }
         }
-      }
+      },
+      "extractionState" : "manual"
     },
     "darkroom.edge.scan_zoom" : {
       "comment" : "Darkroom copy; human editorial review pending.",
@@ -3877,10 +4001,11 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "反转片直扫"
+            "value" : "反转片扫描"
           }
         }
-      }
+      },
+      "extractionState" : "manual"
     },
     "darkroom.fill" : {
       "comment" : "Darkroom print layout interface. New copy; human editorial review pending.",
@@ -3900,7 +4025,7 @@
         }
       }
     },
-    "darkroom.film_edge_later" : {
+    "darkroom.film_edge" : {
       "comment" : "Darkroom copy; human editorial review pending.",
       "localizations" : {
         "en" : {
@@ -3915,7 +4040,8 @@
             "value" : "胶片边缘"
           }
         }
-      }
+      },
+      "extractionState" : "manual"
     },
     "darkroom.gate" : {
       "comment" : "Darkroom distress copy; human editorial review pending.",
@@ -4223,20 +4349,20 @@
         }
       }
     },
-    "develop.film" : {
-      "comment" : "Negative or reversal camera film stock, not motion-picture playback.",
+    "develop.direct_scan_note" : {
+      "comment" : "Develop interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Film"
+            "value" : "Print settings are bypassed."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "胶片"
+            "value" : "当前不应用印相设置。"
           }
         }
       }
@@ -4255,24 +4381,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "印相"
-          }
-        }
-      }
-    },
-    "develop.print_settings_are_bypassed" : {
-      "comment" : "Develop interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Print settings are bypassed."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前不应用印相设置。"
           }
         }
       }
@@ -4307,78 +4415,6 @@
         }
       },
       "shouldTranslate" : false
-    },
-    "editor_info_bar.direct_scan" : {
-      "comment" : "Editor info bar interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Direct scan"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "直接扫描"
-          }
-        }
-      }
-    },
-    "editor_info_bar.film" : {
-      "comment" : "Editor info bar interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Film"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "胶片"
-          }
-        }
-      }
-    },
-    "editor_info_bar.no_lut_selected" : {
-      "comment" : "Editor info bar interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No LUT selected"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未选择 LUT"
-          }
-        }
-      }
-    },
-    "editor_info_bar.print" : {
-      "comment" : "Editor info bar interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Print"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "印相"
-          }
-        }
-      }
     },
     "editor.adjust" : {
       "comment" : "Editor interface text.",
@@ -4434,24 +4470,6 @@
         }
       }
     },
-    "editor.collapsed" : {
-      "comment" : "Editor interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collapsed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已收起"
-          }
-        }
-      }
-    },
     "editor.couldn_t_render_preview" : {
       "comment" : "Editor interface text.",
       "extractionState" : "manual",
@@ -4483,7 +4501,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法保存编辑"
+            "value" : "无法存储编辑"
           }
         }
       }
@@ -4519,7 +4537,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "裁剪"
+            "value" : "裁切"
           }
         }
       }
@@ -4592,24 +4610,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "展开面板"
-          }
-        }
-      }
-    },
-    "editor.expanded" : {
-      "comment" : "Editor interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expanded"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已展开"
           }
         }
       }
@@ -4711,24 +4711,6 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reset all edits?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "要重置所有编辑吗？"
-          }
-        }
-      }
-    },
-    "editor.reset_all_edits_17b6fe" : {
-      "comment" : "Editor interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
             "value" : "Reset All Edits"
           }
         },
@@ -4736,6 +4718,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重置所有编辑"
+          }
+        }
+      }
+    },
+    "editor.reset_all_edits_confirm" : {
+      "comment" : "Editor interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset all edits?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要重置所有编辑吗？"
           }
         }
       }
@@ -4753,7 +4753,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "重置裁剪"
+            "value" : "重置裁切"
           }
         }
       }
@@ -4789,7 +4789,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在保存编辑…"
+            "value" : "正在存储编辑…"
           }
         }
       }
@@ -4902,7 +4902,7 @@
         }
       }
     },
-    "effects.diffusion_can_require_substantial_memory_during_full" : {
+    "effects.diffusion_memory_note" : {
       "comment" : "Effects interface text. Diffusion is an optical filter/light-spread effect.",
       "extractionState" : "manual",
       "localizations" : {
@@ -5028,7 +5028,7 @@
         }
       }
     },
-    "effects.use_stock_grain_settings" : {
+    "effects.use_stock_grain_confirm" : {
       "comment" : "Effects interface text. Photographic film grain; B&W Grain changes grain only, not the whole photo.",
       "extractionState" : "manual",
       "localizations" : {
@@ -5060,6 +5060,78 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "色彩空间"
+          }
+        }
+      }
+    },
+    "export.error.decode" : {
+      "comment" : "Photo exporter interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original photo could not be decoded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法解码原始照片。"
+          }
+        }
+      }
+    },
+    "export.error.file" : {
+      "comment" : "Photo exporter interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The export file could not be created."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法创建导出文件。"
+          }
+        }
+      }
+    },
+    "export.error.photos_permission" : {
+      "comment" : "Photo library writer interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow adding photos in Settings to save this image."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在“设置”中允许添加照片，以存储此图像。"
+          }
+        }
+      }
+    },
+    "export.error.render" : {
+      "comment" : "Photo exporter interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The full-resolution image could not be rendered."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法渲染全分辨率图像。"
           }
         }
       }
@@ -5329,7 +5401,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "以像素计的最长边，从不放大。"
+            "value" : "以像素计的最长边，不会放大。"
           }
         }
       }
@@ -5365,7 +5437,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "保留裁剪、片边和相纸的全部像素，从不放大。"
+            "value" : "保留裁切、片边和相纸的全部像素，不会放大。"
           }
         }
       }
@@ -5401,7 +5473,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "冲印"
+            "value" : "相纸"
           }
         }
       }
@@ -5419,7 +5491,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按此分辨率输出相纸尺寸，从不放大。"
+            "value" : "按此分辨率输出相纸尺寸，不会放大。"
           }
         }
       }
@@ -5438,60 +5510,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标准"
-          }
-        }
-      }
-    },
-    "export.this_may_take_longer_if_memory_runs" : {
-      "comment" : "Export interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This may take longer. If memory runs out, iOS may close SpektraCam. Original photos and saved edits remain stored."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这可能需要更长时间。内存不足时，iOS 可能会关闭 SpektraCam。原始照片和已保存的编辑仍会保留。"
-          }
-        }
-      }
-    },
-    "export.try_export_anyway" : {
-      "comment" : "Export interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Try Export Anyway"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仍要尝试导出"
-          }
-        }
-      }
-    },
-    "export.try_export_anyway_7304a4" : {
-      "comment" : "Export interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Try export anyway?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仍要尝试导出吗？"
           }
         }
       }
@@ -5653,7 +5671,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "照相纸"
+            "value" : "相纸"
           }
         }
       }
@@ -5672,42 +5690,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "反转片"
-          }
-        }
-      }
-    },
-    "library_files.the_original_photo_is_not_available" : {
-      "comment" : "Library files interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The original photo is not available."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法访问原始照片。"
-          }
-        }
-      }
-    },
-    "library_files.this_image_format_is_not_supported" : {
-      "comment" : "Library files interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This image format is not supported."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不支持此图像格式。"
           }
         }
       }
@@ -5748,42 +5730,6 @@
         }
       }
     },
-    "library.couldn_t_import_errors_photos_check_the" : {
-      "comment" : "Library interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Couldn’t import %lld photo. Check the files and try again."
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Couldn’t import %lld photos. Check the files and try again."
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "variations" : {
-            "plural" : {
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "有 %lld 张照片无法导入。请检查文件后重试。"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "library.delete_app_copies" : {
       "comment" : "Library interface text. Delete only the imported app copy; the Photos original remains.",
       "extractionState" : "manual",
@@ -5802,7 +5748,7 @@
         }
       }
     },
-    "library.delete_photos" : {
+    "library.delete_confirm" : {
       "comment" : "Library interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -5838,20 +5784,74 @@
         }
       }
     },
-    "library.edited" : {
+    "library.delete_message" : {
       "comment" : "Library interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Edited"
+            "value" : "This removes the app copies and their edits. Your source photos stay unchanged."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已编辑"
+            "value" : "这会删除 App 内的照片副本及其编辑。源照片保持不变。"
+          }
+        }
+      }
+    },
+    "library.empty_hint" : {
+      "comment" : "Library interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import photos from Photos or Files."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从“照片”或“文件”导入照片。"
+          }
+        }
+      }
+    },
+    "library.error.original_missing" : {
+      "comment" : "Library files interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original photo is not available."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法访问原始照片。"
+          }
+        }
+      }
+    },
+    "library.error.unsupported_format" : {
+      "comment" : "Library files interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This image format is not supported."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支持此图像格式。"
           }
         }
       }
@@ -5946,20 +5946,38 @@
         }
       }
     },
-    "library.import_photos_from_photos_or_files" : {
+    "library.import_failed" : {
       "comment" : "Library interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import photos from Photos or Files."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Couldn’t import %lld photo. Check the files and try again."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Couldn’t import %lld photos. Check the files and try again."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从“照片”或“文件”导入照片。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "有 %lld 张照片无法导入。请检查文件后重试。"
+                }
+              }
+            }
           }
         }
       }
@@ -5982,24 +6000,6 @@
         }
       }
     },
-    "library.lut_manager" : {
-      "comment" : "Library interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LUT Manager"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LUT 管理"
-          }
-        }
-      }
-    },
     "library.no_photos" : {
       "comment" : "Library interface text.",
       "extractionState" : "manual",
@@ -6018,20 +6018,38 @@
         }
       }
     },
-    "library.original" : {
-      "comment" : "Library interface text.",
+    "library.open_failed" : {
+      "comment" : "App interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Original"
+            "value" : "Couldn’t open library"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "原图"
+            "value" : "无法打开图库"
+          }
+        }
+      }
+    },
+    "library.opening" : {
+      "comment" : "App interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening library…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在打开图库…"
           }
         }
       }
@@ -6090,7 +6108,7 @@
         }
       }
     },
-    "library.revert_selected_photos" : {
+    "library.revert_confirm" : {
       "comment" : "Library interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -6104,6 +6122,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "要将所选照片还原为原图吗？"
+          }
+        }
+      }
+    },
+    "library.revert_message" : {
+      "comment" : "Library interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This removes all edits from the selected app copies."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这会移除所选 App 内副本的所有编辑。"
           }
         }
       }
@@ -6158,42 +6194,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示"
-          }
-        }
-      }
-    },
-    "library.this_removes_all_edits_from_the_selected" : {
-      "comment" : "Library interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This removes all edits from the selected app copies."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这会移除所选 App 内副本的所有编辑。"
-          }
-        }
-      }
-    },
-    "library.this_removes_the_app_copies_and_their" : {
-      "comment" : "Library interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This removes the app copies and their edits. Your source photos stay unchanged."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这会删除 App 内的照片副本及其编辑。源照片保持不变。"
           }
         }
       }
@@ -6270,38 +6270,20 @@
         }
       }
     },
-    "lut.close" : {
+    "lut.delete_confirm" : {
       "comment" : "Lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Close"
+            "value" : "Delete selected LUTs?"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "关闭"
-          }
-        }
-      }
-    },
-    "lut.delete_keeps_luts_used_by_saved_edits" : {
-      "comment" : "Lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete keeps LUTs used by saved edits or Undo. Force Delete clears those LUT references, including Undo/Redo. Other adjustments and originals stay."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "普通删除会保留已保存的编辑或撤销记录使用的 LUT。强制删除会清除这些 LUT 引用，包括撤销和重做记录中的引用。其他调整和原图均会保留。"
+            "value" : "要删除所选 LUT 吗？"
           }
         }
       }
@@ -6324,20 +6306,20 @@
         }
       }
     },
-    "lut.delete_selected_luts" : {
+    "lut.delete_message" : {
       "comment" : "Lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete selected LUTs?"
+            "value" : "Delete keeps LUTs used by saved edits or Undo. Force Delete clears those LUT references, including Undo/Redo. Other adjustments and originals stay."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "要删除所选 LUT 吗？"
+            "value" : "普通删除会保留已存储的编辑或撤销记录使用的 LUT。强制删除会清除这些 LUT 引用，包括撤销和重做记录中的引用。其他调整和原图均会保留。"
           }
         }
       }
@@ -6360,7 +6342,7 @@
         }
       }
     },
-    "lut.effects_use_portra_400" : {
+    "lut.effects_note" : {
       "comment" : "Lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -6374,6 +6356,78 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "效果使用 Portra 400 模型。"
+          }
+        }
+      }
+    },
+    "lut.error.in_use" : {
+      "comment" : "Lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep LUTs that are used by saved edits or Undo. Remove those edits before you delete the LUTs."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已存储的编辑或撤销记录仍在使用这些 LUT。删除 LUT 前，请先移除相关编辑。"
+          }
+        }
+      }
+    },
+    "lut.error.index_unsupported" : {
+      "comment" : "Lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The LUT library index is not supported."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不支持此 LUT 库索引。"
+          }
+        }
+      }
+    },
+    "lut.error.list_changed" : {
+      "comment" : "Lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The LUT list changed. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LUT 列表已更改，请重试。"
+          }
+        }
+      }
+    },
+    "lut.error.name_length" : {
+      "comment" : "Lut interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use a name with 1 to 200 characters."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名称须为 1 至 200 个字符。"
           }
         }
       }
@@ -6432,24 +6486,6 @@
         }
       }
     },
-    "lut.keep_luts_that_are_used_by_saved" : {
-      "comment" : "Lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keep LUTs that are used by saved edits or Undo. Remove those edits before you delete the LUTs."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请保留已保存的编辑或撤销记录使用的 LUT。删除 LUT 前，请先移除相关编辑。"
-          }
-        }
-      }
-    },
     "lut.lut_1" : {
       "comment" : "Lut interface text.",
       "extractionState" : "manual",
@@ -6504,24 +6540,6 @@
         }
       }
     },
-    "lut.lut_manager" : {
-      "comment" : "Lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LUT Manager"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LUT 管理"
-          }
-        }
-      }
-    },
     "lut.lut_not_found" : {
       "comment" : "Lut interface text.",
       "extractionState" : "manual",
@@ -6558,6 +6576,24 @@
         }
       }
     },
+    "lut.manager" : {
+      "comment" : "Library interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LUT Manager"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LUT 管理"
+          }
+        }
+      }
+    },
     "lut.name" : {
       "comment" : "Lut interface text.",
       "extractionState" : "manual",
@@ -6590,6 +6626,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无"
+          }
+        }
+      }
+    },
+    "lut.none_selected" : {
+      "comment" : "Editor info bar interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No LUT selected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择 LUT"
           }
         }
       }
@@ -6648,56 +6702,20 @@
         }
       }
     },
-    "lut.save" : {
+    "lut.srgb_note" : {
       "comment" : "Lut interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save"
+            "value" : "Use LUTs made for sRGB photos."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "存储"
-          }
-        }
-      }
-    },
-    "lut.the_lut_library_index_is_not_supported" : {
-      "comment" : "Lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The LUT library index is not supported."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不支持此 LUT 库索引。"
-          }
-        }
-      }
-    },
-    "lut.the_lut_list_changed_try_again" : {
-      "comment" : "Lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The LUT list changed. Try again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LUT 列表已更改，请重试。"
+            "value" : "请使用适用于 sRGB 色彩空间的 LUT。"
           }
         }
       }
@@ -6716,42 +6734,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在更新 LUT…"
-          }
-        }
-      }
-    },
-    "lut.use_a_name_with_1_to_200" : {
-      "comment" : "Lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use a name with 1 to 200 characters."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "名称须为 1 至 200 个字符。"
-          }
-        }
-      }
-    },
-    "lut.use_luts_made_for_srgb_photos" : {
-      "comment" : "Lut interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use LUTs made for sRGB photos."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请使用适用于 sRGB 色彩空间的 LUT。"
           }
         }
       }
@@ -7159,7 +7141,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filter ir · Strength"
+            "value" : "IR filter · Strength"
           }
         },
         "zh-Hans" : {
@@ -7177,7 +7159,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filter ir · Cutoff · nm"
+            "value" : "IR filter · Cutoff · nm"
           }
         },
         "zh-Hans" : {
@@ -7195,7 +7177,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filter ir · Transition · nm"
+            "value" : "IR filter · Transition · nm"
           }
         },
         "zh-Hans" : {
@@ -7213,7 +7195,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filter uv · Strength"
+            "value" : "UV filter · Strength"
           }
         },
         "zh-Hans" : {
@@ -7231,7 +7213,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filter uv · Cutoff · nm"
+            "value" : "UV filter · Cutoff · nm"
           }
         },
         "zh-Hans" : {
@@ -7249,7 +7231,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Filter uv · Transition · nm"
+            "value" : "UV filter · Transition · nm"
           }
         },
         "zh-Hans" : {
@@ -7267,7 +7249,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lens blur um"
+            "value" : "Lens blur · µm"
           }
         },
         "zh-Hans" : {
@@ -7285,7 +7267,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "C filter neutral"
+            "value" : "Cyan filter neutral"
           }
         },
         "zh-Hans" : {
@@ -7537,7 +7519,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "M filter neutral"
+            "value" : "Magenta filter neutral"
           }
         },
         "zh-Hans" : {
@@ -7591,7 +7573,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "exposure"
+            "value" : "Preflash exposure"
           }
         },
         "zh-Hans" : {
@@ -7609,7 +7591,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "m filter shift"
+            "value" : "Preflash magenta shift"
           }
         },
         "zh-Hans" : {
@@ -7627,7 +7609,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "y filter shift"
+            "value" : "Preflash yellow shift"
           }
         },
         "zh-Hans" : {
@@ -7681,7 +7663,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Y filter neutral"
+            "value" : "Yellow filter neutral"
           }
         },
         "zh-Hans" : {
@@ -7771,7 +7753,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diffusion size um"
+            "value" : "Diffusion size · µm"
           }
         },
         "zh-Hans" : {
@@ -7789,7 +7771,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diffusion tail um"
+            "value" : "Diffusion tail · µm"
           }
         },
         "zh-Hans" : {
@@ -7825,7 +7807,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma interlayer b to rg · Red"
+            "value" : "Interlayer gamma · Blue→Red"
           }
         },
         "zh-Hans" : {
@@ -7843,7 +7825,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma interlayer b to rg · Green"
+            "value" : "Interlayer gamma · Blue→Green"
           }
         },
         "zh-Hans" : {
@@ -7861,7 +7843,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma interlayer g to rb · Red"
+            "value" : "Interlayer gamma · Green→Red"
           }
         },
         "zh-Hans" : {
@@ -7879,7 +7861,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma interlayer g to rb · Blue"
+            "value" : "Interlayer gamma · Green→Blue"
           }
         },
         "zh-Hans" : {
@@ -7897,7 +7879,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma interlayer r to gb · Green"
+            "value" : "Interlayer gamma · Red→Green"
           }
         },
         "zh-Hans" : {
@@ -7915,7 +7897,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma interlayer r to gb · Blue"
+            "value" : "Interlayer gamma · Red→Blue"
           }
         },
         "zh-Hans" : {
@@ -7933,7 +7915,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma samelayer rgb · Red"
+            "value" : "Same-layer gamma · Red"
           }
         },
         "zh-Hans" : {
@@ -7951,7 +7933,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma samelayer rgb · Green"
+            "value" : "Same-layer gamma · Green"
           }
         },
         "zh-Hans" : {
@@ -7969,7 +7951,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma samelayer rgb · Blue"
+            "value" : "Same-layer gamma · Blue"
           }
         },
         "zh-Hans" : {
@@ -7987,7 +7969,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inhibition interlayer"
+            "value" : "Interlayer inhibition"
           }
         },
         "zh-Hans" : {
@@ -8005,7 +7987,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inhibition samelayer"
+            "value" : "Same-layer inhibition"
           }
         },
         "zh-Hans" : {
@@ -8203,7 +8185,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microstructure · Radius · µm"
+            "value" : "Microstructure · Blur · µm"
           }
         },
         "zh-Hans" : {
@@ -8221,7 +8203,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microstructure · Amount · nm"
+            "value" : "Microstructure · Clump size · nm"
           }
         },
         "zh-Hans" : {
@@ -8275,7 +8257,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Particle area · layers · Layer 1"
+            "value" : "Particle area scale · Layer 1"
           }
         },
         "zh-Hans" : {
@@ -8293,7 +8275,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Particle area · layers · Layer 2"
+            "value" : "Particle area scale · Layer 2"
           }
         },
         "zh-Hans" : {
@@ -8311,7 +8293,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Particle area · layers · Layer 3"
+            "value" : "Particle area scale · Layer 3"
           }
         },
         "zh-Hans" : {
@@ -8329,7 +8311,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Particle area · RGB · Red"
+            "value" : "Particle area scale · RGB · Red"
           }
         },
         "zh-Hans" : {
@@ -8347,7 +8329,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Particle area · RGB · Green"
+            "value" : "Particle area scale · RGB · Green"
           }
         },
         "zh-Hans" : {
@@ -8365,7 +8347,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Particle area · RGB · Blue"
+            "value" : "Particle area scale · RGB · Blue"
           }
         },
         "zh-Hans" : {
@@ -8383,7 +8365,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sublayers active"
+            "value" : "Sub-layers active"
           }
         },
         "zh-Hans" : {
@@ -8473,7 +8455,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Boost ev"
+            "value" : "Highlight boost · EV"
           }
         },
         "zh-Hans" : {
@@ -8491,7 +8473,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Boost range"
+            "value" : "Highlight boost range"
           }
         },
         "zh-Hans" : {
@@ -8545,7 +8527,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Halation first sigma um · Red"
+            "value" : "Halation first sigma · µm · Red"
           }
         },
         "zh-Hans" : {
@@ -8563,7 +8545,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Halation first sigma um · Green"
+            "value" : "Halation first sigma · µm · Green"
           }
         },
         "zh-Hans" : {
@@ -8581,7 +8563,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Halation first sigma um · Blue"
+            "value" : "Halation first sigma · µm · Blue"
           }
         },
         "zh-Hans" : {
@@ -8599,7 +8581,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Halation n bounces"
+            "value" : "Halation bounces"
           }
         },
         "zh-Hans" : {
@@ -8707,7 +8689,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Protect ev"
+            "value" : "Protect threshold · EV"
           }
         },
         "zh-Hans" : {
@@ -8743,7 +8725,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scatter core um · Red"
+            "value" : "Scatter core · µm · Red"
           }
         },
         "zh-Hans" : {
@@ -8761,7 +8743,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scatter core um · Green"
+            "value" : "Scatter core · µm · Green"
           }
         },
         "zh-Hans" : {
@@ -8779,7 +8761,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scatter core um · Blue"
+            "value" : "Scatter core · µm · Blue"
           }
         },
         "zh-Hans" : {
@@ -8815,7 +8797,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scatter tail um · Red"
+            "value" : "Scatter tail · µm · Red"
           }
         },
         "zh-Hans" : {
@@ -8833,7 +8815,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scatter tail um · Green"
+            "value" : "Scatter tail · µm · Green"
           }
         },
         "zh-Hans" : {
@@ -8851,7 +8833,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scatter tail um · Blue"
+            "value" : "Scatter tail · µm · Blue"
           }
         },
         "zh-Hans" : {
@@ -8959,7 +8941,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma factor blue"
+            "value" : "Gamma factor · Blue"
           }
         },
         "zh-Hans" : {
@@ -8977,7 +8959,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma factor fast"
+            "value" : "Gamma factor · Fast layer"
           }
         },
         "zh-Hans" : {
@@ -8995,7 +8977,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma factor green"
+            "value" : "Gamma factor · Green"
           }
         },
         "zh-Hans" : {
@@ -9013,7 +8995,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma factor red"
+            "value" : "Gamma factor · Red"
           }
         },
         "zh-Hans" : {
@@ -9031,7 +9013,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gamma factor slow"
+            "value" : "Gamma factor · Slow layers"
           }
         },
         "zh-Hans" : {
@@ -9258,186 +9240,6 @@
         }
       }
     },
-    "photo_canvas.edited_photo" : {
-      "comment" : "Photo canvas interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Edited photo"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编辑后的照片"
-          }
-        }
-      }
-    },
-    "photo_canvas.fit_photo" : {
-      "comment" : "Photo canvas interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fit photo"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "缩放至适合大小"
-          }
-        }
-      }
-    },
-    "photo_canvas.percent_zoom" : {
-      "comment" : "VoiceOver zoom percentage. Preserve the %.0f numeric format; this is a complete message.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%.0f percent zoom"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "缩放 %.0f%%"
-          }
-        }
-      }
-    },
-    "photo_canvas.photo" : {
-      "comment" : "Photo canvas interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Photo"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "照片"
-          }
-        }
-      }
-    },
-    "photo_canvas.zoom_in" : {
-      "comment" : "Photo canvas interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zoom in"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放大"
-          }
-        }
-      }
-    },
-    "photo_exporter.the_export_file_could_not_be_created" : {
-      "comment" : "Photo exporter interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The export file could not be created."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法创建导出文件。"
-          }
-        }
-      }
-    },
-    "photo_exporter.the_full_resolution_image_could_not_be" : {
-      "comment" : "Photo exporter interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The full-resolution image could not be rendered."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法渲染全分辨率图像。"
-          }
-        }
-      }
-    },
-    "photo_exporter.the_original_photo_could_not_be_decoded" : {
-      "comment" : "Photo exporter interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The original photo could not be decoded."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法解码原始照片。"
-          }
-        }
-      }
-    },
-    "photo_filmstrip.edited" : {
-      "comment" : "Photo filmstrip interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Edited"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已编辑"
-          }
-        }
-      }
-    },
-    "photo_filmstrip.original" : {
-      "comment" : "Photo filmstrip interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Original"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原图"
-          }
-        }
-      }
-    },
     "photo_info.accessibility_summary" : {
       "comment" : "Photo info interface text.",
       "extractionState" : "manual",
@@ -9492,24 +9294,6 @@
         }
       }
     },
-    "photo_info.collapsed" : {
-      "comment" : "Photo info interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collapsed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已收起"
-          }
-        }
-      }
-    },
     "photo_info.color_space" : {
       "comment" : "Photo info interface text.",
       "extractionState" : "manual",
@@ -9524,24 +9308,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "色彩空间"
-          }
-        }
-      }
-    },
-    "photo_info.expanded" : {
-      "comment" : "Photo info interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expanded"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已展开"
           }
         }
       }
@@ -9578,6 +9344,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "格式"
+          }
+        }
+      }
+    },
+    "photo_info.histogram_hint" : {
+      "comment" : "Photo info interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch brightness and RGB channels"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换亮度与 RGB 通道"
           }
         }
       }
@@ -9672,24 +9456,6 @@
         }
       }
     },
-    "photo_info.switch_brightness_and_rgb_channels" : {
-      "comment" : "Photo info interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Switch brightness and RGB channels"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切换亮度与 RGB 通道"
-          }
-        }
-      }
-    },
     "photo_info.taken" : {
       "comment" : "Photo info interface text.",
       "extractionState" : "manual",
@@ -9708,79 +9474,7 @@
         }
       }
     },
-    "photo_library_writer.allow_adding_photos_in_settings_to_save" : {
-      "comment" : "Photo library writer interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Allow adding photos in Settings to save this image."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请在“设置”中允许添加照片，以存储此图像。"
-          }
-        }
-      }
-    },
-    "photo_metadata.front" : {
-      "comment" : "Photo metadata interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Front"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前置"
-          }
-        }
-      }
-    },
-    "photo_metadata.photo" : {
-      "comment" : "Photo metadata interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Photo"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "照片"
-          }
-        }
-      }
-    },
-    "photo_metadata.rear" : {
-      "comment" : "Photo metadata interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rear"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "后置"
-          }
-        }
-      }
-    },
-    "photo_metadata.unknown_profile" : {
+    "photo_info.unknown_profile" : {
       "comment" : "Photo metadata interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -9794,60 +9488,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未知色彩配置文件"
-          }
-        }
-      }
-    },
-    "photo_thumbnail.camera" : {
-      "comment" : "Photo thumbnail interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Camera"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "相机"
-          }
-        }
-      }
-    },
-    "photo_thumbnail.edited" : {
-      "comment" : "Photo thumbnail interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Edited"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已编辑"
-          }
-        }
-      }
-    },
-    "photo.couldn_t_show_photo" : {
-      "comment" : "Photo interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t show photo"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法显示照片"
           }
         }
       }
@@ -9870,7 +9510,7 @@
         }
       }
     },
-    "photo.delete_photo" : {
+    "photo.delete_confirm" : {
       "comment" : "Photo interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -9888,61 +9528,97 @@
         }
       }
     },
-    "photo.develop" : {
+    "photo.delete_message" : {
       "comment" : "Photo interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Develop"
+            "value" : "This removes the app copy and its edits. Your source photo stays unchanged."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "冲洗"
+            "value" : "将删除 App 内的照片副本及其编辑。源照片保持不变。"
           }
         }
       }
     },
-    "photo.direct_scan" : {
+    "photo.edited" : {
+      "comment" : "Library interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edited"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已编辑"
+          }
+        }
+      }
+    },
+    "photo.edited_photo" : {
+      "comment" : "Photo canvas interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edited photo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑后的照片"
+          }
+        }
+      }
+    },
+    "photo.fit" : {
+      "comment" : "Photo canvas interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fit photo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩放至适合大小"
+          }
+        }
+      }
+    },
+    "photo.load_failed" : {
       "comment" : "Photo interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Direct scan"
+            "value" : "Couldn’t show photo"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "直接扫描"
+            "value" : "无法显示照片"
           }
         }
       }
     },
-    "photo.film" : {
-      "comment" : "Photo interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Film"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "胶片"
-          }
-        }
-      }
-    },
-    "photo.loading_photo" : {
+    "photo.loading" : {
       "comment" : "Photo interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -9956,24 +9632,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在载入照片…"
-          }
-        }
-      }
-    },
-    "photo.no_lut_selected" : {
-      "comment" : "Photo interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No LUT selected"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未选择 LUT"
           }
         }
       }
@@ -10014,25 +9672,7 @@
         }
       }
     },
-    "photo.print" : {
-      "comment" : "Photo interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Print"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "印相"
-          }
-        }
-      }
-    },
-    "photo.revert_to_original" : {
+    "photo.revert_confirm" : {
       "comment" : "Photo interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -10050,72 +9690,61 @@
         }
       }
     },
-    "photo.revert_to_original_abfcd1" : {
-      "comment" : "Photo interface text.",
+    "photo.zoom_in" : {
+      "comment" : "Photo canvas interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Revert to Original"
+            "value" : "Zoom in"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "还原为原图"
+            "value" : "放大"
           }
         }
       }
     },
-    "photo.this_removes_the_app_copy_and_its" : {
-      "comment" : "Photo interface text.",
+    "photo.zoom_percent" : {
+      "comment" : "VoiceOver zoom percentage. Preserve the %.0f numeric format; this is a complete message.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This removes the app copy and its edits. Your source photo stays unchanged."
+            "value" : "%.0f percent zoom"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将删除 App 内的照片副本及其编辑。源照片保持不变。"
+            "value" : "缩放 %.0f%%"
           }
         }
       }
     },
-    "pixel_store.not_enough_storage" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "There is not enough free storage to render this size. Free some space or choose a smaller export size."
-          }
-        }
-      }
-    },
-    "raw_adjustments.the_raw_adjustment_values_are_not_supported" : {
-      "comment" : "Raw adjustments interface text.",
+    "render.error.adjustment" : {
+      "comment" : "Tone interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The RAW adjustment values are not supported."
+            "value" : "The image adjustment could not be rendered."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "不支持这些 RAW 调整值。"
+            "value" : "无法渲染图像调整。"
           }
         }
       }
     },
-    "render_memory_budget.estimated_usage_warning" : {
+    "render.error.memory_estimate" : {
       "comment" : "Export warning: first number is estimated MB, second is the current safe memory allowance.",
       "extractionState" : "manual",
       "localizations" : {
@@ -10133,43 +9762,25 @@
         }
       }
     },
-    "render_memory_budget.this_size_exceeds_the_rendering_limits_choose" : {
-      "comment" : "Render memory budget interface text.",
+    "render.error.raw_adjustments" : {
+      "comment" : "Raw adjustments interface text.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This size exceeds the rendering limits. Choose a smaller size and try again."
+            "value" : "The RAW adjustment values are not supported."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此尺寸超出渲染限制。请选择较小尺寸后重试。"
+            "value" : "不支持这些 RAW 调整值。"
           }
         }
       }
     },
-    "source_image.the_source_photo_could_not_be_decoded" : {
-      "comment" : "Source image interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The source photo could not be decoded."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法解码源照片。"
-          }
-        }
-      }
-    },
-    "source_image.this_raw_file_is_not_supported_by" : {
+    "render.error.raw_unsupported" : {
       "comment" : "Source image interface text.",
       "extractionState" : "manual",
       "localizations" : {
@@ -10187,6 +9798,59 @@
         }
       }
     },
+    "render.error.size_limit" : {
+      "comment" : "Render memory budget interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This size exceeds the rendering limits. Choose a smaller size and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此尺寸超出渲染限制。请选择较小尺寸后重试。"
+          }
+        }
+      }
+    },
+    "render.error.source_decode" : {
+      "comment" : "Source image interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source photo could not be decoded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法解码源照片。"
+          }
+        }
+      }
+    },
+    "render.error.storage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is not enough free storage to render this size. Free some space or choose a smaller export size."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用储存空间不足，无法渲染此尺寸。请清理储存空间，或选择较小的导出尺寸。"
+          }
+        }
+      }
+    },
     "SpektraCam" : {
       "comment" : "Fixed brand, acronym or mathematical notation. Do not translate.",
       "extractionState" : "manual",
@@ -10199,24 +9863,6 @@
         }
       },
       "shouldTranslate" : false
-    },
-    "tone.the_image_adjustment_could_not_be_rendered" : {
-      "comment" : "Tone interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The image adjustment could not be rendered."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法渲染图像调整。"
-          }
-        }
-      }
     }
   },
   "version" : "1.0"

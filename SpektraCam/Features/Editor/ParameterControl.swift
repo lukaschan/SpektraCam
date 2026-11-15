@@ -489,7 +489,7 @@ struct EffectDetails: View {
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12).padding(
                 .trailing, 8)
         } label: {
-            Text(String(localized: "control.details", defaultValue: "Details"))
+            Text(String(localized: "common.details", defaultValue: "Details"))
                 .accessibilityIdentifier(prefix + ".details")
         }.disabled(!session.recipe.flag(prefix + ".active"))
     }

@@ -40,7 +40,7 @@ struct ExportSizePicker: View {
             case .longEdge(let pixels):
                 Picker(String(localized: "export.size.long_edge", defaultValue: "Long edge"),
                        selection: Binding(get: { pixels }, set: { size = .longEdge($0) })) {
-                    ForEach(PhotoExporter.Size.longEdgePresets, id: \.self) { Text("\($0) px").tag($0) }
+                    ForEach(PhotoExporter.Size.longEdgePresets, id: \.self) { Text(verbatim: "\($0) px").tag($0) }
                 }
                 .accessibilityIdentifier("export.size.longEdge")
                 caption(String(localized: "export.size.long_edge_note", defaultValue: "Longest side in pixels. Never enlarged."))

@@ -47,22 +47,22 @@ struct CropCanvas: View {
                     .gesture(moveGesture(in: frame.size))
                     .accessibilityElement()
                     .accessibilityLabel(
-                        String(localized: "crop_canvas.crop_area", defaultValue: "Crop area")
+                        String(localized: "crop.area", defaultValue: "Crop area")
                     )
                     .accessibilityValue(cropDescription)
                     .accessibilityIdentifier("crop.area")
                     .accessibilityAction(
-                        named: String(localized: "crop_canvas.move_left", defaultValue: "Move left")
+                        named: String(localized: "crop.move_left", defaultValue: "Move left")
                     ) { moveBy(x: -0.02, y: 0) }
                     .accessibilityAction(
                         named: String(
-                            localized: "crop_canvas.move_right", defaultValue: "Move right")
+                            localized: "crop.move_right", defaultValue: "Move right")
                     ) { moveBy(x: 0.02, y: 0) }
                     .accessibilityAction(
-                        named: String(localized: "crop_canvas.move_up", defaultValue: "Move up")
+                        named: String(localized: "crop.move_up", defaultValue: "Move up")
                     ) { moveBy(x: 0, y: -0.02) }
                     .accessibilityAction(
-                        named: String(localized: "crop_canvas.move_down", defaultValue: "Move down")
+                        named: String(localized: "crop.move_down", defaultValue: "Move down")
                     ) { moveBy(x: 0, y: 0.02) }
 
                 ForEach(CropCorner.allCases) { corner in
@@ -96,7 +96,7 @@ struct CropCanvas: View {
 
     private var cropDescription: String {
         String(
-            localized: "crop_canvas.int_selection_normalizedrect_width_100_percent_wide",
+            localized: "crop.area_summary",
             defaultValue:
                 "\(Int(selection.normalizedRect.width * 100)) percent wide, \(Int(selection.normalizedRect.height * 100)) percent high; framing \(Int(geometry.framingX * 100)), \(Int(geometry.framingY * 100))"
         )

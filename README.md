@@ -1,6 +1,6 @@
 # SpektraCam
 
-**v0.3 · iPhone · iOS 27.2+**
+**v0.3 · iPhone · iOS 26+**
 
 此App是基于 Andrea Volpato 的 [spektrafilm][upstream] 原生移植的 iPhone 照片编辑器。
 免费、开源，支持简体中文与英文。
@@ -10,7 +10,7 @@ This App is a free, open-source iPhone photo editor built on a native port of An
 ## 功能 / Features
 
 从“照片”或“文件”导入，保留原始文件并且单独保存编辑。
-有裁剪、胶片与印相模拟、调整、颗粒、光晕和柔光，以及 JPEG/PNG 导出功能。
+有裁切、胶片与印相模拟、调整、颗粒、光晕和柔光，以及 JPEG/PNG 导出功能。
 界面目前仅支持 iPhone 竖屏。
 
 Import from Photos or Files. Keep originals and save edits separately. 
@@ -51,10 +51,10 @@ Export is currently SDR, sRGB, 8-bit only. Export at full resolution is limited 
 
 ## 构建 / Build
 
-使用 Xcode 27.2 打开 [SpektraCam.xcodeproj](SpektraCam.xcodeproj)，选择模拟器或 iPhone 后运行。
+使用 Xcode 27.2 打开 [SpektraCam.xcodeproj](SpektraCam.xcodeproj)，选择模拟器或 iPhone 后运行。最低支持 iOS 26。
 真机安装需要选择自己的开发团队。Python 3 用于本机测试；UI 测试需先在测试模拟器中加入两张不同照片。
 
-Open [SpektraCam.xcodeproj](SpektraCam.xcodeproj) in Xcode 27.2, select a Simulator or iPhone, and run. Select your development team for device installation. Python 3 runs the native checks; UI tests need two different photos in the test Simulator.
+Open [SpektraCam.xcodeproj](SpektraCam.xcodeproj) in Xcode 27.2, select a Simulator or iPhone, and run. The deployment target is iOS 26. Select your development team for device installation. Python 3 runs the native checks; UI tests need two different photos in the test Simulator.
 
 ```sh
 python3 Scripts/core-checks.py
@@ -63,9 +63,9 @@ python3 Scripts/build-and-run.py --ui-tests
 
 ## 隐私 / Privacy
 
-无账户、广告、追踪或分析 SDK。照片、编辑与 LUT 保存在设备本地。可选定位会写入拍摄位置；Apple 地图服务可能接收照片坐标以查询地名。导出、分享、系统备份与 TestFlight 诊断遵循对应的系统设置与隐私条款。
+无账户、广告、追踪或分析 SDK。照片、编辑与 LUT 保存在设备本地。可选定位会写入拍摄位置；Apple 地图服务可能接收照片坐标以查询地名。导出、共享、系统备份与 TestFlight 诊断遵循对应的系统设置与隐私条款。详见[隐私政策](PRIVACY.md)。
 
-No accounts, ads, tracking or analytics SDKs. Photos, edits and LUTs stay on the device. Optional location access adds capture coordinates; Apple MapKit may receive photo coordinates to resolve place names. Export, sharing, system backups and TestFlight diagnostics follow the relevant system settings and privacy terms.
+No accounts, ads, tracking or analytics SDKs. Photos, edits and LUTs stay on the device. Optional location access adds capture coordinates; Apple MapKit may receive photo coordinates to resolve place names. Export, sharing, system backups and TestFlight diagnostics follow the relevant system settings and privacy terms. See the [privacy policy](PRIVACY.md).
 
 ## 许可与致谢 / License and credits
 

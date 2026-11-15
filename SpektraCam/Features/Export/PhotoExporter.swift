@@ -18,15 +18,15 @@ nonisolated enum PhotoExporter {
             switch self {
             case .decode:
                 String(
-                    localized: "photo_exporter.the_original_photo_could_not_be_decoded",
+                    localized: "export.error.decode",
                     defaultValue: "The original photo could not be decoded.")
             case .render:
                 String(
-                    localized: "photo_exporter.the_full_resolution_image_could_not_be",
+                    localized: "export.error.render",
                     defaultValue: "The full-resolution image could not be rendered.")
             case .encode:
                 String(
-                    localized: "photo_exporter.the_export_file_could_not_be_created",
+                    localized: "export.error.file",
                     defaultValue: "The export file could not be created.")
             }
         }

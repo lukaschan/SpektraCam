@@ -98,14 +98,7 @@ struct PhotoDetailView: View {
                 ExportPanel(originalURL: request.originalURL, sourceFilename: request.sourceFilename)
             }
         }
-        .alert(
-            String(localized: "photo.photo", defaultValue: "Photo"),
-            isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })
-        ) {
-            Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) {}
-        } message: {
-            Text(failure ?? "")
-        }
+        .failureAlert(String(localized: "photo.photo", defaultValue: "Photo"), message: $failure)
     }
     private var savedRecipe: EditRecipe? {
         photo?.recipeData.flatMap { try? JSONDecoder().decode(EditRecipe.self, from: $0) }
@@ -116,27 +109,27 @@ struct PhotoDetailView: View {
         }
         if recipe.look.mode == .lut { return "3D LUT" }
         return FilmStock.films.first { $0.id == recipe.filmID }?.name
-            ?? String(localized: "photo.film", defaultValue: "Film")
+            ?? String(localized: "film_stock.film", defaultValue: "Film")
     }
     private var printTitle: String {
         guard let recipe = savedRecipe, recipe.look.enabled else {
             return photo?.isRAW == true
                 ? "RAW"
                 : photo?.metadata.formatLabel
-                    ?? String(localized: "photo_metadata.photo", defaultValue: "Photo")
+                    ?? String(localized: "photo.photo", defaultValue: "Photo")
         }
         if recipe.look.mode == .lut {
             let names = [recipe.look.first.id, recipe.look.second.id].compactMap {
                 library.luts.name($0)
             }
             return names.isEmpty
-                ? String(localized: "photo.no_lut_selected", defaultValue: "No LUT selected")
+                ? String(localized: "lut.none_selected", defaultValue: "No LUT selected")
                 : names.joined(separator: " · ")
         }
         return recipe.bypassesPrint
-            ? String(localized: "photo.direct_scan", defaultValue: "Direct scan")
+            ? String(localized: "develop.direct_scan", defaultValue: "Direct scan")
             : FilmStock.prints.first { $0.id == recipe.printID }?.name
-                ?? String(localized: "photo.print", defaultValue: "Print")
+                ?? String(localized: "develop.print", defaultValue: "Print")
     }
     private func loadPreview() async {
         guard let photo else { return }
@@ -311,12 +304,12 @@ private struct PhotoViewerControls: View {
             .photoActionStyle()
             .disabled(!canRevert).accessibilityIdentifier("photo.revert")
             .confirmationDialog(
-                String(localized: "photo.revert_to_original", defaultValue: "Revert to original?"),
+                String(localized: "photo.revert_confirm", defaultValue: "Revert to original?"),
                 isPresented: $confirmRevert, titleVisibility: .visible
             ) {
                 Button(
                     String(
-                        localized: "photo.revert_to_original_abfcd1",
+                        localized: "library.revert_to_original",
                         defaultValue: "Revert to Original"), role: .destructive, action: revert)
             }
             deleteButton
@@ -324,7 +317,7 @@ private struct PhotoViewerControls: View {
     }
     private var developButton: some View {
         Button(action: develop) {
-            Text(String(localized: "photo.develop", defaultValue: "Develop")).font(.headline)
+            Text(String(localized: "editor.develop", defaultValue: "Develop")).font(.headline)
                 .lineLimit(1).fixedSize(
                     horizontal: true, vertical: false
                 )
@@ -354,7 +347,7 @@ private struct PhotoDeleteButton: View {
             "photo.delete"
         )
         .confirmationDialog(
-            String(localized: "photo.delete_photo", defaultValue: "Delete Photo?"),
+            String(localized: "photo.delete_confirm", defaultValue: "Delete Photo?"),
             isPresented: $confirmDelete, titleVisibility: .visible
         ) {
             Button(
@@ -363,7 +356,7 @@ private struct PhotoDeleteButton: View {
         } message: {
             Text(
                 String(
-                    localized: "photo.this_removes_the_app_copy_and_its",
+                    localized: "photo.delete_message",
                     defaultValue:
                         "This removes the app copy and its edits. Your source photo stays unchanged."
                 ))
@@ -388,7 +381,7 @@ struct AlbumPhotoPage: View {
                 ContentUnavailableView {
                     Label(
                         String(
-                            localized: "photo.couldn_t_show_photo",
+                            localized: "photo.load_failed",
                             defaultValue: "Couldn’t show photo"),
                         systemImage: "exclamationmark.triangle")
                 } description: {
@@ -398,7 +391,7 @@ struct AlbumPhotoPage: View {
                 }
             } else {
                 ProgressView(
-                    String(localized: "photo.loading_photo", defaultValue: "Loading photo…"))
+                    String(localized: "photo.loading", defaultValue: "Loading photo…"))
             }
         }
         .task(id: "\(photo.renderKey)-\(retry)-\(previewMaximum)") {

@@ -166,7 +166,7 @@ struct LibraryView: View {
                             )
                             .confirmationDialog(
                                 String(
-                                    localized: "library.revert_selected_photos",
+                                    localized: "library.revert_confirm",
                                     defaultValue: "Revert selected photos?"),
                                 isPresented: $confirmRevert,
                                 titleVisibility: .visible
@@ -189,7 +189,7 @@ struct LibraryView: View {
                                 Text(
                                     String(
                                         localized:
-                                            "library.this_removes_all_edits_from_the_selected",
+                                            "library.revert_message",
                                         defaultValue:
                                             "This removes all edits from the selected app copies."))
                             }
@@ -205,14 +205,14 @@ struct LibraryView: View {
                             .accessibilityHint(String(localized: "library.from_photos", defaultValue: "From Photos"))
                         }
                     }
-                    ToolbarItem(placement: .bottomBar) { Spacer() }
+                    ToolbarSpacer(.flexible, placement: .bottomBar)
                     ToolbarItem(placement: .bottomBar) {
                         Button(
-                            String(localized: "library.lut_manager", defaultValue: "LUT Manager")
+                            String(localized: "lut.manager", defaultValue: "LUT Manager")
                         ) { showLUTs = true }
                         .accessibilityIdentifier("library.luts").disabled(working)
                     }
-                    ToolbarItem(placement: .bottomBar) { Spacer() }
+                    ToolbarSpacer(.flexible, placement: .bottomBar)
                     ToolbarItem(placement: .bottomBar) {
                         Button(
                             String(localized: "common.delete", defaultValue: "Delete"),
@@ -222,7 +222,7 @@ struct LibraryView: View {
                         .disabled(!selecting || selection.isEmpty || working)
                         .confirmationDialog(
                             String(
-                                localized: "library.delete_photos",
+                                localized: "library.delete_confirm",
                                 defaultValue: "Delete \(selection.count) photos?"),
                             isPresented: $confirmDelete,
                             titleVisibility: .visible
@@ -246,7 +246,7 @@ struct LibraryView: View {
                         } message: {
                             Text(
                                 String(
-                                    localized: "library.this_removes_the_app_copies_and_their",
+                                    localized: "library.delete_message",
                                     defaultValue:
                                         "This removes the app copies and their edits. Your source photos stay unchanged."
                                 )
@@ -282,14 +282,7 @@ struct LibraryView: View {
                     scrollRevision += 1
                 }
 
-                .alert(
-                    String(localized: "library.library", defaultValue: "Library"),
-                    isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })
-                ) {
-                    Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) {}
-                } message: {
-                    Text(failure ?? "")
-                }
+                .failureAlert(String(localized: "library.library", defaultValue: "Library"), message: $failure)
         }
     }
     private var gallery: some View {
@@ -304,7 +297,7 @@ struct LibraryView: View {
                     systemImage: "photo.on.rectangle",
                     description: Text(
                         String(
-                            localized: "library.import_photos_from_photos_or_files",
+                            localized: "library.empty_hint",
                             defaultValue: "Import photos from Photos or Files.")))
             } else {
                 ScrollViewReader { proxy in
@@ -344,10 +337,10 @@ struct LibraryView: View {
                                         .accessibilityValue(
                                             photo.hasEdits
                                                 ? String(
-                                                    localized: "library.edited",
+                                                    localized: "photo.edited",
                                                     defaultValue: "Edited")
                                                 : String(
-                                                    localized: "library.original",
+                                                    localized: "photo.original",
                                                     defaultValue: "Original")
                                         )
                                         .accessibilityAddTraits(
@@ -436,7 +429,7 @@ struct LibraryView: View {
         scrollRevision += 1
         if errors > 0 {
             failure = String(
-                localized: "library.couldn_t_import_errors_photos_check_the",
+                localized: "library.import_failed",
                 defaultValue: "Couldn’t import \(errors) photos. Check the files and try again.")
         }
     }

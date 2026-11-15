@@ -60,7 +60,7 @@ struct CameraView: View {
                             if model.pendingCount > 0 {
                                 Text(
                                     String(
-                                        localized: "camera.the_capture_is_kept_on_this_iphone",
+                                        localized: "camera.capture_kept",
                                         defaultValue: "The capture is kept on this iPhone.")
                                 ).font(.footnote)
                                 Button(
@@ -135,7 +135,7 @@ struct CameraView: View {
                                 localized: "camera.saved_to_library",
                                 defaultValue: "Saved to Library: \(model.savedCount)")
                             : String(
-                                localized: "camera.raw_photos_save_to_the_app_library",
+                                localized: "camera.saves_to_library_note",
                                 defaultValue: "RAW photos save to the app library.")
                     )
                     .font(.footnote).foregroundStyle(.secondary)
@@ -257,7 +257,7 @@ struct CameraView: View {
                 systemImage: "camera",
                 description: Text(
                     String(
-                        localized: "camera.raw_capture_needs_a_physical_iphone",
+                        localized: "camera.raw_needs_device",
                         defaultValue: "RAW capture needs a physical iPhone."))
             )
             .accessibilityIdentifier("camera.unavailable")
@@ -269,7 +269,7 @@ struct CameraView: View {
             } description: {
                 Text(
                     String(
-                        localized: "camera.allow_camera_access_in_settings_to_take",
+                        localized: "camera.access_denied",
                         defaultValue: "Allow camera access in Settings to take photos."))
             } actions: {
                 Button(String(localized: "camera.open_settings", defaultValue: "Open Settings")) {
@@ -283,7 +283,7 @@ struct CameraView: View {
                 description: Text(
                     model.pauseReason
                         ?? String(
-                            localized: "camera.the_camera_will_resume_when_it_is",
+                            localized: "camera.interrupted.generic",
                             defaultValue: "The camera will resume when it is available.")))
         case .failed(let message):
             ContentUnavailableView {

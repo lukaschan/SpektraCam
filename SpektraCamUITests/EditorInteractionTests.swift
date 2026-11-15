@@ -482,6 +482,16 @@ final class EditorInteractionTests: XCTestCase {
         XCTAssertTrue(
             app.staticTexts["All editing features are free."].exists
                 || app.staticTexts["Free and open source. All editing features are free."].exists)
+        // App Review requires the privacy policy to be reachable in the app.
+        let licenses = app.descendants(matching: .any)["about.licenses"]
+        for _ in 0..<4 where !licenses.isHittable { app.swipeUp() }
+        XCTAssertTrue(app.descendants(matching: .any)["about.privacy"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["about.support"].exists)
+        licenses.tap()
+        app.buttons["SpektraCam · GPLv3"].tap()
+        XCTAssertTrue(
+            app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "GNU GENERAL PUBLIC LICENSE"))
+                .firstMatch.waitForExistence(timeout: 5))
     }
     @MainActor func testPhotoRevertAndControls() {
         let app = openPhoto()
@@ -500,7 +510,7 @@ final class EditorInteractionTests: XCTestCase {
         expectation(for: NSPredicate(format: "isEnabled == false"), evaluatedWith: revert)
         waitForExpectations(timeout: 10)
     }
-    @MainActor func testStraightenedCropCanReframe() {
+    @MainActor func testStraightenedCropCanReframe() throws {
         let app = openPhoto()
         app.buttons["editor.tool.crop"].tap()
         let slider = app.sliders["crop.straighten"]
@@ -508,6 +518,10 @@ final class EditorInteractionTests: XCTestCase {
         drag(slider, to: 0.65)
         let area = app.otherElements["crop.area"]
         XCTAssertTrue(area.waitForExistence(timeout: 5))
+        // A straightened square fills its frame exactly, so there is nothing to reframe.
+        try XCTSkipIf(
+            abs(area.frame.width - area.frame.height) < 2,
+            "Needs a non-square first photo in the test Simulator")
         let before = area.value as? String
         area.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(
             forDuration: 0.1,
@@ -634,6 +648,9 @@ final class EditorInteractionTests: XCTestCase {
         app.buttons["camera.close"].tap()
         app.buttons["photo.develop"].tap()
         XCTAssertTrue(app.buttons["editor.back"].waitForExistence(timeout: 30))
+        app.buttons["editor.expand"].tap()
+        let panel = app.buttons["editor.expand"].value as? String
+        XCTAssertEqual(panel, "Expanded")
         app.buttons["camera.open"].tap()
         XCTAssertTrue(app.buttons["camera.close"].waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -642,7 +659,9 @@ final class EditorInteractionTests: XCTestCase {
         add(screenshot)
         app.buttons["camera.close"].tap()
         XCTAssertTrue(app.buttons["editor.back"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.buttons["editor.expand"].value as? String, "Expanded")
+        XCTAssertEqual(
+            app.buttons["editor.expand"].value as? String, panel,
+            "Presenting the camera changed the editor panel")
     }
     @MainActor func testCameraLibraryReturnsToRoot() {
         let app = openPhoto()
@@ -833,6 +852,16 @@ final class EditorInteractionTests: XCTestCase {
             forDuration: 0.1,
             thenDragTo: slider.coordinate(withNormalizedOffset: CGVector(dx: position, dy: 0.5)),
             withVelocity: .slow, thenHoldForDuration: 0.1)
+    }
+    /// Scroll the editor panel until a control is wholly inside it. A collapsed panel clips the
+    /// last control to a sliver that XCUITest still reports as hittable.
+    @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        let controls = app.descendants(matching: .any).matching(identifier: "editor.controls").firstMatch
+        for _ in 0..<4 where element.frame.maxY > controls.frame.maxY - 8 {
+            controls.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7)).press(
+                forDuration: 0.05,
+                thenDragTo: controls.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)))
+        }
     }
     @MainActor private func libraryPhotos(_ app: XCUIApplication) -> XCUIElementQuery {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'library.photo.'"))
@@ -1164,12 +1193,14 @@ final class EditorInteractionTests: XCTestCase {
         app.buttons["adjust.section.color"].tap()
         let bw = app.descendants(matching: .any).matching(identifier: "tone.monochrome").firstMatch
         XCTAssertTrue(bw.waitForExistence(timeout: 5))
+        reveal(bw, in: app)
         bw.tap()
         XCTAssertEqual(bw.value as? String, "1")
         app.buttons["editor.tool.effects"].tap()
         let grain = app.descendants(matching: .any).matching(identifier: "grain.monochrome")
             .firstMatch
         XCTAssertTrue(grain.waitForExistence(timeout: 5))
+        reveal(grain, in: app)
         grain.tap()
         XCTAssertEqual(grain.value as? String, "1")
         app.buttons["effects.section.halation"].tap()

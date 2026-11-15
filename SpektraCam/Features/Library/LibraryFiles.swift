@@ -41,11 +41,11 @@ actor LibraryFiles {
             switch self {
             case .image:
                 String(
-                    localized: "library_files.this_image_format_is_not_supported",
+                    localized: "library.error.unsupported_format",
                     defaultValue: "This image format is not supported.")
             case .missing:
                 String(
-                    localized: "library_files.the_original_photo_is_not_available",
+                    localized: "library.error.original_missing",
                     defaultValue: "The original photo is not available.")
             }
         }

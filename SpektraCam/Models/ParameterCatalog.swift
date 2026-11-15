@@ -18,7 +18,7 @@ extension ParameterDefinition {
             "film_render.grain.sublayers_active",
             String(
                 localized: "parameter.film_render.grain.sublayers_active.title",
-                defaultValue: "Sublayers active"), true),
+                defaultValue: "Sub-layers active"), true),
         .number(
             "film_render.grain.particle_area_um2",
             String(
@@ -29,37 +29,37 @@ extension ParameterDefinition {
             "film_render.grain.particle_scale[0]",
             String(
                 localized: "parameter.film_render.grain.particle_scale[0].title",
-                defaultValue: "Particle area · RGB · Red"), 1.6, 0.01...4.800000000000001,
+                defaultValue: "Particle area scale · RGB · Red"), 1.6, 0.01...4.800000000000001,
             step: 0.01, minimum: 0.01, maximum: nil, unit: ""),
         .number(
             "film_render.grain.particle_scale[1]",
             String(
                 localized: "parameter.film_render.grain.particle_scale[1].title",
-                defaultValue: "Particle area · RGB · Green"), 1.6, 0.01...4.800000000000001,
+                defaultValue: "Particle area scale · RGB · Green"), 1.6, 0.01...4.800000000000001,
             step: 0.01, minimum: 0.01, maximum: nil, unit: ""),
         .number(
             "film_render.grain.particle_scale[2]",
             String(
                 localized: "parameter.film_render.grain.particle_scale[2].title",
-                defaultValue: "Particle area · RGB · Blue"), 3.2, 0.01...9.600000000000001,
+                defaultValue: "Particle area scale · RGB · Blue"), 3.2, 0.01...9.600000000000001,
             step: 0.01, minimum: 0.01, maximum: nil, unit: ""),
         .number(
             "film_render.grain.particle_scale_layers[0]",
             String(
                 localized: "parameter.film_render.grain.particle_scale_layers[0].title",
-                defaultValue: "Particle area · layers · Layer 1"), 2.0, 0.05...6.0, step: 0.05,
+                defaultValue: "Particle area scale · Layer 1"), 2.0, 0.05...6.0, step: 0.05,
             minimum: 0.05, maximum: nil, unit: ""),
         .number(
             "film_render.grain.particle_scale_layers[1]",
             String(
                 localized: "parameter.film_render.grain.particle_scale_layers[1].title",
-                defaultValue: "Particle area · layers · Layer 2"), 1.0, 0.05...3.0, step: 0.05,
+                defaultValue: "Particle area scale · Layer 2"), 1.0, 0.05...3.0, step: 0.05,
             minimum: 0.05, maximum: nil, unit: ""),
         .number(
             "film_render.grain.particle_scale_layers[2]",
             String(
                 localized: "parameter.film_render.grain.particle_scale_layers[2].title",
-                defaultValue: "Particle area · layers · Layer 3"), 0.5, 0.05...2.0, step: 0.05,
+                defaultValue: "Particle area scale · Layer 3"), 0.5, 0.05...2.0, step: 0.05,
             minimum: 0.05, maximum: nil, unit: ""),
         .number(
             "film_render.grain.density_min[0]",
@@ -111,13 +111,13 @@ extension ParameterDefinition {
             "film_render.grain.micro_structure[0]",
             String(
                 localized: "parameter.film_render.grain.micro_structure[0].title",
-                defaultValue: "Microstructure · Radius · µm"), 0.2, 0.0...2.0, step: 0.1,
+                defaultValue: "Microstructure · Blur · µm"), 0.2, 0.0...2.0, step: 0.1,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.grain.micro_structure[1]",
             String(
                 localized: "parameter.film_render.grain.micro_structure[1].title",
-                defaultValue: "Microstructure · Amount · nm"), 30.0, 0.0...100.0, step: 0.1,
+                defaultValue: "Microstructure · Clump size · nm"), 30.0, 0.0...100.0, step: 0.1,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.grain.n_sub_layers",
@@ -158,37 +158,37 @@ extension ParameterDefinition {
             "film_render.halation.scatter_core_um[0]",
             String(
                 localized: "parameter.film_render.halation.scatter_core_um[0].title",
-                defaultValue: "Scatter core um · Red"), 2.2, 0.0...6.6000000000000005, step: 0.5,
+                defaultValue: "Scatter core · µm · Red"), 2.2, 0.0...6.6000000000000005, step: 0.5,
             minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.scatter_core_um[1]",
             String(
                 localized: "parameter.film_render.halation.scatter_core_um[1].title",
-                defaultValue: "Scatter core um · Green"), 2.0, 0.0...6.0, step: 0.5, minimum: 0.0,
+                defaultValue: "Scatter core · µm · Green"), 2.0, 0.0...6.0, step: 0.5, minimum: 0.0,
             maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.scatter_core_um[2]",
             String(
                 localized: "parameter.film_render.halation.scatter_core_um[2].title",
-                defaultValue: "Scatter core um · Blue"), 1.6, 0.0...4.800000000000001, step: 0.5,
+                defaultValue: "Scatter core · µm · Blue"), 1.6, 0.0...4.800000000000001, step: 0.5,
             minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.scatter_tail_um[0]",
             String(
                 localized: "parameter.film_render.halation.scatter_tail_um[0].title",
-                defaultValue: "Scatter tail um · Red"), 9.3, 0.0...27.900000000000002, step: 1.0,
+                defaultValue: "Scatter tail · µm · Red"), 9.3, 0.0...27.900000000000002, step: 1.0,
             minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.scatter_tail_um[1]",
             String(
                 localized: "parameter.film_render.halation.scatter_tail_um[1].title",
-                defaultValue: "Scatter tail um · Green"), 9.7, 0.0...29.099999999999998, step: 1.0,
+                defaultValue: "Scatter tail · µm · Green"), 9.7, 0.0...29.099999999999998, step: 1.0,
             minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.scatter_tail_um[2]",
             String(
                 localized: "parameter.film_render.halation.scatter_tail_um[2].title",
-                defaultValue: "Scatter tail um · Blue"), 9.1, 0.0...27.299999999999997, step: 1.0,
+                defaultValue: "Scatter tail · µm · Blue"), 9.1, 0.0...27.299999999999997, step: 1.0,
             minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.scatter_tail_weight[0]",
@@ -211,19 +211,19 @@ extension ParameterDefinition {
         .number(
             "film_render.halation.boost_ev",
             String(
-                localized: "parameter.film_render.halation.boost_ev.title", defaultValue: "Boost ev"
+                localized: "parameter.film_render.halation.boost_ev.title", defaultValue: "Highlight boost · EV"
             ), 0.0, 0.0...2.0, step: 0.5, minimum: 0.0, maximum: nil, unit: "EV"),
         .number(
             "film_render.halation.boost_range",
             String(
                 localized: "parameter.film_render.halation.boost_range.title",
-                defaultValue: "Boost range"), 0.3, 0.0...1.0, step: 0.05, minimum: 0.0,
+                defaultValue: "Highlight boost range"), 0.3, 0.0...1.0, step: 0.05, minimum: 0.0,
             maximum: 1.0, unit: ""),
         .number(
             "film_render.halation.protect_ev",
             String(
                 localized: "parameter.film_render.halation.protect_ev.title",
-                defaultValue: "Protect ev"), 4.0, 0.0...12.0, step: 0.5, minimum: 0.0, maximum: nil,
+                defaultValue: "Protect threshold · EV"), 4.0, 0.0...12.0, step: 0.5, minimum: 0.0, maximum: nil,
             unit: "EV"),
         .number(
             "film_render.halation.halation_strength[0]",
@@ -247,25 +247,25 @@ extension ParameterDefinition {
             "film_render.halation.halation_first_sigma_um[0]",
             String(
                 localized: "parameter.film_render.halation.halation_first_sigma_um[0].title",
-                defaultValue: "Halation first sigma um · Red"), 65.0, 0.0...195.0, step: 1.0,
+                defaultValue: "Halation first sigma · µm · Red"), 65.0, 0.0...195.0, step: 1.0,
             minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.halation_first_sigma_um[1]",
             String(
                 localized: "parameter.film_render.halation.halation_first_sigma_um[1].title",
-                defaultValue: "Halation first sigma um · Green"), 65.0, 0.0...195.0, step: 1.0,
+                defaultValue: "Halation first sigma · µm · Green"), 65.0, 0.0...195.0, step: 1.0,
             minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.halation_first_sigma_um[2]",
             String(
                 localized: "parameter.film_render.halation.halation_first_sigma_um[2].title",
-                defaultValue: "Halation first sigma um · Blue"), 65.0, 0.0...195.0, step: 1.0,
+                defaultValue: "Halation first sigma · µm · Blue"), 65.0, 0.0...195.0, step: 1.0,
             minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "film_render.halation.halation_n_bounces",
             String(
                 localized: "parameter.film_render.halation.halation_n_bounces.title",
-                defaultValue: "Halation n bounces"), 3.0, 1.0...5.0, step: 1.0, minimum: 1.0,
+                defaultValue: "Halation bounces"), 3.0, 1.0...5.0, step: 1.0, minimum: 1.0,
             maximum: 5.0, unit: ""),
         .number(
             "film_render.halation.halation_bounce_decay",
@@ -292,79 +292,79 @@ extension ParameterDefinition {
             "film_render.dir_couplers.inhibition_samelayer",
             String(
                 localized: "parameter.film_render.dir_couplers.inhibition_samelayer.title",
-                defaultValue: "Inhibition samelayer"), 1.0, 0.0...3.0, step: 0.05, minimum: 0.0,
+                defaultValue: "Same-layer inhibition"), 1.0, 0.0...3.0, step: 0.05, minimum: 0.0,
             maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.inhibition_interlayer",
             String(
                 localized: "parameter.film_render.dir_couplers.inhibition_interlayer.title",
-                defaultValue: "Inhibition interlayer"), 1.0, 0.0...3.0, step: 0.05, minimum: 0.0,
+                defaultValue: "Interlayer inhibition"), 1.0, 0.0...3.0, step: 0.05, minimum: 0.0,
             maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_samelayer_rgb[0]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_samelayer_rgb[0].title",
-                defaultValue: "Gamma samelayer rgb · Red"), 0.341, 0.0...2.0, step: 0.02,
+                defaultValue: "Same-layer gamma · Red"), 0.341, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_samelayer_rgb[1]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_samelayer_rgb[1].title",
-                defaultValue: "Gamma samelayer rgb · Green"), 0.324, 0.0...2.0, step: 0.02,
+                defaultValue: "Same-layer gamma · Green"), 0.324, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_samelayer_rgb[2]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_samelayer_rgb[2].title",
-                defaultValue: "Gamma samelayer rgb · Blue"), 0.273, 0.0...2.0, step: 0.02,
+                defaultValue: "Same-layer gamma · Blue"), 0.273, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_interlayer_r_to_gb[0]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_interlayer_r_to_gb[0].title",
-                defaultValue: "Gamma interlayer r to gb · Green"), 0.355, 0.0...2.0, step: 0.02,
+                defaultValue: "Interlayer gamma · Red→Green"), 0.355, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_interlayer_r_to_gb[1]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_interlayer_r_to_gb[1].title",
-                defaultValue: "Gamma interlayer r to gb · Blue"), 0.305, 0.0...2.0, step: 0.02,
+                defaultValue: "Interlayer gamma · Red→Blue"), 0.305, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_interlayer_g_to_rb[0]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_interlayer_g_to_rb[0].title",
-                defaultValue: "Gamma interlayer g to rb · Red"), 0.154, 0.0...2.0, step: 0.02,
+                defaultValue: "Interlayer gamma · Green→Red"), 0.154, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_interlayer_g_to_rb[1]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_interlayer_g_to_rb[1].title",
-                defaultValue: "Gamma interlayer g to rb · Blue"), 0.358, 0.0...2.0, step: 0.02,
+                defaultValue: "Interlayer gamma · Green→Blue"), 0.358, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_interlayer_b_to_rg[0]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_interlayer_b_to_rg[0].title",
-                defaultValue: "Gamma interlayer b to rg · Red"), 0.171, 0.0...2.0, step: 0.02,
+                defaultValue: "Interlayer gamma · Blue→Red"), 0.171, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.gamma_interlayer_b_to_rg[1]",
             String(
                 localized: "parameter.film_render.dir_couplers.gamma_interlayer_b_to_rg[1].title",
-                defaultValue: "Gamma interlayer b to rg · Green"), 0.225, 0.0...2.0, step: 0.02,
+                defaultValue: "Interlayer gamma · Blue→Green"), 0.225, 0.0...2.0, step: 0.02,
             minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "film_render.dir_couplers.diffusion_size_um",
             String(
                 localized: "parameter.film_render.dir_couplers.diffusion_size_um.title",
-                defaultValue: "Diffusion size um"), 20.0, 0.0...60.0, step: 5.0, minimum: 0.0,
+                defaultValue: "Diffusion size · µm"), 20.0, 0.0...60.0, step: 5.0, minimum: 0.0,
             maximum: nil, unit: "µm"),
         .number(
             "film_render.dir_couplers.diffusion_tail_um",
             String(
                 localized: "parameter.film_render.dir_couplers.diffusion_tail_um.title",
-                defaultValue: "Diffusion tail um"), 200.0, 0.0...600.0, step: 0.01, minimum: 0.0,
+                defaultValue: "Diffusion tail · µm"), 200.0, 0.0...600.0, step: 0.01, minimum: 0.0,
             maximum: nil, unit: "µm"),
         .number(
             "film_render.dir_couplers.diffusion_tail_weight",
@@ -423,31 +423,31 @@ extension ParameterDefinition {
             "print_render.density_curves_morph.gamma_factor_fast",
             String(
                 localized: "parameter.print_render.density_curves_morph.gamma_factor_fast.title",
-                defaultValue: "Gamma factor fast"), 1.0, 0.5...2.0, step: 0.05, minimum: 0.5,
+                defaultValue: "Gamma factor · Fast layer"), 1.0, 0.5...2.0, step: 0.05, minimum: 0.5,
             maximum: 2.0, unit: ""),
         .number(
             "print_render.density_curves_morph.gamma_factor_slow",
             String(
                 localized: "parameter.print_render.density_curves_morph.gamma_factor_slow.title",
-                defaultValue: "Gamma factor slow"), 1.0, 0.5...2.0, step: 0.05, minimum: 0.5,
+                defaultValue: "Gamma factor · Slow layers"), 1.0, 0.5...2.0, step: 0.05, minimum: 0.5,
             maximum: 2.0, unit: ""),
         .number(
             "print_render.density_curves_morph.gamma_factor_red",
             String(
                 localized: "parameter.print_render.density_curves_morph.gamma_factor_red.title",
-                defaultValue: "Gamma factor red"), 1.0, 0.5...2.0, step: 0.02, minimum: 0.5,
+                defaultValue: "Gamma factor · Red"), 1.0, 0.5...2.0, step: 0.02, minimum: 0.5,
             maximum: 2.0, unit: ""),
         .number(
             "print_render.density_curves_morph.gamma_factor_green",
             String(
                 localized: "parameter.print_render.density_curves_morph.gamma_factor_green.title",
-                defaultValue: "Gamma factor green"), 1.0, 0.5...2.0, step: 0.02, minimum: 0.5,
+                defaultValue: "Gamma factor · Green"), 1.0, 0.5...2.0, step: 0.02, minimum: 0.5,
             maximum: 2.0, unit: ""),
         .number(
             "print_render.density_curves_morph.gamma_factor_blue",
             String(
                 localized: "parameter.print_render.density_curves_morph.gamma_factor_blue.title",
-                defaultValue: "Gamma factor blue"), 1.0, 0.5...2.0, step: 0.02, minimum: 0.5,
+                defaultValue: "Gamma factor · Blue"), 1.0, 0.5...2.0, step: 0.02, minimum: 0.5,
             maximum: 2.0, unit: ""),
         .number(
             "print_render.density_curves_morph.developer_exhaustion",
@@ -477,7 +477,7 @@ extension ParameterDefinition {
             ]),
         .number(
             "camera.lens_blur_um",
-            String(localized: "parameter.camera.lens_blur_um.title", defaultValue: "Lens blur um"),
+            String(localized: "parameter.camera.lens_blur_um.title", defaultValue: "Lens blur · µm"),
             0.0, 0.0...2.0, step: 0.05, minimum: 0.0, maximum: nil, unit: "µm"),
         .number(
             "camera.film_format_mm",
@@ -489,37 +489,37 @@ extension ParameterDefinition {
             "camera.filter_uv[0]",
             String(
                 localized: "parameter.camera.filter_uv[0].title",
-                defaultValue: "Filter uv · Strength"), 0.0, 0.0...1.0, step: 0.01, minimum: 0.0,
+                defaultValue: "UV filter · Strength"), 0.0, 0.0...1.0, step: 0.01, minimum: 0.0,
             maximum: 1.0, unit: ""),
         .number(
             "camera.filter_uv[1]",
             String(
                 localized: "parameter.camera.filter_uv[1].title",
-                defaultValue: "Filter uv · Cutoff · nm"), 410.0, 0.0...1230.0, step: 0.01,
+                defaultValue: "UV filter · Cutoff · nm"), 410.0, 0.0...1230.0, step: 0.01,
             minimum: nil, maximum: nil, unit: ""),
         .number(
             "camera.filter_uv[2]",
             String(
                 localized: "parameter.camera.filter_uv[2].title",
-                defaultValue: "Filter uv · Transition · nm"), 8.0, 0.01...24.0, step: 0.01,
+                defaultValue: "UV filter · Transition · nm"), 8.0, 0.01...24.0, step: 0.01,
             minimum: 0.01, maximum: nil, unit: ""),
         .number(
             "camera.filter_ir[0]",
             String(
                 localized: "parameter.camera.filter_ir[0].title",
-                defaultValue: "Filter ir · Strength"), 0.0, 0.0...1.0, step: 0.01, minimum: 0.0,
+                defaultValue: "IR filter · Strength"), 0.0, 0.0...1.0, step: 0.01, minimum: 0.0,
             maximum: 1.0, unit: ""),
         .number(
             "camera.filter_ir[1]",
             String(
                 localized: "parameter.camera.filter_ir[1].title",
-                defaultValue: "Filter ir · Cutoff · nm"), 675.0, 0.0...2025.0, step: 0.01,
+                defaultValue: "IR filter · Cutoff · nm"), 675.0, 0.0...2025.0, step: 0.01,
             minimum: nil, maximum: nil, unit: ""),
         .number(
             "camera.filter_ir[2]",
             String(
                 localized: "parameter.camera.filter_ir[2].title",
-                defaultValue: "Filter ir · Transition · nm"), 15.0, 0.01...45.0, step: 0.01,
+                defaultValue: "IR filter · Transition · nm"), 15.0, 0.01...45.0, step: 0.01,
             minimum: 0.01, maximum: nil, unit: ""),
         .flag(
             "camera.diffusion_filter.active",
@@ -621,19 +621,19 @@ extension ParameterDefinition {
             "enlarger.y_filter_neutral",
             String(
                 localized: "parameter.enlarger.y_filter_neutral.title",
-                defaultValue: "Y filter neutral"), 55.0, 0.0...165.0, step: 0.01, minimum: 0.0,
+                defaultValue: "Yellow filter neutral"), 55.0, 0.0...165.0, step: 0.01, minimum: 0.0,
             maximum: nil, unit: ""),
         .number(
             "enlarger.m_filter_neutral",
             String(
                 localized: "parameter.enlarger.m_filter_neutral.title",
-                defaultValue: "M filter neutral"), 65.0, 0.0...195.0, step: 0.01, minimum: 0.0,
+                defaultValue: "Magenta filter neutral"), 65.0, 0.0...195.0, step: 0.01, minimum: 0.0,
             maximum: nil, unit: ""),
         .number(
             "enlarger.c_filter_neutral",
             String(
                 localized: "parameter.enlarger.c_filter_neutral.title",
-                defaultValue: "C filter neutral"), 0.0, 0.0...2.0, step: 0.01, minimum: 0.0,
+                defaultValue: "Cyan filter neutral"), 0.0, 0.0...2.0, step: 0.01, minimum: 0.0,
             maximum: nil, unit: ""),
         .number(
             "enlarger.lens_blur",
@@ -707,19 +707,19 @@ extension ParameterDefinition {
         .number(
             "enlarger.preflash_exposure",
             String(
-                localized: "parameter.enlarger.preflash_exposure.title", defaultValue: "exposure"),
+                localized: "parameter.enlarger.preflash_exposure.title", defaultValue: "Preflash exposure"),
             0.0, 0.0...2.0, step: 0.005, minimum: 0.0, maximum: nil, unit: ""),
         .number(
             "enlarger.preflash_y_filter_shift",
             String(
                 localized: "parameter.enlarger.preflash_y_filter_shift.title",
-                defaultValue: "y filter shift"), 0.0, -100.0...100.0, step: 1.0, minimum: nil,
+                defaultValue: "Preflash yellow shift"), 0.0, -100.0...100.0, step: 1.0, minimum: nil,
             maximum: nil, unit: "CC"),
         .number(
             "enlarger.preflash_m_filter_shift",
             String(
                 localized: "parameter.enlarger.preflash_m_filter_shift.title",
-                defaultValue: "m filter shift"), 0.0, -100.0...100.0, step: 1.0, minimum: nil,
+                defaultValue: "Preflash magenta shift"), 0.0, -100.0...100.0, step: 1.0, minimum: nil,
             maximum: nil, unit: "CC"),
         .number(
             "scanner.lens_blur",

@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import Foundation
+import OSLog
 
 nonisolated struct CameraReadings: Sendable {
     var histogram = Array(repeating: Double(0), count: 64)
@@ -15,7 +16,7 @@ nonisolated struct CameraLens: Identifiable, Equatable, Sendable {
     let macro: Bool
     let primary: Bool
     var title: String {
-        front ? String(localized: "camera_meter.front", defaultValue: "Front") : String(millimeters)
+        front ? String(localized: "camera.front", defaultValue: "Front") : String(millimeters)
     }
 }
 
@@ -35,7 +36,7 @@ nonisolated final class CameraMeter: NSObject, AVCaptureVideoDataOutputSampleBuf
     ) {
         let now = ProcessInfo.processInfo.systemUptime
         if lastUpdate == -.infinity {
-            print("Camera first preview frame: \(now - started) s")
+            Log.camera.debug("First preview frame: \(now - self.started) s")
         }
         guard now - lastUpdate >= 0.2, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer),
             CVPixelBufferGetPlaneCount(buffer) >= 1

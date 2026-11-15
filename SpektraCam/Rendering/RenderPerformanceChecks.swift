@@ -25,9 +25,9 @@ import UIKit
             $0 + 1 < arguments.count ? arguments[$0 + 1] : nil
         }
         guard arguments.contains("--check-performance"),
-            let photo = requestedPhoto.flatMap { requested in
+            let photo = requestedPhoto.flatMap({ requested in
                 library.photos.first { $0.id.uuidString.caseInsensitiveCompare(requested) == .orderedSame }
-            } ?? library.photos.first(where: \.isRAW) ?? library.photos.first
+            }) ?? library.photos.first(where: \.isRAW) ?? library.photos.first
         else { return }
         let label = arguments.firstIndex(of: "--performance-run").flatMap {
             $0 + 1 < arguments.count ? arguments[$0 + 1] : nil

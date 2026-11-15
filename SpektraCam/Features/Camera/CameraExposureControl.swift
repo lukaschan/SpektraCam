@@ -8,7 +8,7 @@ struct CameraExposureControl: View {
         HStack(spacing: 12) {
             Image(systemName: "sun.max").accessibilityHidden(true)
             DefaultSlider(value: $value, range: range, defaultValue: 0,
-                title: String(localized: "camera_preview.camera_exposure", defaultValue: "Camera exposure"),
+                title: String(localized: "camera.exposure", defaultValue: "Camera exposure"),
                 identifier: "camera.exposure", fillOrigin: 0)
                 .accessibilityValue(String(format: "%+.2f EV", value))
             Button { value = 0 } label: {

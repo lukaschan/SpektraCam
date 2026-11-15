@@ -1,6 +1,7 @@
 @preconcurrency import AVFoundation
 import Foundation
 import ImageIO
+import OSLog
 
 nonisolated enum CameraFormat: String, CaseIterable, Identifiable, Sendable {
     case proRAW, bayerRAW
@@ -18,27 +19,27 @@ nonisolated enum CameraFailure: LocalizedError {
         switch self {
         case .unavailable:
             String(
-                localized: "camera.camera_capture_needs_a_physical_iphone",
+                localized: "camera.error.needs_device",
                 defaultValue: "Camera capture needs a physical iPhone.")
         case .denied:
             String(
-                localized: "camera.allow_camera_access_in_settings_to_take",
+                localized: "camera.access_denied",
                 defaultValue: "Allow camera access in Settings to take photos.")
         case .configuration:
             String(
-                localized: "camera.the_camera_could_not_start",
+                localized: "camera.error.start_failed",
                 defaultValue: "The camera could not start.")
         case .rawUnavailable:
             String(
-                localized: "camera.this_camera_does_not_support_raw_capture",
+                localized: "camera.error.raw_unsupported",
                 defaultValue: "This camera does not support RAW capture.")
         case .notReady:
             String(
-                localized: "camera.the_camera_is_not_ready_try_again",
+                localized: "camera.error.not_ready",
                 defaultValue: "The camera is not ready. Try again.")
         case .noData:
             String(
-                localized: "camera.the_camera_did_not_return_a_raw",
+                localized: "camera.error.no_raw_data",
                 defaultValue: "The camera did not return a RAW photo.")
         }
     }
@@ -225,9 +226,8 @@ actor CameraService {
         }
         source = CameraPreviewSource(session: session, device: device)
         prepareCapture()
-        print(
-            "Camera photo size: \(output.maxPhotoDimensions.width)×\(output.maxPhotoDimensions.height)"
-        )
+        Log.camera.debug(
+            "Photo size: \(self.output.maxPhotoDimensions.width)×\(self.output.maxPhotoDimensions.height)")
     }
     private func maximumDimensions() -> CMVideoDimensions {
         (session.inputs.first as? AVCaptureDeviceInput)?.device.activeFormat
@@ -287,9 +287,8 @@ actor CameraService {
         session.beginConfiguration()
         defer {
             session.commitConfiguration()
-            print(
-                "Camera lens \(lens.millimeters): \(ProcessInfo.processInfo.systemUptime - started) s"
-            )
+            Log.camera.debug(
+                "Lens \(lens.millimeters): \(ProcessInfo.processInfo.systemUptime - started) s")
         }
         session.removeInput(previous)
         do {
@@ -349,27 +348,27 @@ actor CameraService {
                 let code =
                     (note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue
                     ?? 0
-                print("Camera interrupted: \(code)")
+                Log.camera.info("Interrupted: \(code)")
                 let message: String
                 switch AVCaptureSession.InterruptionReason(rawValue: code) {
                 case .videoDeviceInUseByAnotherClient:
                     message = String(
-                        localized: "camera.another_app_is_using_the_camera",
+                        localized: "camera.interrupted.in_use",
                         defaultValue: "Another app is using the camera.")
                 case .videoDeviceNotAvailableWithMultipleForegroundApps:
                     message =
                         String(
-                            localized: "camera.ios_paused_camera_access_while_another_view",
+                            localized: "camera.interrupted.multitasking",
                             defaultValue:
                                 "iOS paused camera access while another view is active. Stop screen sharing to resume."
                         )
                 case .videoDeviceNotAvailableDueToSystemPressure:
                     message = String(
-                        localized: "camera.ios_paused_the_camera_to_reduce_system",
+                        localized: "camera.interrupted.system_pressure",
                         defaultValue: "iOS paused the camera to reduce system load.")
                 default:
                     message = String(
-                        localized: "camera.the_camera_will_resume_when_it_is",
+                        localized: "camera.interrupted.generic",
                         defaultValue: "The camera will resume when it is available.")
                 }
                 sink.yield(.interrupted(message))
@@ -387,7 +386,7 @@ actor CameraService {
                     .failed(
                         error?.localizedDescription
                             ?? String(
-                                localized: "camera.the_camera_stopped_try_again",
+                                localized: "camera.error.stopped",
                                 defaultValue: "The camera stopped. Try again.")))
             },
         ]
@@ -479,9 +478,8 @@ nonisolated private final class RAWPhotoCapture: NSObject, AVCapturePhotoCapture
         // Default file representation preserves full lossless ProRAW quality.
         result = Result { try inbox.store(data) }
         let size = photo.resolvedSettings.rawPhotoDimensions
-        print(
-            "Camera RAW \(size.width)×\(size.height) saved: \(ProcessInfo.processInfo.systemUptime - started) s"
-        )
+        Log.camera.debug(
+            "RAW \(size.width)×\(size.height) saved: \(ProcessInfo.processInfo.systemUptime - self.started) s")
     }
     func photoOutput(
         _ output: AVCapturePhotoOutput,

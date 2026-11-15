@@ -54,8 +54,7 @@ struct DarkroomView: View {
                                systemImage: showLoupe ? "magnifyingglass.circle.fill" : "magnifyingglass.circle") {
                             showLoupe.toggle()
                         }
-                        .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-                        .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("darkroom.loupe.toggle")
+                        .glassIconButton().accessibilityIdentifier("darkroom.loupe.toggle")
                     }
                 inspector(height: min(expanded ? 360 : 202, max(160, workspace.size.height * 0.55)))
             }
@@ -73,7 +72,7 @@ struct DarkroomView: View {
                     PanelTabs(
                         options: [
                             (Style.cleanPrint, String(localized: "darkroom.clean_print", defaultValue: "Clean print")),
-                            (.filmEdge, String(localized: "darkroom.film_edge_later", defaultValue: "Film edge")),
+                            (.filmEdge, String(localized: "darkroom.film_edge", defaultValue: "Film edge")),
                         ],
                         selection: Binding(get: { edge == nil ? .cleanPrint : .filmEdge },
                             set: { edge = $0 == .filmEdge ? (edge ?? FilmEdgeLayout.newDefault()) : nil }), prefix: "darkroom.")
@@ -105,6 +104,21 @@ struct DarkroomView: View {
         if edge.format == .roll120 { return .roll120 }
         return edge.cinePerforations ? .cine35 : .film35
     }
+    /// Change the film edge, starting from the default when there is none yet.
+    private func setEdge(_ change: (inout FilmEdgeLayout) -> Void) {
+        var next = edge ?? FilmEdgeLayout.newDefault()
+        change(&next)
+        edge = next
+    }
+    private func edgeBinding<Value>(_ path: WritableKeyPath<FilmEdgeLayout, Value>) -> Binding<Value> {
+        Binding(get: { (edge ?? FilmEdgeLayout.newDefault())[keyPath: path] }, set: { value in setEdge { $0[keyPath: path] = value } })
+    }
+    /// A zoom stored as a fraction and shown as a percentage, kept inside its range.
+    private func percentBinding(_ path: WritableKeyPath<FilmEdgeLayout, Double>, in range: ClosedRange<Double>) -> Binding<Double> {
+        Binding(get: { (edge ?? FilmEdgeLayout.newDefault())[keyPath: path] * 100 }, set: { value in
+            setEdge { $0[keyPath: path] = min(max(value / 100, range.lowerBound), range.upperBound) }
+        })
+    }
     private var edgeControls: some View {
         VStack(alignment: .leading, spacing: 8) {
             // One row: Auto follows Develop; a type pins the edge. Auto keeps the last pinned type.
@@ -134,28 +148,20 @@ struct DarkroomView: View {
                           (.cine35, String(localized: "darkroom.edge.cine35", defaultValue: "35 mm cine")),
                           (.roll120, "120")],
                 selection: Binding(get: { formatChoice }, set: { choice in
-                    var next = edge ?? FilmEdgeLayout.newDefault()
-                    next.format = choice == .roll120 ? .roll120 : .film35
-                    next.cinePerforations = choice == .cine35
-                    edge = next
+                    setEdge {
+                        $0.format = choice == .roll120 ? .roll120 : .film35
+                        $0.cinePerforations = choice == .cine35
+                    }
                 }),
                 prefix: "darkroom.edge.format.")
             if edge?.format == .roll120 {
                 PanelTabs(
                     options: FilmEdgeLayout.RollFrame.allCases.map { ($0, $0.title) },
-                    selection: Binding(get: { edge?.rollFrame ?? .six6 }, set: { frame in
-                        var next = edge ?? FilmEdgeLayout.newDefault()
-                        next.rollFrame = frame
-                        edge = next
-                    }),
+                    selection: edgeBinding(\.rollFrame),
                     prefix: "darkroom.edge.frame.")
                 PanelTabs(
                     options: FilmEdgeLayout.RollGate.allCases.map { ($0, $0.title) },
-                    selection: Binding(get: { edge?.rollGate ?? .hasselblad }, set: { body in
-                        var next = edge ?? FilmEdgeLayout.newDefault()
-                        next.rollGate = body
-                        edge = next
-                    }),
+                    selection: edgeBinding(\.rollGate),
                     prefix: "darkroom.edge.body.")
             }
             ViewThatFits(in: .horizontal) {
@@ -173,11 +179,6 @@ struct DarkroomView: View {
 
     // MARK: Gate — the camera and holder. Fixed per setup, remembered for the next edit.
     private var gate: FilmEdgeGate { edge?.gate ?? FilmEdgeGate() }
-    private func setGate(_ change: (inout FilmEdgeGate) -> Void) {
-        var next = edge ?? FilmEdgeLayout.newDefault()
-        change(&next.gate)
-        edge = next
-    }
     private var gateControls: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -189,18 +190,14 @@ struct DarkroomView: View {
             }
             PanelTabs(
                 options: FilmEdgeGate.Kind.allCases.map { ($0, $0.title) },
-                selection: Binding(get: { gate.kind ?? .natural }, set: { kind in setGate { $0 = FilmEdgeGate(kind) } }),
+                selection: Binding(get: { gate.kind ?? .natural }, set: { kind in setEdge { $0.gate = FilmEdgeGate(kind) } }),
                 prefix: "darkroom.gate.", isSelectionActive: gate.kind != nil)
         }
     }
 
     // MARK: Distress — how the film was handled. Presets for a quick start, every field for fine control.
     private var distress: FilmEdgeDistress { edge?.distress ?? FilmEdgeLayout.newDefault().distress }
-    private func setDistress(_ change: (inout FilmEdgeDistress) -> Void) {
-        var next = edge ?? FilmEdgeLayout.newDefault()
-        change(&next.distress)
-        edge = next
-    }
+    private func setDistress(_ change: (inout FilmEdgeDistress) -> Void) { setEdge { change(&$0.distress) } }
     private func distressBinding(_ path: WritableKeyPath<FilmEdgeDistress, Double>, scale: Double = 1) -> Binding<Double> {
         Binding(get: { distress[keyPath: path] * scale }, set: { value in
             let range = FilmEdgeDistress.ranges[path] ?? (0...1)
@@ -219,8 +216,7 @@ struct DarkroomView: View {
                 Button(String(localized: "darkroom.distress.new_seed", defaultValue: "New pattern"), systemImage: "dice") {
                     setDistress { $0.seed = UInt32.random(in: 1...UInt32.max) }
                 }
-                .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-                .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("darkroom.distress.seed")
+                .glassIconButton().accessibilityIdentifier("darkroom.distress.seed")
             }
             PanelTabs(
                 options: FilmEdgeDistress.Preset.allCases.map { ($0, $0.title) },
@@ -299,8 +295,7 @@ struct DarkroomView: View {
     }
     // MARK: Enlarger — the head's height sets how much of the frame the easel opening shows.
     private var zoomControl: some View {
-        let layout = edge ?? FilmEdgeLayout.newDefault()
-        let border = layout.easelBorder
+        let border = (edge ?? FilmEdgeLayout.newDefault()).easelBorder
         func mm(_ v: Double) -> String { abs(v).formatted(.number.precision(.fractionLength(2))) }
         let readout = abs(border.ends) < 0.005
             ? String(localized: "darkroom.easel.on_edge", defaultValue: "On the frame edge")
@@ -310,12 +305,7 @@ struct DarkroomView: View {
         return VStack(alignment: .leading, spacing: 3) {
             NumericControl(
                 title: String(localized: "darkroom.easel.zoom", defaultValue: "Enlarger zoom"),
-                value: Binding(get: { layout.printZoom * 100 }, set: { value in
-                    var next = edge ?? FilmEdgeLayout.newDefault()
-                    let range = FilmEdgeLayout.printZoomRange
-                    next.printZoom = min(max(value / 100, range.lowerBound), range.upperBound)
-                    edge = next
-                }),
+                value: percentBinding(\.printZoom, in: FilmEdgeLayout.printZoomRange),
                 range: 90...110, step: 0.5, minimum: 90, maximum: 110, unit: "%",
                 identifier: "darkroom.easel.zoom", defaultValue: 97, fillOrigin: 100,
                 onEditingChanged: onEdgeEditingChanged)
@@ -324,15 +314,9 @@ struct DarkroomView: View {
     }
     /// The scan's counterpart to the enlarger zoom: how far past the frame the scanner's crop reaches.
     private var scanZoomControl: some View {
-        let layout = edge ?? FilmEdgeLayout.newDefault()
-        return NumericControl(
+        NumericControl(
             title: String(localized: "darkroom.edge.scan_zoom", defaultValue: "Scan framing"),
-            value: Binding(get: { layout.scanZoom * 100 }, set: { value in
-                var next = edge ?? FilmEdgeLayout.newDefault()
-                let range = FilmEdgeLayout.scanZoomRange
-                next.scanZoom = min(max(value / 100, range.lowerBound), range.upperBound)
-                edge = next
-            }),
+            value: percentBinding(\.scanZoom, in: FilmEdgeLayout.scanZoomRange),
             range: 75...105, step: 0.5, minimum: 75, maximum: 105, unit: "%",
             identifier: "darkroom.edge.scanZoom", defaultValue: 90, fillOrigin: 100,
             onEditingChanged: onEdgeEditingChanged)
@@ -355,8 +339,7 @@ struct DarkroomView: View {
                     next.easelSeed = UInt32.random(in: 2...UInt32.max)
                     layout = next
                 }
-                .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-                .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("darkroom.easel.seed")
+                .glassIconButton().accessibilityIdentifier("darkroom.easel.seed")
             }
             PanelTabs(options: Easel.Kind.allCases.map { ($0, $0.title) }, selection: binding(\.blade), prefix: "darkroom.easel.blade.")
         }
@@ -395,8 +378,7 @@ struct DarkroomView: View {
                         next.orientation = landscape ? .portrait : .landscape
                         layout = next
                     }
-                    .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-                    .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("darkroom.rotatePaper")
+                    .glassIconButton().accessibilityIdentifier("darkroom.rotatePaper")
                 }
             }
             HStack(alignment: .bottom, spacing: 10) {
