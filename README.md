@@ -1,6 +1,6 @@
 # SpektraCam
 
-**v0.3 · iPhone · iPad · iOS 26+**
+**v1.0 · iPhone · iPad · iOS 26+**
 
 此App是基于 Andrea Volpato 的 [spektrafilm][upstream] 原生移植的 iPhone 与 iPad 照片编辑器。
 免费、开源，支持简体中文与英文。
