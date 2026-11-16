@@ -28,7 +28,7 @@ struct CameraButton: View {
             if prominent {
                 action.labelStyle(PhotoActionLabelStyle(side: 24))
                     .buttonStyle(.glassProminent).controlSize(.large).tint(Color.accentColor)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.onAccent)
                     .frame(width: 52, height: 52)
             } else {
                 action.photoActionStyle()
@@ -123,7 +123,9 @@ struct LibraryThumbnail: View {
                 if selecting {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .font(.title2).symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, selected ? Color.accentColor : .white)
+                        .foregroundStyle(
+                            selected ? AnyShapeStyle(.onAccent) : AnyShapeStyle(.white),
+                            selected ? Color.accentColor : .white)
                         .shadow(radius: 2).padding(7)
                 }
             }

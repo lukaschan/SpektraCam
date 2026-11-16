@@ -15,7 +15,7 @@ where Selection.RawValue == String {
                 ForEach(options, id: \.0) { option in
                     Group {
                         if isSelectionActive && selection == option.0 {
-                            tab(option).buttonStyle(.glassProminent).foregroundStyle(.white)
+                            tab(option).buttonStyle(.glassProminent).foregroundStyle(.onAccent)
                         } else {
                             tab(option).buttonStyle(.glass)
                         }

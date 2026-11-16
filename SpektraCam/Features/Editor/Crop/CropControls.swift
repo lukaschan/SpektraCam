@@ -38,7 +38,7 @@ struct CropControls: View {
                 Spacer()
                 Button(String(localized: "common.done", defaultValue: "Done"),
                     systemImage: "checkmark", action: done)
-                    .buttonStyle(.glassProminent).foregroundStyle(.white)
+                    .buttonStyle(.glassProminent).foregroundStyle(.onAccent)
                     .accessibilityIdentifier("crop.done")
             }
             .controlSize(.regular).frame(minHeight: 44)

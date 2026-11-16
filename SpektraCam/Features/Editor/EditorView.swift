@@ -11,6 +11,7 @@ struct EditorView: View {
     @State private var closing = false
     @State private var closeFailure: String?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appAccent) private var accent
     @State private var activeTool: EditorTool? = .develop
     @State private var panelExpanded = false
     @State private var inspectorFrame = CGRect.zero
@@ -292,7 +293,7 @@ struct EditorView: View {
                                 showOriginal.toggle()
                                 if panelExpanded { setExpanded(false) }
                             }
-                            .tint(showOriginal ? Color.accentColor : Color.primary)
+                            .tint(showOriginal ? Color.accentColor : accent.idle)
                             .accessibilityAddTraits(showOriginal ? .isSelected : [])
                             .photoActionStyle()
                             .accessibilityLabel(compareTitle)

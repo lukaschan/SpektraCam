@@ -6,7 +6,7 @@ struct SpektraCamApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView().appAccent()
         }
     }
 }

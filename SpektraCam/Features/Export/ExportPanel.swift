@@ -151,7 +151,7 @@ struct ExportPanel: View {
                                 localized: "export.save_to_photos", defaultValue: "Save to Photos"))
             }.padding(.vertical, 4)
         }
-        .buttonStyle(.glassProminent).foregroundStyle(.white).disabled(url == nil || saving || saved)
+        .buttonStyle(.glassProminent).foregroundStyle(.onAccent).disabled(url == nil || saving || saved)
         .accessibilityIdentifier("export.save")
     }
     private var shareButton: some View {

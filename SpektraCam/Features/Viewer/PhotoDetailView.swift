@@ -359,7 +359,7 @@ private struct PhotoViewerControls: View {
                            systemImage: "camera.filters", action: develop)
                         .labelStyle(.iconOnly).font(.system(size: 20, weight: .medium))
                         .buttonStyle(.glassProminent).buttonBorderShape(.circle).controlSize(.large)
-                        .foregroundStyle(.white).frame(width: 56, height: 56)
+                        .foregroundStyle(.onAccent).frame(width: 56, height: 56)
                         .accessibilityIdentifier("photo.develop")
                     Button {
                         confirmRevert = true
@@ -437,7 +437,7 @@ private struct PhotoViewerControls: View {
                     horizontal: true, vertical: false
                 )
                 .padding(.horizontal, 24)
-        }.buttonStyle(.glassProminent).foregroundStyle(.white).accessibilityIdentifier("photo.develop")
+        }.buttonStyle(.glassProminent).foregroundStyle(.onAccent).accessibilityIdentifier("photo.develop")
     }
     private var exportButton: some View {
         Button(action: export) {
