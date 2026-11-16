@@ -35,6 +35,7 @@ checks={
  'metering':(['SpectralCore','MeteringCore'],['Reference/Fixtures/metering-stages.json']),
  'gamut':(['SpectralCore','AppearanceCore','GamutCore'],['Reference/Fixtures']),
 }
+checks['metal-dispatch'] = (['MetalDispatch'], [])
 checks['histogram'] = (['PhotoHistogram'], [])
 checks['geotag'] = (['CameraLocation','PhotoMetadata'], [])
 checks['raw-input'] = (checks['recipe'][0] + ['PhotoColorBridge','SourceImageRenderer','PhotoMetadata','ImportedPhoto'], [])
@@ -74,6 +75,7 @@ checks['film-edge'] = (list(dict.fromkeys(checks['processed-export'][0] + ['Prin
 checks['darkroom-orientation'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer'])), ['.'])
 checks['darkroom'] = (list(dict.fromkeys(checks['export'][0] + checks['recipe'][0] + ['PrintCompositor'])), [])
 for files, arguments in checks.values():
+ if any(f.startswith('Metal') or f == 'ToneRenderer' for f in files) and 'MetalDispatch' not in files: files.append('MetalDispatch')
  if any(f in files for f in ['MetalFilmPipeline','SourceImageRenderer','ToneRenderer']) and 'PixelStore' not in files: files.append('PixelStore')
  if 'EditRecipe' in files:
   for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout']:

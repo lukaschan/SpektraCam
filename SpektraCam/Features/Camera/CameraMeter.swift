@@ -7,6 +7,8 @@ nonisolated struct CameraReadings: Sendable {
     var seconds = Double(0)
     var aperture = Float(0)
     var iso = Float(0)
+    /// The device's own exposure bias, so the slider follows Camera Control.
+    var bias = Float(0)
 }
 
 nonisolated struct CameraLens: Identifiable, Equatable, Sendable {
@@ -64,6 +66,7 @@ nonisolated final class CameraMeter: NSObject, AVCaptureVideoDataOutputSampleBuf
         publish(
             CameraReadings(
                 histogram: bins.map { $0 / peak }, seconds: device.exposureDuration.seconds,
-                aperture: device.lensAperture, iso: device.iso))
+                aperture: device.lensAperture, iso: device.iso,
+                bias: device.exposureTargetBias))
     }
 }

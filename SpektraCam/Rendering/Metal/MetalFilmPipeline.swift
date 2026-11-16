@@ -441,7 +441,7 @@ actor MetalFilmPipeline {
         }
         var n = UInt32(count)
         e.setBytes(&n, length: 4, index: 4)
-        e.dispatchThreads(
+        e.dispatchGrid(
             MTLSize(width: count, height: 1, depth: 1),
             threadsPerThreadgroup: MTLSize(
                 width: min(128, function.maxTotalThreadsPerThreadgroup), height: 1, depth: 1))
@@ -761,7 +761,7 @@ actor MetalFilmPipeline {
         e.setBytes(&a, length: 16, index: 2)
         e.setBytes(&b, length: 16, index: 3)
         e.setBytes(&c, length: 16, index: 4)
-        e.dispatchThreads(
+        e.dispatchGrid(
             MTLSize(width: (payload.w + f - 1) / f, height: (payload.h + f - 1) / f, depth: 1),
             threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
         e.endEncoding()
@@ -854,7 +854,7 @@ actor MetalFilmPipeline {
             var shape = SIMD4<UInt32>(
                 UInt32(run.paddedWidth), UInt32(run.proxyWidth), UInt32(run.proxyHeight), 0)
             crop.setBytes(&shape, length: 16, index: 2)
-            crop.dispatchThreads(
+            crop.dispatchGrid(
                 MTLSize(width: run.proxyWidth * run.proxyHeight, height: 1, depth: 1),
                 threadsPerThreadgroup: MTLSize(
                     width: min(128, function.maxTotalThreadsPerThreadgroup), height: 1, depth: 1))
@@ -918,7 +918,7 @@ actor MetalFilmPipeline {
         }
         func dispatch(_ e: MTLComputeCommandEncoder, _ name: String, _ requestedCount: Int? = nil) {
             let n = requestedCount ?? count
-            e.dispatchThreads(
+            e.dispatchGrid(
                 MTLSize(width: n, height: 1, depth: 1),
                 threadsPerThreadgroup: MTLSize(
                     width: min(128, functions[name]!.maxTotalThreadsPerThreadgroup), height: 1,

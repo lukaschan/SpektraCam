@@ -44,7 +44,7 @@ actor MetalGrain {
         var key = SIMD2<UInt32>(UInt32(truncatingIfNeeded: seed), UInt32(truncatingIfNeeded: seed >> 32))
         encoder.setBytes(&shape, length: MemoryLayout.size(ofValue: shape), index: 3)
         encoder.setBytes(&key, length: MemoryLayout.size(ofValue: key), index: 4)
-        encoder.dispatchThreads(
+        encoder.dispatchGrid(
             MTLSize(width: density.count, height: 1, depth: 1),
             threadsPerThreadgroup: MTLSize(
                 width: min(128, kernel.maxTotalThreadsPerThreadgroup), height: 1, depth: 1))

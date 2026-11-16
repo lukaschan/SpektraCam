@@ -25,6 +25,18 @@ The simple RAW camera captures DNG; Apple ProRAW and lens support depend on the 
 You can also choose to bypass the spektrafilm pipeline and use up to two `.cube` 3D LUT slots have separate Mix controls. 
 Use LUTs for encoded sRGB images; Log/HDR input transforms are not supported.
 
+### 相机兼容性 / Camera compatibility
+
+镜头和格式按当前设备的 AVFoundation 实际能力检测，不按机型名称判断；只显示可拍摄 RAW 的镜头。
+RAW 与 Apple ProRAW 不同：例如 iPhone 11 Pro 的广角和长焦可拍摄 Bayer RAW，但不支持 Apple ProRAW，其超广角不提供 RAW 输出。
+Apple ProRAW 适用于 iPhone 12 Pro 及后续支持的 Pro 机型；可用格式和分辨率取决于当前镜头。
+若设备没有支持的 RAW 镜头，相机页面会说明原因，仍可导入和编辑照片。模拟器不能验证真实相机的 RAW 能力。
+
+Lenses and formats are detected from AVFoundation’s current capture configuration, rather than a model-name list. Only RAW-capable lenses are offered.
+RAW and Apple ProRAW are different: for example, [iPhone 11 Pro][iphone11-raw] supports Bayer RAW on its wide and telephoto cameras, but has no Apple ProRAW support or ultrawide RAW output.
+[Apple ProRAW][proraw] is available on iPhone 12 Pro and later supported Pro models; formats and resolutions depend on the selected lens.
+If no camera offers a supported RAW format, the camera explains the limitation and photo import/editing remain available. Simulator checks cannot verify physical camera capabilities.
+
 ## 局限 / Limitations
 
 **SpektraCam  只是提供近似胶片模拟，并不能精确还原某款胶片或实际工艺，也无法匹配不同相机传感器带来的差异。** 
@@ -77,3 +89,5 @@ Code: [GPLv3](LICENSE). spektrafilm profiles and LUT data: [CC BY-SA 4.0](SPEKTR
 [profile-data]: https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/src/spektrafilm/profiles/io.py
 [model-notes]: https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/README.md#introduction
 [kodak]: https://www.kodakprofessional.com/sites/default/files/wysiwyg/pro/resources/e4000_ektachrome_100.pdf
+[proraw]: https://support.apple.com/en-us/119916
+[iphone11-raw]: https://www.lux.camera/inside-the-iphone-11-camera-part-1-a-completely-new-camera/

@@ -397,6 +397,13 @@ struct DarkroomView: View {
                     .glassIconButton().accessibilityIdentifier("darkroom.rotatePaper")
                 }
             }
+            // Presets for the usual widths; the slider below takes anything in between.
+            PanelTabs(
+                options: PrintLayout.Border.allCases.map { ($0, $0.title) },
+                selection: Binding(
+                    get: { PrintLayout.Border(margin: margin) ?? .none },
+                    set: { setMargin($0.margin) }),
+                prefix: "darkroom.border.", isSelectionActive: !filled && PrintLayout.Border(margin: margin) != nil)
             HStack(alignment: .bottom, spacing: 10) {
                 NumericControl(
                     title: String(localized: "darkroom.border", defaultValue: "Border"),

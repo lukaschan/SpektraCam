@@ -194,6 +194,42 @@ precision, and tiling already bounds peak memory by the tile, not the image. Hal
 only pay off for the file-backed scene-linear stores of a full-size export (16 to 8 bytes per
 pixel on disk); that is a measured follow-up, not a pre-release change.
 
+### Camera (third pass)
+
+- **LVF hold.** A round `LVF` button right of the shutter stops the session (sensor and preview)
+  and shows one "Camera on Hold" screen in the viewfinder. Tap the viewfinder, the button or the
+  shutter to resume. Returning from the background does not undo a hold. System interruptions
+  (another app, multitasking, thermal) use the same screen with their reason; only a user hold
+  is tappable.
+- **Capture.** Volume buttons and Camera Control fire the shutter (`onCameraCaptureEvent`); a
+  Camera Control light-press adjusts exposure (`AVCaptureSystemExposureBiasSlider`), and the
+  on-screen slider follows it. Zero shutter lag, responsive capture and fast-capture
+  prioritisation are enabled where the output supports them. The shutter is free again as soon
+  as the DNG is written; importing into the library now runs behind the next shot.
+- **Flash.** Two states, off by default, shown only as available when the active lens and RAW
+  format support it.
+- **Layout.** Framed 3:4 viewfinder (4:3 in landscape) with nothing drawn over it; below it the
+  exposure slider, then flash / lens capsule / flip, then library / shutter / LVF. The session's
+  shot count is a badge on the library button. Rows keep their place while the camera starts or
+  is on hold, so the shutter never moves.
+
+Tested with `--ui-test-camera-demo`, a simulator-only stand-in camera (compiled out of Release):
+`testCameraHoldFlashAndShutterInPortrait` / `InLandscape` plus four existing camera tests pass.
+**Not tested on hardware:** the live feed, volume and Camera Control capture, flash, zero
+shutter lag, and how much power a hold saves. These need a run on the phone.
+
+### Camera (fourth pass)
+
+- On an iPhone the camera interface is held in portrait (`AppDelegate.lockPortrait`) and only
+  the symbols and labels turn with the device; the top row does not. Displays that ignore
+  orientation locks (iPad multitasking, the Duo's inner display) keep the adaptive layout.
+- The EV slider has equal side columns, so its track and zero sit on the screen's centre line.
+- On hold the viewfinder is a flat gray panel and every control stays in place, inactive.
+- The format chip now states what will be captured (`PRO 48`, `PRO 12`, `RAW 12`). Resolution is
+  offered only for ProRAW: Bayer RAW is the sensor's binned 12 MP readout on these phones.
+  Whether ProRAW at Max really writes 48 MP is **not confirmed**; it needs one capture on the
+  phone with the console open (the app logs the resolved RAW dimensions under the Camera category).
+
 ## Order of work from here
 
 1. Get Andrea Volpato's written permission for App Store distribution; add the notice.

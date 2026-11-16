@@ -42,6 +42,31 @@ nonisolated struct PrintLayout: Codable, Equatable, Sendable {
     /// Nil is automatic (see `resolvedMargin`).
     var margin: Double?
     static let marginRange = -0.2...0.2
+    /// Common border widths, as a share of the sheet's long side.
+    enum Border: String, CaseIterable {
+        case none, narrow, medium, wide
+        var margin: Double {
+            switch self {
+            case .none: 0
+            case .narrow: 0.03
+            case .medium: 0.05
+            case .wide: 0.13
+            }
+        }
+        var title: String {
+            switch self {
+            case .none: String(localized: "darkroom.border.none", defaultValue: "No border")
+            case .narrow: String(localized: "darkroom.border.narrow", defaultValue: "Narrow")
+            case .medium: String(localized: "darkroom.border.medium", defaultValue: "Medium")
+            case .wide: String(localized: "darkroom.border.wide", defaultValue: "Wide")
+            }
+        }
+        /// The preset this border matches, if any.
+        init?(margin: Double) {
+            guard let match = Self.allCases.first(where: { abs($0.margin - margin) < 0.0005 }) else { return nil }
+            self = match
+        }
+    }
     /// A film-edge enlarger print starts on a 5 × 7 sheet; a photo shown as itself stays as image.
     static var enlargerDefault: Self { var layout = Self(); layout.paper = .fiveBySeven; return layout }
     /// The automatic border: none for a photo shown as itself, a modest one on a sized sheet
@@ -142,7 +167,7 @@ nonisolated enum Easel {
         }
     }
     /// A hand-set easel lands a little off: up to this fraction of the sheet's long side.
-    static let placement = 0.008
+    static let placement = 0.0055
     /// Seeded unit values in [-1, 1] for a hand-set placement.
     static func jitter(_ seed: UInt32, _ k: Int32) -> Double {
         FilmEdgeNoise.unit(FilmEdgeNoise.hash(k, 77, seed)) * 2 - 1

@@ -85,10 +85,12 @@ struct CameraPreview: UIViewRepresentable {
 }
 
 /// The preview remains borderless. Grid marks do not intercept touch or accessibility.
-struct CameraViewfinder: SwiftUI.View {
+struct CameraViewfinder<Status: SwiftUI.View>: SwiftUI.View {
     let model: CameraModel
     /// The sensor's long side follows the long side of the space.
     var landscape = false
+    /// Shown inside the frame while there is no live view: starting, on hold, unavailable.
+    @ViewBuilder var status: Status
     @State private var focusPoint: CGPoint?
     @State private var focusRevision = UUID()
     var body: some SwiftUI.View {
@@ -105,7 +107,6 @@ struct CameraViewfinder: SwiftUI.View {
             }
         }
         .aspectRatio(landscape ? 4.0 / 3 : 3.0 / 4, contentMode: .fit)
-        .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
         .overlay {
             if model.source != nil {
                 GeometryReader { proxy in
@@ -134,6 +135,13 @@ struct CameraViewfinder: SwiftUI.View {
                 }
             }
         }
+        .overlay { status }
+        .clipShape(.rect(cornerRadius: 20))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
         .onChange(of: model.selectedLens?.id) { _, _ in focusPoint = nil }
         .task(id: focusRevision) {
             try? await Task.sleep(for: .seconds(4))

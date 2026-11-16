@@ -489,11 +489,11 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         // centre in the easel opening: the black rebate band tapers and differs side to side.
         let handSet = resolved.enlargerPrint && easel?.handSet == true
         let easelSeed = easel?.easelSeed ?? 1
-        if handSet { resolved.tilt = min(max(resolved.tilt + 0.3 * Easel.jitter(easelSeed, 3), -3.3), 3.3) }
+        if handSet { resolved.tilt = min(max(resolved.tilt + 0.2 * Easel.jitter(easelSeed, 3), -3.3), 3.3) }
         // The blades' worn edge: the gate's wear profile at the easel's amplitude.
         if resolved.enlargerPrint { resolved.carrierRoughness = (easel?.blade ?? .natural).wear }
         distress = resolved
-        easelOffset = handSet ? (0.18 * Easel.jitter(easelSeed, 4), 0.18 * Easel.jitter(easelSeed, 5)) : (0, 0)
+        easelOffset = handSet ? (0.12 * Easel.jitter(easelSeed, 4), 0.12 * Easel.jitter(easelSeed, 5)) : (0, 0)
         registration = Self.maxRegistration * (FilmEdgeNoise.unit(Self.streamSeed(resolved.seed, 61)) * 2 - 1)
         // `portrait` means the film runs vertically on the canvas. 6 × 4.5 frames lie across the
         // film, so a landscape 645 picture sits on a vertical strip.

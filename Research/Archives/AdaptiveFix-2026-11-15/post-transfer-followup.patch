@@ -1,0 +1,28 @@
+--- a/Research/AdaptiveValidation.md
++++ b/Research/AdaptiveValidation.md
+@@ -1,4 +1,8 @@
+ # Adaptive camera and rendering checks
++
++The copied fix was restored to this adaptive worktree on November 15, 2026.
++Transfer details, verified archives, current test results, and remaining checks are in
++[the archive record](Archives/AdaptiveFix-2026-11-15/README.md).
+ 
+ The Duo launch failure was a Metal validation abort in library thumbnail rendering:
+ `Dispatch Threads with Non-Uniform Threadgroup Size is not supported on this device`.
+--- a/SpektraCamUITests/CameraLifecycleTests.swift
++++ b/SpektraCamUITests/CameraLifecycleTests.swift
+@@ -61,8 +61,12 @@
+             XCTAssertTrue(app.buttons["camera.close"].waitForNonExistence(timeout: 10))
+             // A visible or hittable library is insufficient: prove that a real action works.
+             app.buttons["library.info"].tap()
+-            XCTAssertTrue(app.buttons["about.importFiles"].waitForExistence(timeout: 5))
+-            app.buttons["Done"].tap()
++            let about = app.navigationBars["About"]
++            XCTAssertTrue(about.waitForExistence(timeout: 5))
++            let done = app.buttons["Done"]
++            XCTAssertTrue(done.waitForExistence(timeout: 5))
++            done.tap()
++            XCTAssertTrue(about.waitForNonExistence(timeout: 5))
+         }
+         cell.tap()
+         XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 10))

@@ -1,0 +1,592 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project SpektraCam.xcodeproj -scheme SpektraCam -configuration Debug -sdk iphonesimulator -destination id=5208EE70-99A9-46FB-827E-8AC10F2B547B -derivedDataPath /private/tmp/spektracam-adaptive-validation CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO "-only-testing:SpektraCamUITests/CameraLifecycleTests" -resultBundlePath /Users/runzeni/dev/Xcode/SpektraCam-adaptive/Research/Archives/AdaptiveFix-2026-11-15/phone-final.xcresult test
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+    SDKROOT = iphonesimulator27.2
+
+Writing result bundle at path:
+	/Users/runzeni/dev/Xcode/SpektraCam-adaptive/Research/Archives/AdaptiveFix-2026-11-15/phone-final.xcresult
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (2 targets)
+    Target 'SpektraCamUITests' in project 'SpektraCam' (no dependencies)
+    Target 'SpektraCam' in project 'SpektraCam' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/AppIcon.icon /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/xcstringstool compile --dry-run --output-directory /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/InfoPlist.xcstrings
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/xcstringstool compile --dry-run --output-directory /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/Localizable.xcstrings
+
+Build description signature: 3c3d8ab9e3696005dfa32a69296463a0
+Build description path: /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/XCBuildData/3c3d8ab9e3696005dfa32a69296463a0.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk /tmp/spektracam-adaptive-validation/SDKStatCaches.noindex/iphonesimulator27.2-24B8118-cc78df9d8a9de6526dea716b1c70fd8e.sdkstatcache
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk -o /tmp/spektracam-adaptive-validation/SDKStatCaches.noindex/iphonesimulator27.2-24B8118-cc78df9d8a9de6526dea716b1c70fd8e.sdkstatcache
+
+CompileAssetCatalogVariant thinned /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/AppIcon.icon /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/Assets.xcassets (in target 'SpektraCam' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/AppIcon.icon /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/Assets.xcassets --compile /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_dependencies_thinned --output-partial-info-plist /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_generated_info.plist_thinned --app-icon AppIcon --accent-color AccentColor --compress-pngs --enable-on-demand-resources YES --filter-for-thinning-device-configuration iPhone16,2 --filter-for-device-os-version 27.2 --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator
+/* com.apple.actool.compilation-results */
+/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_generated_info.plist_thinned
+/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_output/thinned/AppIcon60x60@2x.png
+/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_output/thinned/AppIcon76x76@2x~ipad.png
+/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_output/thinned/Assets.car
+
+
+LinkAssetCatalog /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/AppIcon.icon /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCam/Resources/Assets.xcassets (in target 'SpektraCam' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-linkAssetCatalog --thinned /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_output/thinned --thinned-dependencies /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_dependencies_thinned --thinned-info-plist-content /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_generated_info.plist_thinned --unthinned /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_output/unthinned --unthinned-dependencies /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_dependencies_unthinned --unthinned-info-plist-content /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_generated_info.plist_unthinned --output /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app --plist-output /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_generated_info.plist
+note: Emplaced /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/Assets.car (in target 'SpektraCam' from project 'SpektraCam')
+note: Emplaced /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/AppIcon60x60@2x.png (in target 'SpektraCam' from project 'SpektraCam')
+note: Emplaced /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/AppIcon76x76@2x~ipad.png (in target 'SpektraCam' from project 'SpektraCam')
+
+SwiftDriver SpektraCamUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name SpektraCamUITests -Onone @/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.SwiftFileList -DDEBUG -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk -target arm64-apple-ios26.0-simulator -g -module-cache-path /tmp/spektracam-adaptive-validation/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /tmp/spektracam-adaptive-validation/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/Developer/Library/Frameworks -c -j18 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /tmp/spektracam-adaptive-validation/SDKStatCaches.noindex/iphonesimulator27.2-24B8118-cc78df9d8a9de6526dea716b1c70fd8e.sdkstatcache -output-file-map /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /tmp/spektracam-adaptive-validation/ModuleCache.noindex -sdk-module-cache-path /tmp/spektracam-adaptive-validation/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /tmp/spektracam-adaptive-validation/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests_const_extract_protocols.json -Xcc -iquote -Xcc /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-generated-files.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-own-target-headers.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-all-target-headers.hmap -Xcc -iquote -Xcc /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-project-headers.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/include -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources-normal/arm64 -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources/arm64 -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-Swift.h -working-directory /Users/runzeni/dev/Xcode/SpektraCam-adaptive -experimental-emit-module-separately -disable-cmo
+
+SwiftCompile normal arm64 Compiling\ CameraLifecycleTests.swift /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCamUITests/CameraLifecycleTests.swift (in target 'SpektraCamUITests' from project 'SpektraCam')
+
+SwiftCompile normal arm64 /Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCamUITests/CameraLifecycleTests.swift (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-SwiftPerFileCompile CameraLifecycleTests.swift
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ SpektraCamUITests (in target 'SpektraCamUITests' from project 'SpektraCam')
+
+SwiftCompile normal arm64 (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling CameraLifecycleTests.swift (in target 'SpektraCamUITests' from project 'SpektraCam')
+
+SwiftDriver\ Compilation SpektraCamUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name SpektraCamUITests -Onone @/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.SwiftFileList -DDEBUG -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk -target arm64-apple-ios26.0-simulator -g -module-cache-path /tmp/spektracam-adaptive-validation/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /tmp/spektracam-adaptive-validation/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/Developer/Library/Frameworks -c -j18 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /tmp/spektracam-adaptive-validation/SDKStatCaches.noindex/iphonesimulator27.2-24B8118-cc78df9d8a9de6526dea716b1c70fd8e.sdkstatcache -output-file-map /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /tmp/spektracam-adaptive-validation/ModuleCache.noindex -sdk-module-cache-path /tmp/spektracam-adaptive-validation/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /tmp/spektracam-adaptive-validation/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests_const_extract_protocols.json -Xcc -iquote -Xcc /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-generated-files.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-own-target-headers.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-all-target-headers.hmap -Xcc -iquote -Xcc /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-project-headers.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/include -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources-normal/arm64 -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources/arm64 -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-Swift.h -working-directory /Users/runzeni/dev/Xcode/SpektraCam-adaptive -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for SpektraCamUITests (in target 'SpektraCamUITests' from project 'SpektraCam')
+
+SwiftDriver\ Compilation\ Requirements SpektraCamUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name SpektraCamUITests -Onone @/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.SwiftFileList -DDEBUG -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk -target arm64-apple-ios26.0-simulator -g -module-cache-path /tmp/spektracam-adaptive-validation/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /tmp/spektracam-adaptive-validation/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/Developer/Library/Frameworks -c -j18 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /tmp/spektracam-adaptive-validation/SDKStatCaches.noindex/iphonesimulator27.2-24B8118-cc78df9d8a9de6526dea716b1c70fd8e.sdkstatcache -output-file-map /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-OutputFileMap.json -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /tmp/spektracam-adaptive-validation/ModuleCache.noindex -sdk-module-cache-path /tmp/spektracam-adaptive-validation/SDKExplicitPrecompiledModules -emit-dependencies -emit-module -emit-module-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.swiftmodule -serialize-diagnostics -dependency-scan-serialize-diagnostics-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-dependency-scan.dia -validate-clang-modules-once -clang-build-session-file /tmp/spektracam-adaptive-validation/ModuleCache.noindex/Session.modulevalidation -Xcc -fmodules-prune-interval\=86400 -Xcc -fmodules-prune-after\=345600 -emit-const-values -const-gather-protocols-list /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests_const_extract_protocols.json -Xcc -iquote -Xcc /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-generated-files.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-own-target-headers.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-all-target-headers.hmap -Xcc -iquote -Xcc /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests-project-headers.hmap -Xcc -I/tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/include -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources-normal/arm64 -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources/arm64 -Xcc -I/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests-Swift.h -working-directory /Users/runzeni/dev/Xcode/SpektraCam-adaptive -experimental-emit-module-separately -disable-cmo
+
+Copy /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests.swiftmodule/arm64-apple-ios-simulator.abi.json /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.abi.json (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.abi.json /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.swiftsourceinfo (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.swiftsourceinfo /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+Ld /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/SpektraCamUITests normal (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios26.0-simulator -bundle -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk -O0 -Xlinker -no_warn_duplicate_libraries -L/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator -L/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F/tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator -iframework /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -iframework /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk/Developer/Library/Frameworks -filelist /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.LinkFileList -Xlinker -rpath -Xlinker @loader_path/Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.swiftmodule -Xlinker -needed_framework -Xlinker XCTest -framework XCTest -Xlinker -needed-lXCTestSwiftSupport -lXCTestSwiftSupport -o /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/SpektraCamUITests
+
+ExtractAppIntentsMetadata (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name SpektraCamUITests --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator27.2.sdk --xcode-version 27B52 --platform-family iOS --deployment-target 26.0 --bundle-identifier io.github.runzeni.SpektraCam.uitests --output /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest --target-triple arm64-apple-ios26.0-simulator --binary-file /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/SpektraCamUITests --dependency-file /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests_dependency_info.dat --stringsdata-file /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.SwiftFileList --metadata-file-list /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests.DependencyMetadataFileList --static-metadata-file-list /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SpektraCamUITests.DependencyStaticMetadataFileList --swift-const-vals-list /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/Objects-normal/arm64/SpektraCamUITests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --no-app-shortcuts-localization
+2026-11-15 21:07:09.482 appintentsmetadataprocessor[72719:31386785] Starting App Intents metadata extraction
+2026-11-15 21:07:09.482 appintentsmetadataprocessor[72719:31386785] warning: Metadata extraction skipped, no AppIntents.framework dependency found
+
+ProcessInfoPlistFile /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/Info.plist /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/empty-SpektraCamUITests.plist (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-infoPlistUtility /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/empty-SpektraCamUITests.plist -producttype com.apple.product-type.bundle.ui-testing -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/ProductTypeInfoPlistAdditions.plist -o /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/Info.plist
+
+ProcessInfoPlistFile /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/Info.plist /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/empty-SpektraCam.plist (in target 'SpektraCam' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-infoPlistUtility /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/empty-SpektraCam.plist -producttype com.apple.product-type.application -genpkginfo /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/assetcatalog_generated_info.plist -o /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/Info.plist
+
+CopySwiftLibs /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest (in target 'SpektraCamUITests' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/SpektraCamUITests --scan-folder /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/Frameworks --scan-folder /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/PlugIns --scan-folder /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/SystemExtensions --scan-folder /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/Extensions --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCamUITests-Runner.app/PlugIns/SpektraCamUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCamUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+Ignoring --strip-bitcode because --sign was not passed
+
+CopySwiftLibs /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app (in target 'SpektraCam' from project 'SpektraCam')
+    cd /Users/runzeni/dev/Xcode/SpektraCam-adaptive
+    builtin-swiftStdLibTool --copy --verbose --scan-executable /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/SpektraCam.debug.dylib --scan-folder /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/Frameworks --scan-folder /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/PlugIns --scan-folder /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/SystemExtensions --scan-folder /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/Extensions --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /tmp/spektracam-adaptive-validation/Build/Products/Debug-iphonesimulator/SpektraCam.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SpektraCam.build/Debug-iphonesimulator/SpektraCam.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+Ignoring --strip-bitcode because --sign was not passed
+
+PruneExplicitPrecompiledModules /tmp/spektracam-adaptive-validation/SDKExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+PruneExplicitPrecompiledModules /tmp/spektracam-adaptive-validation/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+2026-11-15 21:07:10.294593-0500 SpektraCamUITests-Runner[72724:31387005] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-11-15 21:07:12.017.
+Test Suite 'SpektraCamUITests.xctest' started at 2026-11-15 21:07:12.017.
+Test Suite 'CameraLifecycleTests' started at 2026-11-15 21:07:12.018.
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testBayerOnlyCamera]' started.
+    t =     0.00s Start Test at 2026-11-15 21:07:12.019
+    t =     0.02s Set Up
+    t =     0.02s Open io.github.runzeni.spektracam
+    t =     0.02s     Launch io.github.runzeni.spektracam
+2026-11-15 21:07:12.084 xcodebuild[72655:31386307] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-15 21:07:12.084 xcodebuild[72655:31386307] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[72724]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.6Bkzfr/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x108878310) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.6Bkzfr/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x1088ac398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     0.44s         Interface orientation changed to Landscape Right
+    t =     0.47s         Setting up automation session
+    t =     2.00s         Wait for io.github.runzeni.spektracam to idle
+    t =     3.42s Waiting 15.0s for "camera.open" Button to exist
+    t =     4.46s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.open" Button`
+    t =     4.46s         Checking existence of `"camera.open" Button`
+    t =     4.53s Tap "camera.open" Button
+    t =     4.53s     Wait for io.github.runzeni.spektracam to idle
+    t =     4.53s     Find the "camera.open" Button
+    t =     4.55s     Check for interrupting elements affecting "camera.open" Button
+    t =     4.56s     Synthesize event
+    t =     4.85s     Wait for io.github.runzeni.spektracam to idle
+    t =     5.57s Waiting 10.0s for "camera.lens.24" Button to exist
+    t =     6.61s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.lens.24" Button`
+    t =     6.61s         Checking existence of `"camera.lens.24" Button`
+    t =     6.66s Checking existence of `"camera.lens.120" Button`
+    t =     6.69s Checking existence of `"camera.lens.13" Button`
+    t =     6.72s Find the "camera.flip" Button
+    t =     6.74s Find the "camera.format" Button
+    t =     6.76s Tap "camera.lens.120" Button
+    t =     6.76s     Wait for io.github.runzeni.spektracam to idle
+    t =     6.76s     Find the "camera.lens.120" Button
+    t =     6.78s     Check for interrupting elements affecting "camera.lens.120" Button
+    t =     6.81s     Synthesize event
+    t =     7.09s     Wait for io.github.runzeni.spektracam to idle
+    t =     7.81s Find the "camera.lens.120" Button
+    t =     7.85s Tap "camera.close" Button
+    t =     7.85s     Wait for io.github.runzeni.spektracam to idle
+    t =     7.85s     Find the "camera.close" Button
+    t =     7.88s     Check for interrupting elements affecting "camera.close" Button
+    t =     7.90s     Synthesize event
+    t =     8.20s     Wait for io.github.runzeni.spektracam to idle
+    t =     8.91s Waiting 10.0s for "library.info" Button to exist
+    t =     9.94s     Checking `Expect predicate `existsNoRetry == 1` for object "library.info" Button`
+    t =     9.95s         Checking existence of `"library.info" Button`
+    t =     9.97s Tear Down
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testBayerOnlyCamera]' passed (10.187 seconds).
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testLandscapeRoundTrip]' started.
+    t =     0.00s Start Test at 2026-11-15 21:07:22.209
+    t =     0.02s Set Up
+    t =     0.02s Setting device orientation to Landscape Left
+    t =     0.03s     Wait for io.github.runzeni.spektracam to idle
+    t =     0.06s Open io.github.runzeni.spektracam
+    t =     0.06s     Launch io.github.runzeni.spektracam
+    t =     0.06s         Terminate io.github.runzeni.spektracam:72742
+    t =     0.18s             Interface orientation changed to Portrait
+2026-11-15 21:07:23.303 xcodebuild[72655:31386307] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-15 21:07:23.303 xcodebuild[72655:31386307] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.26s         Interface orientation changed to Landscape Right
+    t =     1.30s         Setting up automation session
+    t =     2.72s         Wait for io.github.runzeni.spektracam to idle
+    t =     4.22s Waiting 30.0s for Button (First Match) to exist
+    t =     5.25s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =     5.25s         Checking existence of `Button (First Match)`
+    t =     5.32s Tap "camera.open" Button
+    t =     5.32s     Wait for io.github.runzeni.spektracam to idle
+    t =     5.33s     Find the "camera.open" Button
+    t =     5.38s     Check for interrupting elements affecting "camera.open" Button
+    t =     5.39s     Synthesize event
+    t =     5.68s     Wait for io.github.runzeni.spektracam to idle
+    t =     6.40s Waiting 10.0s for "camera.lens.24" Button to exist
+    t =     7.43s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.lens.24" Button`
+    t =     7.44s         Checking existence of `"camera.lens.24" Button`
+    t =     7.49s Find the "camera.shutter" Button
+    t =     7.52s Find the Window (First Match)
+    t =     7.53s Find the "camera.shutter" Button
+    t =     7.55s Find the "camera.flash" Button
+    t =     7.58s Find the "camera.flip" Button
+    t =     7.61s Find the "camera.lens.24" Button
+    t =     7.63s Tap "camera.hold" Button
+    t =     7.63s     Wait for io.github.runzeni.spektracam to idle
+    t =     7.63s     Find the "camera.hold" Button
+    t =     7.66s     Check for interrupting elements affecting "camera.hold" Button
+    t =     7.68s     Synthesize event
+    t =     7.97s     Wait for io.github.runzeni.spektracam to idle
+    t =     8.69s Waiting 5.0s for "camera.hold.screen" Any to exist
+    t =     9.72s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.hold.screen" Any`
+    t =     9.72s         Checking existence of `"camera.hold.screen" Any`
+    t =     9.77s Pressing Home button
+    t =    10.15s     Interface orientation changed to Portrait
+    t =    10.24s Open io.github.runzeni.spektracam
+    t =    10.24s     Activate io.github.runzeni.spektracam
+    t =    10.73s         Wait for io.github.runzeni.spektracam to idle
+    t =    10.84s             Interface orientation changed to Landscape Right
+    t =    10.90s Waiting 5.0s for "camera.hold.screen" Any to exist
+    t =    11.93s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.hold.screen" Any`
+    t =    11.93s         Checking existence of `"camera.hold.screen" Any`
+    t =    11.98s Tap "camera.shutter" Button
+    t =    11.98s     Wait for io.github.runzeni.spektracam to idle
+    t =    11.99s     Find the "camera.shutter" Button
+    t =    12.02s     Check for interrupting elements affecting "camera.shutter" Button
+    t =    12.04s     Synthesize event
+    t =    12.33s     Wait for io.github.runzeni.spektracam to idle
+    t =    12.34s Waiting 5.0s for "camera.hold.screen" Any to not exist
+    t =    13.38s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.hold.screen" Any`
+    t =    13.38s         Checking existence of `"camera.hold.screen" Any`
+    t =    13.42s Find the "camera.shutter" Button
+    t =    13.45s Setting device orientation to Portrait
+    t =    13.45s     Device orientation changed to Portrait
+    t =    13.48s     Interface orientation changed to Portrait
+    t =    13.48s     Wait for io.github.runzeni.spektracam to idle
+    t =    13.53s Tap "camera.close" Button
+    t =    13.53s     Wait for io.github.runzeni.spektracam to idle
+    t =    14.13s     Find the "camera.close" Button
+    t =    14.18s     Check for interrupting elements affecting "camera.close" Button
+    t =    14.21s     Synthesize event
+    t =    14.50s     Wait for io.github.runzeni.spektracam to idle
+    t =    15.22s Waiting 10.0s for "camera.close" Button to not exist
+    t =    16.25s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.close" Button`
+    t =    16.25s         Checking existence of `"camera.close" Button`
+    t =    16.28s Tap "library.info" Button
+    t =    16.28s     Wait for io.github.runzeni.spektracam to idle
+    t =    16.28s     Find the "library.info" Button
+    t =    16.31s     Check for interrupting elements affecting "library.info" Button
+    t =    16.32s     Synthesize event
+    t =    16.62s     Wait for io.github.runzeni.spektracam to idle
+    t =    17.07s Waiting 5.0s for "Done" Button to exist
+    t =    18.11s     Checking `Expect predicate `existsNoRetry == 1` for object "Done" Button`
+    t =    18.11s         Checking existence of `"Done" Button`
+    t =    18.18s Checking existence of `"about.importFiles" Button`
+    t =    18.22s Waiting 5.0s for "about.importFiles" Button to exist
+    t =    19.25s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    19.26s         Checking existence of `"about.importFiles" Button`
+    t =    19.31s Tap "Done" Button
+    t =    19.31s     Wait for io.github.runzeni.spektracam to idle
+    t =    19.31s     Find the "Done" Button
+    t =    19.35s     Check for interrupting elements affecting "xmark" Button
+    t =    19.38s     Synthesize event
+    t =    19.67s     Wait for io.github.runzeni.spektracam to idle
+    t =    20.05s Tap "camera.open" Button
+    t =    20.05s     Wait for io.github.runzeni.spektracam to idle
+    t =    20.05s     Find the "camera.open" Button
+    t =    20.08s     Check for interrupting elements affecting "camera.open" Button
+    t =    20.10s     Synthesize event
+    t =    20.38s     Wait for io.github.runzeni.spektracam to idle
+    t =    21.10s Waiting 10.0s for "camera.lens.24" Button to exist
+    t =    22.14s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.lens.24" Button`
+    t =    22.14s         Checking existence of `"camera.lens.24" Button`
+    t =    22.19s Find the "camera.shutter" Button
+    t =    22.22s Find the Window (First Match)
+    t =    22.22s Find the "camera.shutter" Button
+    t =    22.25s Find the "camera.flash" Button
+    t =    22.28s Find the "camera.flip" Button
+    t =    22.30s Find the "camera.lens.24" Button
+    t =    22.33s Tap "camera.hold" Button
+    t =    22.33s     Wait for io.github.runzeni.spektracam to idle
+    t =    22.33s     Find the "camera.hold" Button
+    t =    22.35s     Check for interrupting elements affecting "camera.hold" Button
+    t =    22.38s     Synthesize event
+    t =    22.67s     Wait for io.github.runzeni.spektracam to idle
+    t =    23.37s Waiting 5.0s for "camera.hold.screen" Any to exist
+    t =    24.40s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.hold.screen" Any`
+    t =    24.40s         Checking existence of `"camera.hold.screen" Any`
+    t =    24.44s Tap "camera.shutter" Button
+    t =    24.44s     Wait for io.github.runzeni.spektracam to idle
+    t =    24.44s     Find the "camera.shutter" Button
+    t =    24.47s     Check for interrupting elements affecting "camera.shutter" Button
+    t =    24.49s     Synthesize event
+    t =    24.78s     Wait for io.github.runzeni.spektracam to idle
+    t =    24.79s Waiting 5.0s for "camera.hold.screen" Any to not exist
+    t =    25.81s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.hold.screen" Any`
+    t =    25.81s         Checking existence of `"camera.hold.screen" Any`
+    t =    25.84s Find the "camera.shutter" Button
+    t =    25.87s Setting device orientation to Portrait
+    t =    25.87s     Wait for io.github.runzeni.spektracam to idle
+    t =    25.87s Tap "camera.library" Button
+    t =    25.87s     Wait for io.github.runzeni.spektracam to idle
+    t =    25.87s     Find the "camera.library" Button
+    t =    25.90s     Check for interrupting elements affecting "camera.library" Button
+    t =    25.92s     Synthesize event
+    t =    26.22s     Wait for io.github.runzeni.spektracam to idle
+    t =    26.56s Waiting 10.0s for "camera.close" Button to not exist
+    t =    27.58s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.close" Button`
+    t =    27.58s         Checking existence of `"camera.close" Button`
+    t =    27.62s Tap "library.info" Button
+    t =    27.62s     Wait for io.github.runzeni.spektracam to idle
+    t =    27.62s     Find the "library.info" Button
+    t =    27.64s     Check for interrupting elements affecting "library.info" Button
+    t =    27.66s     Synthesize event
+    t =    27.95s     Wait for io.github.runzeni.spektracam to idle
+    t =    28.37s Waiting 5.0s for "Done" Button to exist
+    t =    29.40s     Checking `Expect predicate `existsNoRetry == 1` for object "Done" Button`
+    t =    29.40s         Checking existence of `"Done" Button`
+    t =    29.46s Checking existence of `"about.importFiles" Button`
+    t =    29.50s Waiting 5.0s for "about.importFiles" Button to exist
+    t =    30.53s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    30.53s         Checking existence of `"about.importFiles" Button`
+    t =    30.58s Tap "Done" Button
+    t =    30.58s     Wait for io.github.runzeni.spektracam to idle
+    t =    30.58s     Find the "Done" Button
+    t =    30.62s     Check for interrupting elements affecting "xmark" Button
+    t =    30.65s     Synthesize event
+    t =    30.94s     Wait for io.github.runzeni.spektracam to idle
+    t =    31.32s Tap Button (First Match)
+    t =    31.32s     Wait for io.github.runzeni.spektracam to idle
+    t =    31.33s     Find the Button (First Match)
+    t =    31.36s     Check for interrupting elements affecting "library.photo.0DC357FE-DF83-41B2-8E84-0B7D84986C22" Button
+    t =    31.38s     Synthesize event
+    t =    31.66s     Wait for io.github.runzeni.spektracam to idle
+    t =    32.02s Waiting 10.0s for "photo.develop" Button to exist
+    t =    33.05s     Checking `Expect predicate `existsNoRetry == 1` for object "photo.develop" Button`
+    t =    33.05s         Checking existence of `"photo.develop" Button`
+    t =    33.08s Tap "photo.develop" Button
+    t =    33.08s     Wait for io.github.runzeni.spektracam to idle
+    t =    33.09s     Find the "photo.develop" Button
+    t =    33.10s     Check for interrupting elements affecting "photo.develop" Button
+    t =    33.12s     Synthesize event
+    t =    33.41s     Wait for io.github.runzeni.spektracam to idle
+    t =    33.88s Waiting 30.0s for "develop.mode.spektrafilm" Button to exist
+    t =    34.91s     Checking `Expect predicate `existsNoRetry == 1` for object "develop.mode.spektrafilm" Button`
+    t =    34.91s         Checking existence of `"develop.mode.spektrafilm" Button`
+    t =    34.96s Tap "develop.mode.spektrafilm" Button
+    t =    34.96s     Wait for io.github.runzeni.spektracam to idle
+    t =    34.97s     Find the "develop.mode.spektrafilm" Button
+    t =    35.00s     Check for interrupting elements affecting "develop.mode.spektrafilm" Button
+    t =    35.02s     Synthesize event
+    t =    35.31s     Wait for io.github.runzeni.spektracam to idle
+    t =    35.31s Waiting 30.0s for "Edited photo" Image to exist
+    t =    36.33s     Checking `Expect predicate `existsNoRetry == 1` for object "Edited photo" Image`
+    t =    36.33s         Checking existence of `"Edited photo" Image`
+    t =    36.37s Waiting 30.0s for "Rendering preview" ActivityIndicator to not exist
+    t =    37.40s     Checking `Expect predicate `existsNoRetry == 0` for object "Rendering preview" ActivityIndicator`
+    t =    37.40s         Checking existence of `"Rendering preview" ActivityIndicator`
+    t =    37.45s Tap "editor.tool.adjust" Button
+    t =    37.45s     Wait for io.github.runzeni.spektracam to idle
+    t =    37.45s     Find the "editor.tool.adjust" Button
+    t =    37.49s     Check for interrupting elements affecting "editor.tool.adjust" Button
+    t =    37.51s     Synthesize event
+    t =    37.80s     Wait for io.github.runzeni.spektracam to idle
+    t =    38.53s Waiting 10.0s for "tone.exposure" Slider to exist
+    t =    39.57s     Checking `Expect predicate `existsNoRetry == 1` for object "tone.exposure" Slider`
+    t =    39.58s         Checking existence of `"tone.exposure" Slider`
+    t =    39.62s Set normalized position of "tone.exposure" Slider to 0.60
+    t =    39.62s     Wait for io.github.runzeni.spektracam to idle
+    t =    39.62s     Find the "tone.exposure" Slider
+    t =    39.64s     Check for interrupting elements affecting "tone.exposure" Slider
+    t =    39.67s     Synthesize event
+    t =    40.22s     Wait for io.github.runzeni.spektracam to idle
+    t =    41.33s Waiting 30.0s for "Rendering preview" ActivityIndicator to not exist
+    t =    42.37s     Checking `Expect predicate `existsNoRetry == 0` for object "Rendering preview" ActivityIndicator`
+    t =    42.37s         Checking existence of `"Rendering preview" ActivityIndicator`
+    t =    42.41s Tap "camera.open" Button
+    t =    42.41s     Wait for io.github.runzeni.spektracam to idle
+    t =    42.41s     Find the "camera.open" Button
+    t =    42.44s     Check for interrupting elements affecting "camera.open" Button
+    t =    42.46s     Synthesize event
+    t =    42.75s     Wait for io.github.runzeni.spektracam to idle
+    t =    43.47s Waiting 10.0s for "camera.close" Button to exist
+    t =    44.50s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.close" Button`
+    t =    44.50s         Checking existence of `"camera.close" Button`
+    t =    44.56s Tap "camera.close" Button
+    t =    44.56s     Wait for io.github.runzeni.spektracam to idle
+    t =    44.56s     Find the "camera.close" Button
+    t =    44.59s     Check for interrupting elements affecting "camera.close" Button
+    t =    44.62s     Synthesize event
+    t =    44.92s     Wait for io.github.runzeni.spektracam to idle
+    t =    45.63s Waiting 10.0s for "camera.close" Button to not exist
+    t =    46.67s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.close" Button`
+    t =    46.67s         Checking existence of `"camera.close" Button`
+    t =    46.70s Tap "editor.back" Button
+    t =    46.70s     Wait for io.github.runzeni.spektracam to idle
+    t =    46.70s     Find the "editor.back" Button
+    t =    46.73s     Check for interrupting elements affecting "editor.back" Button
+    t =    46.76s     Synthesize event
+    t =    47.05s     Wait for io.github.runzeni.spektracam to idle
+    t =    47.40s Waiting 15.0s for "photo.develop" Button to exist
+    t =    48.43s     Checking `Expect predicate `existsNoRetry == 1` for object "photo.develop" Button`
+    t =    48.44s         Checking existence of `"photo.develop" Button`
+    t =    48.46s Find the Target Application 'io.github.runzeni.spektracam'
+    t =    48.58s Added attachment named 'Camera returned to a working rendered photo'
+    t =    48.58s Tear Down
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testLandscapeRoundTrip]' passed (48.837 seconds).
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testNoRAWCameraKeepsLibraryAvailable]' started.
+    t =     0.00s Start Test at 2026-11-15 21:08:11.046
+    t =     0.02s Set Up
+    t =     0.03s Open io.github.runzeni.spektracam
+    t =     0.03s     Launch io.github.runzeni.spektracam
+    t =     0.03s         Terminate io.github.runzeni.spektracam:72835
+2026-11-15 21:08:12.119 xcodebuild[72655:31386307] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-15 21:08:12.119 xcodebuild[72655:31386307] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.28s         Setting up automation session
+    t =     2.73s         Wait for io.github.runzeni.spektracam to idle
+    t =     4.16s Waiting 15.0s for "camera.open" Button to exist
+    t =     5.20s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.open" Button`
+    t =     5.20s         Checking existence of `"camera.open" Button`
+    t =     5.29s Tap "camera.open" Button
+    t =     5.29s     Wait for io.github.runzeni.spektracam to idle
+    t =     5.29s     Find the "camera.open" Button
+    t =     5.31s     Check for interrupting elements affecting "camera.open" Button
+    t =     5.33s     Synthesize event
+    t =     5.62s     Wait for io.github.runzeni.spektracam to idle
+    t =     6.36s Waiting 10.0s for "camera.rawUnsupported" Any to exist
+    t =     7.39s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.rawUnsupported" Any`
+    t =     7.39s         Checking existence of `"camera.rawUnsupported" Any`
+    t =     7.42s Find the "camera.shutter" Button
+    t =     7.45s Find the "camera.flip" Button
+    t =     7.47s Tap "camera.close" Button
+    t =     7.47s     Wait for io.github.runzeni.spektracam to idle
+    t =     7.48s     Find the "camera.close" Button
+    t =     7.50s     Check for interrupting elements affecting "camera.close" Button
+    t =     7.53s     Synthesize event
+    t =     7.82s     Wait for io.github.runzeni.spektracam to idle
+    t =     8.53s Tap "library.info" Button
+    t =     8.53s     Wait for io.github.runzeni.spektracam to idle
+    t =     8.53s     Find the "library.info" Button
+    t =     8.55s     Check for interrupting elements affecting "library.info" Button
+    t =     8.57s     Synthesize event
+    t =     8.86s     Wait for io.github.runzeni.spektracam to idle
+    t =     9.31s Waiting 10.0s for "about.importFiles" Button to exist
+    t =    10.33s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    10.33s         Checking existence of `"about.importFiles" Button`
+    t =    10.39s Tear Down
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testNoRAWCameraKeepsLibraryAvailable]' passed (10.630 seconds).
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testPortraitRoundTrip]' started.
+    t =     0.00s Start Test at 2026-11-15 21:08:21.677
+    t =     0.02s Set Up
+    t =     0.02s Setting device orientation to Portrait
+    t =     0.02s     Wait for io.github.runzeni.spektracam to idle
+    t =     0.03s Open io.github.runzeni.spektracam
+    t =     0.03s     Launch io.github.runzeni.spektracam
+    t =     0.03s         Terminate io.github.runzeni.spektracam:73257
+2026-11-15 21:08:22.737 xcodebuild[72655:31386307] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-15 21:08:22.737 xcodebuild[72655:31386307] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.27s         Setting up automation session
+    t =     2.68s         Wait for io.github.runzeni.spektracam to idle
+    t =     4.18s Waiting 30.0s for Button (First Match) to exist
+    t =     5.21s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =     5.21s         Checking existence of `Button (First Match)`
+    t =     5.28s Tap "camera.open" Button
+    t =     5.28s     Wait for io.github.runzeni.spektracam to idle
+    t =     5.29s     Find the "camera.open" Button
+    t =     5.33s     Check for interrupting elements affecting "camera.open" Button
+    t =     5.35s     Synthesize event
+    t =     5.64s     Wait for io.github.runzeni.spektracam to idle
+    t =     6.37s Waiting 10.0s for "camera.lens.24" Button to exist
+    t =     7.40s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.lens.24" Button`
+    t =     7.40s         Checking existence of `"camera.lens.24" Button`
+    t =     7.44s Find the "camera.shutter" Button
+    t =     7.47s Find the Window (First Match)
+    t =     7.47s Find the "camera.shutter" Button
+    t =     7.50s Find the "camera.flash" Button
+    t =     7.53s Find the "camera.flip" Button
+    t =     7.55s Find the "camera.lens.24" Button
+    t =     7.58s Tap "camera.hold" Button
+    t =     7.58s     Wait for io.github.runzeni.spektracam to idle
+    t =     7.58s     Find the "camera.hold" Button
+    t =     7.61s     Check for interrupting elements affecting "camera.hold" Button
+    t =     7.63s     Synthesize event
+    t =     7.92s     Wait for io.github.runzeni.spektracam to idle
+    t =     8.63s Waiting 5.0s for "camera.hold.screen" Any to exist
+    t =     9.66s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.hold.screen" Any`
+    t =     9.66s         Checking existence of `"camera.hold.screen" Any`
+    t =     9.71s Pressing Home button
+    t =    10.18s Open io.github.runzeni.spektracam
+    t =    10.18s     Activate io.github.runzeni.spektracam
+    t =    10.65s         Wait for io.github.runzeni.spektracam to idle
+    t =    10.82s Waiting 5.0s for "camera.hold.screen" Any to exist
+    t =    11.84s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.hold.screen" Any`
+    t =    11.85s         Checking existence of `"camera.hold.screen" Any`
+    t =    11.90s Tap "camera.shutter" Button
+    t =    11.90s     Wait for io.github.runzeni.spektracam to idle
+    t =    11.90s     Find the "camera.shutter" Button
+    t =    11.93s     Check for interrupting elements affecting "camera.shutter" Button
+    t =    11.96s     Synthesize event
+    t =    12.25s     Wait for io.github.runzeni.spektracam to idle
+    t =    12.25s Waiting 5.0s for "camera.hold.screen" Any to not exist
+    t =    13.28s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.hold.screen" Any`
+    t =    13.28s         Checking existence of `"camera.hold.screen" Any`
+    t =    13.33s Find the "camera.shutter" Button
+    t =    13.35s Setting device orientation to Landscape Left
+    t =    13.36s     Device orientation changed to Landscape Left
+    t =    13.36s     Wait for io.github.runzeni.spektracam to idle
+    t =    13.36s Tap "camera.close" Button
+    t =    13.37s     Wait for io.github.runzeni.spektracam to idle
+    t =    13.37s     Find the "camera.close" Button
+    t =    13.39s     Check for interrupting elements affecting "camera.close" Button
+    t =    13.42s     Synthesize event
+    t =    13.71s     Wait for io.github.runzeni.spektracam to idle
+    t =    14.19s         Interface orientation changed to Landscape Right
+    t =    14.73s Waiting 10.0s for "camera.close" Button to not exist
+    t =    15.76s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.close" Button`
+    t =    15.76s         Checking existence of `"camera.close" Button`
+    t =    15.79s Tap "library.info" Button
+    t =    15.79s     Wait for io.github.runzeni.spektracam to idle
+    t =    15.80s     Find the "library.info" Button
+    t =    15.82s     Check for interrupting elements affecting "library.info" Button
+    t =    15.83s     Synthesize event
+    t =    16.13s     Wait for io.github.runzeni.spektracam to idle
+    t =    16.55s Waiting 5.0s for "Done" Button to exist
+    t =    17.57s     Checking `Expect predicate `existsNoRetry == 1` for object "Done" Button`
+    t =    17.57s         Checking existence of `"Done" Button`
+    t =    17.64s Checking existence of `"about.importFiles" Button`
+    t =    17.66s Swipe up Target Application 'io.github.runzeni.spektracam'
+    t =    17.66s     Wait for io.github.runzeni.spektracam to idle
+    t =    17.67s     Find the Target Application 'io.github.runzeni.spektracam'
+    t =    17.69s     Check for interrupting elements affecting "SpektraCam" Application
+    t =    17.71s     Synthesize event
+    t =    18.13s     Wait for io.github.runzeni.spektracam to idle
+    t =    18.14s Waiting 5.0s for "about.importFiles" Button to exist
+    t =    19.17s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    19.17s         Checking existence of `"about.importFiles" Button`
+    t =    19.22s         Capturing element debug description
+    t =    20.14s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    20.14s         Checking existence of `"about.importFiles" Button`
+    t =    20.19s         Capturing element debug description
+    t =    21.21s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    21.21s         Checking existence of `"about.importFiles" Button`
+    t =    21.26s         Capturing element debug description
+    t =    22.19s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    22.19s         Checking existence of `"about.importFiles" Button`
+    t =    22.23s         Capturing element debug description
+    t =    23.14s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    23.14s         Checking existence of `"about.importFiles" Button`
+    t =    23.18s         Capturing element debug description
+    t =    23.18s     Checking existence of `"about.importFiles" Button`
+    t =    23.21s Collecting debug information to assist test failure triage
+    t =    23.21s     Requesting snapshot of accessibility hierarchy for app with pid 73305
+/Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCamUITests/CameraLifecycleTests.swift:69: error: -[SpektraCamUITests.CameraLifecycleTests testPortraitRoundTrip] : XCTAssertTrue failed
+    t =    23.29s Tear Down
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testPortraitRoundTrip]' failed (23.533 seconds).
+Test Suite 'CameraLifecycleTests' failed at 2026-11-15 21:08:45.210.
+	 Executed 4 tests, with 1 failure (0 unexpected) in 93.187 (93.192) seconds
+Test Suite 'SpektraCamUITests.xctest' failed at 2026-11-15 21:08:45.210.
+	 Executed 4 tests, with 1 failure (0 unexpected) in 93.187 (93.193) seconds
+Test Suite 'Selected tests' failed at 2026-11-15 21:08:45.211.
+	 Executed 4 tests, with 1 failure (0 unexpected) in 93.187 (93.194) seconds
+2026-11-15 21:08:45.520 xcodebuild[72655:31391386]  IDETestOperationsObserverDebug: Failure collecting diagnostics from simulator: Process exited with error 72:
+ xcrun: error: unable to find utility "simctl", not a developer tool or in PATH
+
+2026-11-15 21:08:45.524 xcodebuild[72655:31386307] [MT] IDETestOperationsObserverDebug: 96.021 elapsed -- Testing started completed.
+2026-11-15 21:08:45.524 xcodebuild[72655:31386307] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-15 21:08:45.524 xcodebuild[72655:31386307] [MT] IDETestOperationsObserverDebug: 96.021 sec, +96.021 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runzeni/dev/Xcode/SpektraCam-adaptive/Research/Archives/AdaptiveFix-2026-11-15/phone-final.xcresult
+
+Failing tests:
+	CameraLifecycleTests.testPortraitRoundTrip()
+
+** TEST FAILED **
+
+Testing started

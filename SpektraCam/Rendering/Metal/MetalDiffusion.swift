@@ -202,7 +202,7 @@ nonisolated final class DiffusionMetalKernels {
             prepare.setBytes(&dimensions, length: 16, index: 2)
             prepare.setBytes(&border, length: 4, index: 3)
             prepare.setBytes(&wholeSample, length: 4, index: 4)
-            prepare.dispatchThreads(
+            prepare.dispatchGrid(
                 MTLSize(width: fw, height: fh, depth: 1),
                 threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
             prepare.endEncoding()
@@ -300,7 +300,7 @@ nonisolated final class DiffusionMetalKernels {
         prepare.setBytes(&dimensions, length: 16, index: 2)
         prepare.setBytes(&border, length: 4, index: 3)
         prepare.setBytes(&edge, length: 4, index: 4)
-        prepare.dispatchThreads(
+        prepare.dispatchGrid(
             MTLSize(width: fw, height: fh, depth: 1),
             threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
         prepare.endEncoding()
@@ -387,7 +387,7 @@ nonisolated final class DiffusionMetalKernels {
     private func dispatch(
         _ encoder: MTLComputeCommandEncoder, _ pipeline: MTLComputePipelineState, _ count: Int
     ) {
-        encoder.dispatchThreads(
+        encoder.dispatchGrid(
             MTLSize(width: count, height: 1, depth: 1),
             threadsPerThreadgroup: MTLSize(
                 width: min(128, pipeline.maxTotalThreadsPerThreadgroup), height: 1, depth: 1))

@@ -43,7 +43,7 @@ import Metal
         for (i, b) in [buffer(counters), buffer(keys), output].enumerated() {
             encoder.setBuffer(b, offset: 0, index: i)
         }
-        encoder.dispatchThreads(
+        encoder.dispatchGrid(
             MTLSize(width: 3, height: 1, depth: 1),
             threadsPerThreadgroup: MTLSize(width: 3, height: 1, depth: 1))
         encoder.endEncoding()

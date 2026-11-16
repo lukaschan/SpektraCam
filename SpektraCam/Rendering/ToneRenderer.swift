@@ -359,7 +359,7 @@ nonisolated private final class GradeKernel: @unchecked Sendable {
 
         parameters.withUnsafeBytes { encoder.setBytes($0.baseAddress!, length: $0.count, index: 0) }
         let group = pipeline.threadExecutionWidth
-        encoder.dispatchThreads(
+        encoder.dispatchGrid(
             MTLSize(width: width, height: height, depth: 1),
             threadsPerThreadgroup: MTLSize(
                 width: group, height: max(1, pipeline.maxTotalThreadsPerThreadgroup / group),

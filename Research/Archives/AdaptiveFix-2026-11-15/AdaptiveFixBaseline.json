@@ -1,0 +1,25 @@
+{
+  "source": "/Users/runzeni/dev/Xcode/SpektraCam-adaptive",
+  "head": "46bf81d9706a8f112c085100973bd731fa9fb67c",
+  "sha256": {
+    "README.md": "37066cea83779aff45b9da8cf2fe50a49f8fa1ac7fe960b2909abed36f487fd1",
+    "Research/AdaptiveValidation.md": null,
+    "Scripts/core-checks.py": "4b58fde335f9395ebb0f22b853a5f5099765c1eee508f3a6b78977a4eb3ac9ec",
+    "Scripts/layout-matrix.py": "19533bb3523ed028da8e7e570f03cceabf74afdeb5a70c117aae8fa59995d280",
+    "Scripts/metal-checks.py": "3d0d668b0e3d1686253541824bf3eee056204fd1d7907ae36d1cb0c98f4807cf",
+    "Scripts/metal-dispatch-checks.swift": null,
+    "Scripts/metal-grain-checks.swift": "bc83219fab10fc2f3e7b70da8c79901201194e716a038109322cd2fbaebbc5a7",
+    "SpektraCam/Features/Camera/CameraModel.swift": "bb8cf437bf828cc0665c0598ad946189e1b00a6198201d53601cfa68be3a2dce",
+    "SpektraCam/Features/Camera/CameraService.swift": "e7bf6d3c371ba2c46df76f42c86acb3b57cef7a10ec5576f5f9c5e747d7773c7",
+    "SpektraCam/Features/Camera/CameraView.swift": "da4f1d3c34a5fb8b5832e9dab15ea19a83d120f57bf3c9390f086bcffc322f3b",
+    "SpektraCam/Rendering/Metal/MetalColorPipeline.swift": "a4b232d88fcb4fd66765d3996269ebfbbdf565af9d727bd12e865b34d4f68662",
+    "SpektraCam/Rendering/Metal/MetalDiffusion.swift": "26e290f24731d11dff7dbfb7ad53435404d5dc5b6c96cd7c669ce47ea7eaaff2",
+    "SpektraCam/Rendering/Metal/MetalDispatch.swift": null,
+    "SpektraCam/Rendering/Metal/MetalFilmPipeline.swift": "8b4cccfc61848dc79908c63e2e37447df12e2f3717dd525e9bc3faa9e8099c31",
+    "SpektraCam/Rendering/Metal/MetalGrain.swift": "97d6af94f888606dc455c42339175e70fdcc876ce9fe3ee0559c312f2232fb1b",
+    "SpektraCam/Rendering/Metal/MetalStages.swift": "7e1052914544d862a5236103c79d84165d32967103d985b5f436207d3e127b1b",
+    "SpektraCam/Rendering/ToneRenderer.swift": "73b040ca0938ad7ee2e5d3fa84d2832bd1c09b207a21b88ee3394822b098b302",
+    "SpektraCam/Resources/Localizable.xcstrings": "aea520ee6775554e26f2081b2e60ca8eb7b7a10ead6e3393fb33b7c35788c903",
+    "SpektraCamUITests/CameraLifecycleTests.swift": null
+  }
+}

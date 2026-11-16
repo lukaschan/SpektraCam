@@ -4,16 +4,21 @@ import SwiftUI
 struct CameraExposureControl: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
+    /// Degrees that keep the symbols upright when the interface does not rotate.
+    var glyphTurn = 0.0
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "sun.max").accessibilityHidden(true)
+            Image(systemName: "sun.max").rotationEffect(.degrees(glyphTurn))
+                .frame(width: 76, height: 44, alignment: .leading).accessibilityHidden(true)
             DefaultSlider(value: $value, range: range, defaultValue: 0,
                 title: String(localized: "camera.exposure", defaultValue: "Camera exposure"),
                 identifier: "camera.exposure", fillOrigin: 0)
                 .accessibilityValue(String(format: "%+.2f EV", value))
             Button { value = 0 } label: {
-                Text(String(format: "%+.2f EV", value))
-                    .monospacedDigit().frame(width: 76, height: 44, alignment: .trailing).contentShape(.rect)
+                Text(String(format: "%+.2f EV", value)).monospacedDigit()
+                    .fixedSize().rotationEffect(.degrees(glyphTurn))
+                    .frame(width: 76, height: 44, alignment: glyphTurn == 0 ? .trailing : .center)
+                    .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "control.reset_to_default", defaultValue: "Reset to Default"))

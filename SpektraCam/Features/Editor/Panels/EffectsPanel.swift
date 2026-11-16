@@ -67,13 +67,6 @@ struct EffectsPanel: View {
                 }
                 .disabled(session.recipe.look.mode == .lut)
             case .diffusion:
-                Text(
-                    String(
-                        localized: "effects.diffusion_memory_note",
-                        defaultValue:
-                            "Diffusion can require substantial memory during full-size export.")
-                ).font(.caption)
-                    .foregroundStyle(.secondary)
                 EffectSection(
                     title: String(
                         localized: "effects.camera_diffusion", defaultValue: "Camera diffusion"),

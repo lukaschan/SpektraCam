@@ -34,6 +34,9 @@ final class AdaptiveLayoutTests: XCTestCase {
         XCTAssertTrue(app.buttons["camera.shutter"].waitForExistence(timeout: 10))
         capture(app, orientation.isLandscape ? "wide-camera" : "tall-camera")
         app.buttons["camera.close"].tap()
+        // Leaving the camera releases its portrait hold; the library must come back usable.
+        XCTAssertTrue(app.buttons["library.import"].waitForExistence(timeout: 10))
+        capture(app, orientation.isLandscape ? "wide-after-camera" : "tall-after-camera")
         cell.tap()
         XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 10))
         capture(app, orientation.isLandscape ? "wide-viewer" : "tall-viewer")
@@ -64,6 +67,60 @@ final class AdaptiveLayoutTests: XCTestCase {
         sleep(3)
         capture(app, prefix + "darkroom-edge")
     }
+
+    /// The simulator has no camera; `--ui-test-camera-demo` stands one in so every control is live.
+    @MainActor private func cameraDemo(_ orientation: UIDeviceOrientation, prefix: String) {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = orientation
+        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.spektracam")
+        app.launchArguments = ["--ui-test-library", "--reset-test-library", "--ui-test-camera-demo"]
+        app.launch()
+        XCTAssertTrue(app.buttons["camera.open"].waitForExistence(timeout: 15))
+        app.buttons["camera.open"].tap()
+        let shutter = app.buttons["camera.shutter"]
+        let hold = app.buttons["camera.hold"]
+        XCTAssertTrue(app.buttons["camera.lens.24"].waitForExistence(timeout: 10))
+        XCTAssertTrue(shutter.isEnabled)
+        // The hold sits on the shutter's right, under the right thumb.
+        XCTAssertGreaterThanOrEqual(hold.frame.midX, shutter.frame.midX)
+        capture(app, prefix + "camera-ready")
+        // Flash has two states and starts off.
+        let flash = app.buttons["camera.flash"]
+        XCTAssertEqual(flash.value as? String, "Off")
+        flash.tap()
+        XCTAssertEqual(flash.value as? String, "On")
+        shutter.tap()
+        XCTAssertTrue(app.staticTexts["camera.saved"].waitForExistence(timeout: 5))
+        // LVF switches the camera off; the shutter stays where it was and wakes it.
+        let shutterFrame = shutter.frame
+        hold.tap()
+        let screen = app.descendants(matching: .any)["camera.hold.screen"]
+        XCTAssertTrue(screen.waitForExistence(timeout: 5))
+        // The controls stay in place on hold; they are only inactive.
+        XCTAssertTrue(app.buttons["camera.lens.24"].exists)
+        XCTAssertFalse(app.buttons["camera.lens.24"].isEnabled)
+        XCTAssertEqual(shutter.frame.midX, shutterFrame.midX, accuracy: 1)
+        XCTAssertEqual(shutter.frame.midY, shutterFrame.midY, accuracy: 1)
+        capture(app, prefix + "camera-hold")
+        shutter.tap()
+        XCTAssertTrue(screen.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["camera.lens.24"].isEnabled)
+        hold.tap()
+        XCTAssertTrue(screen.waitForExistence(timeout: 5))
+        screen.tap()
+        XCTAssertTrue(screen.waitForNonExistence(timeout: 5))
+        // Taller than wide, the EV slider sits on the screen's centre line.
+        let window = app.windows.firstMatch.frame
+        if window.height > window.width {
+            XCTAssertEqual(app.sliders["camera.exposure"].frame.midX, window.midX, accuracy: 2)
+        }
+        // A live camera must still let go: Close returns to a working library.
+        app.buttons["camera.close"].tap()
+        XCTAssertTrue(app.buttons["library.import"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["camera.open"].isHittable)
+    }
+    @MainActor func testCameraHoldFlashAndShutterInPortrait() { cameraDemo(.portrait, prefix: "tall-") }
+    @MainActor func testCameraHoldFlashAndShutterInLandscape() { cameraDemo(.landscapeLeft, prefix: "wide-") }
 
     @MainActor func testSideBySideWorkspaceInLandscape() throws {
         let app = try openEditor(.landscapeLeft)

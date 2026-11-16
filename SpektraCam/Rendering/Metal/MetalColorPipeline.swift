@@ -56,7 +56,7 @@ actor MetalColorPipeline {
         encoder.setBytes(&shape, length: MemoryLayout.size(ofValue: shape), index: 10)
         encoder.setBytes(&flags, length: MemoryLayout.size(ofValue: flags), index: 11)
         let threads = min(kernel.maxTotalThreadsPerThreadgroup, kernel.threadExecutionWidth * 4)
-        encoder.dispatchThreads(
+        encoder.dispatchGrid(
             MTLSize(width: input.count, height: 1, depth: 1),
             threadsPerThreadgroup: MTLSize(width: threads, height: 1, depth: 1))
         encoder.endEncoding()

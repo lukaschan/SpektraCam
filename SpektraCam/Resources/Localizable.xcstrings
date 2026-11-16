@@ -1,6 +1,40 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "camera.raw_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAW Capture Unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法拍摄 RAW"
+          }
+        }
+      }
+    },
+    "camera.raw_unsupported_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device’s cameras do not provide a supported RAW format. You can still import and edit photos."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备的相机不提供受支持的 RAW 格式。你仍可导入和编辑照片。"
+          }
+        }
+      }
+    },
     "%lld³" : {
       "comment" : "Fixed brand, acronym or mathematical notation. Do not translate.",
       "extractionState" : "manual",
@@ -1129,24 +1163,6 @@
         }
       }
     },
-    "camera.camera_paused" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Camera Paused"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "相机已暂停"
-          }
-        }
-      }
-    },
     "camera.camera_stopped" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1381,6 +1397,24 @@
         }
       }
     },
+    "camera.flash" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flash"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "闪光灯"
+          }
+        }
+      }
+    },
     "camera.flip_camera" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1485,6 +1519,60 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示经过处理的相机预览，无法据此判断 RAW 数据是否溢出。"
+          }
+        }
+      }
+    },
+    "camera.hold" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold Camera"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂停相机"
+          }
+        }
+      }
+    },
+    "camera.hold_hint" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap to resume"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "轻点以恢复"
+          }
+        }
+      }
+    },
+    "camera.hold_power_note" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sensor and preview are off to save power."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "传感器和预览已关闭，以节省电量。"
           }
         }
       }
@@ -1669,6 +1757,24 @@
         }
       }
     },
+    "camera.on_hold" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera on Hold"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机已暂停"
+          }
+        }
+      }
+    },
     "camera.open_library" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1777,6 +1883,24 @@
         }
       }
     },
+    "camera.resume" : {
+      "comment" : "Camera interface text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume Camera"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复相机"
+          }
+        }
+      }
+    },
     "camera.retry_import" : {
       "comment" : "Camera interface text.",
       "extractionState" : "manual",
@@ -1809,24 +1933,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已存入图库：%lld 张"
-          }
-        }
-      }
-    },
-    "camera.saves_to_library_note" : {
-      "comment" : "Camera interface text.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RAW photos save to the app library."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RAW 照片存储在 App 图库中。"
           }
         }
       }
@@ -3139,6 +3245,78 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "白边"
+          }
+        }
+      }
+    },
+    "darkroom.border.medium" : {
+      "comment" : "Darkroom border preset.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medium"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "中"
+          }
+        }
+      }
+    },
+    "darkroom.border.narrow" : {
+      "comment" : "Darkroom border preset.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Narrow"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窄"
+          }
+        }
+      }
+    },
+    "darkroom.border.none" : {
+      "comment" : "Darkroom border preset.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No border"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无白边"
+          }
+        }
+      }
+    },
+    "darkroom.border.wide" : {
+      "comment" : "Darkroom border preset.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wide"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "宽"
           }
         }
       }
@@ -4898,24 +5076,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "柔光"
-          }
-        }
-      }
-    },
-    "effects.diffusion_memory_note" : {
-      "comment" : "Effects interface text. Diffusion is an optical filter/light-spread effect.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diffusion can require substantial memory during full-size export."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以完整尺寸导出时，柔光效果可能占用大量内存。"
           }
         }
       }
