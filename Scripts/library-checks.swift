@@ -179,6 +179,57 @@ import UniformTypeIdentifiers
         precondition(reverted == nil && revertedBytes == originalBytes)
         try await library!.finishEditing(photo.id, recipe: recipe)
         print("PASS: revert clears the saved recipe across restart and preserves original bytes")
+        // Copy a look to another photo, undo it, and never let Undo discard a later edit.
+        context.setFillColor(CGColor(red: 0.7, green: 0.2, blue: 0.1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 24, height: 32))
+        let targetSource = temporary.appendingPathComponent("paste-target.jpg")
+        let targetFile = CGImageDestinationCreateWithURL(
+            targetSource as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(targetFile, context.makeImage()!, nil)
+        precondition(CGImageDestinationFinalize(targetFile))
+        let target = try await library!.importPhoto(targetSource)
+        var framedEdit = EditRecipe()
+        framedEdit.look.enabled = false
+        framedEdit.geometry.rotateLeft()
+        framedEdit.tone.exposureEV = -0.5
+        try await library!.finishEditing(target.id, recipe: framedEdit)
+        let framedEditBytes = library!.photo(target.id)!.recipeData
+        try library!.copyLook(from: photo.id)
+        precondition(library!.copiedLook?.sourceID == photo.id)
+        var outcome = try await library!.pasteLook([.look], to: [photo.id, target.id])
+        precondition(outcome.pasted == 1 && outcome.skipped == 0, "A photo's own look changed it")
+        let pasted = try library!.recipe(target.id)!
+        precondition(pasted.mix == 0.6 && pasted.tone.contrast == 1.2 && pasted.monochromeGrain)
+        precondition(
+            pasted.tone.exposureEV == -0.5 && pasted.source.exposureEV == 0, "Look pasted the exposure")
+        precondition(pasted.geometry == framedEdit.geometry, "Paste moved the framing")
+        precondition(library!.pasteUndo?.count == 1 && library!.pasteUndo?.contains(target.id) == true)
+        let untouched = try library!.recipe(photo.id)
+        precondition(untouched == recipe, "Paste changed the source photo")
+        library = nil
+        library = try PhotoLibrary(root: root, cache: cache, modelDirectory: dataDirectory)
+        let reopenedPaste = try library!.recipe(target.id)
+        precondition(reopenedPaste == pasted, "Restart lost the pasted look")
+        try library!.copyLook(from: photo.id)
+        try await library!.finishEditing(target.id, recipe: framedEdit)
+        outcome = try await library!.pasteLook([.look], to: [target.id])
+        precondition(outcome.pasted == 1)
+        try await library!.undoPaste()
+        precondition(
+            library!.photo(target.id)!.recipeData == framedEditBytes && library!.pasteUndo == nil,
+            "Undo did not restore the earlier edit")
+        try await library!.revert([target.id])
+        outcome = try await library!.pasteLook([.look, .exposure], to: [target.id])
+        let withExposure = try library!.recipe(target.id)!
+        precondition(withExposure.source.exposureEV == 1.25 && withExposure.geometry.isIdentity)
+        try await library!.undoPaste()
+        precondition(!library!.photo(target.id)!.hasEdits, "Undo left an edit on an untouched photo")
+        _ = try await library!.pasteLook([.look], to: [target.id])
+        try await library!.finishEditing(target.id, recipe: framedEdit)
+        precondition(library!.pasteUndo == nil, "Undo would discard a later edit")
+        try await library!.delete([target.id])
+        precondition(library!.photos.count == 1)
+        print("PASS: a copied look pastes by part, survives restart and undoes exactly")
         try FileManager.default.removeItem(at: cache)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         let rebuilt = try await library!.images.image(library!.photo(photo.id)!, thumbnail: false)

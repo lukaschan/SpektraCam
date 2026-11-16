@@ -27,6 +27,7 @@ struct PhotoDetailView: View {
     @State private var immersive = false
     @State private var confirmRevert = false
     @State private var confirmDelete = false
+    @State private var showPasteLook = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private struct ExportRequest: Identifiable {
         let id = UUID()
@@ -71,7 +72,17 @@ struct PhotoDetailView: View {
                 let recipe = savedRecipe
                 PhotoInfoPanel(
                     title: filmTitle(recipe), subtitle: printTitle(recipe), metadata: displayMetadata,
-                    location: photo.locationName, histogram: histogram, identifier: "photo"
+                    location: photo.locationName, histogram: histogram, identifier: "photo",
+                    look: LookActions(
+                        canCopy: photo.hasEdits && !working,
+                        canPaste: library.copiedLook != nil && !working,
+                        canUndo: library.pasteUndo?.contains(photo.id) == true && !working,
+                        copy: {
+                            do { try library.copyLook(from: photo.id) } catch {
+                                failure = error.localizedDescription
+                            }
+                        },
+                        paste: { showPasteLook = true }, undo: undoPaste)
                 )
                 .padding(.horizontal, 12).padding(.top, 4)
                 .opacity(immersive ? 0 : 1).allowsHitTesting(!immersive)
@@ -128,7 +139,9 @@ struct PhotoDetailView: View {
             histogram = .empty
         }
         .navigationDestination(item: $editor) { session in
-            EditorView(session: session, locationName: photo?.locationName, library: library) {
+            EditorView(
+                session: session, locationName: photo?.locationName, photoID: selectedID, library: library
+            ) {
                 let recipe = session.hasEdits ? session.recipe : nil
                 try await library.finishEditing(selectedID, recipe: recipe)
             }
@@ -140,7 +153,33 @@ struct PhotoDetailView: View {
                 ExportPanel(originalURL: request.originalURL, sourceFilename: request.sourceFilename)
             }
         }
+        .sheet(isPresented: $showPasteLook) {
+            if let clip = library.copiedLook {
+                PasteLookSheet(library: library, clip: clip, paste: pasteLook)
+            }
+        }
         .failureAlert(String(localized: "photo.photo", defaultValue: "Photo"), message: $failure)
+    }
+    private func pasteLook(_ parts: Set<EditRecipe.Part>) {
+        let id = selectedID
+        working = true
+        Task {
+            defer { working = false }
+            do {
+                if try await library.pasteLook(parts, to: [id]).skipped > 0 {
+                    failure = String(
+                        localized: "look.paste.skipped",
+                        defaultValue: "Photos edited with an older film model were skipped.")
+                }
+            } catch { failure = error.localizedDescription }
+        }
+    }
+    private func undoPaste() {
+        working = true
+        Task {
+            defer { working = false }
+            do { try await library.undoPaste() } catch { failure = error.localizedDescription }
+        }
     }
     @ToolbarContentBuilder private var sideBarActions: some ToolbarContent {
         ToolbarItem(placement: .bottomBar) {

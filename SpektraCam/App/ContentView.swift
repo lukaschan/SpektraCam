@@ -42,10 +42,12 @@ struct ContentView: View {
                         #if DEBUG && targetEnvironment(simulator)
                             // Layout checks import a host file directly, without the system picker.
                             let arguments = ProcessInfo.processInfo.arguments
-                            if let flag = arguments.firstIndex(of: "--ui-test-import"), flag + 1 < arguments.count,
-                                library.photos.isEmpty
-                            {
-                                _ = try? await library.importPhoto(URL(fileURLWithPath: arguments[flag + 1]))
+                            if library.photos.isEmpty {
+                                // Each flag is followed by one path; repeat it to import several.
+                                for (index, argument) in arguments.enumerated()
+                                where argument == "--ui-test-import" && index + 1 < arguments.count {
+                                    _ = try? await library.importPhoto(URL(fileURLWithPath: arguments[index + 1]))
+                                }
                             }
                         #endif
                         await recoverCaptures(library)

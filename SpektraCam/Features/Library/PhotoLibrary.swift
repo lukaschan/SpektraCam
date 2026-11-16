@@ -17,6 +17,21 @@ import SwiftData
     @ObservationIgnored private var sources: [String: LibrarySchemaV2.PhotosSource] = [:]
     @ObservationIgnored private var pending: [UUID: EditRecipe] = [:]
     @ObservationIgnored private var saves: [UUID: Task<Void, Never>] = [:]
+    /// The look last copied. Kept for this run of the app.
+    private(set) var copiedLook: LookClip?
+    /// What the last paste replaced, until one of those photos is edited some other way.
+    private(set) var pasteUndo: PasteUndo?
+    struct PasteUndo {
+        fileprivate let previous: [UUID: Data?]
+        fileprivate let luts: Set<String>
+        var count: Int { previous.count }
+        func contains(_ id: UUID) -> Bool { previous.keys.contains(id) }
+    }
+    struct PasteOutcome {
+        var pasted = 0
+        /// Photos whose edits belong to another film model revision.
+        var skipped = 0
+    }
 
     init(root: URL? = nil, cache: URL? = nil, modelDirectory: URL? = nil) throws {
         let root =
@@ -130,6 +145,8 @@ import SwiftData
             }
         }
         for recipe in pending.values { ids.formUnion(recipe.look.identifiers) }
+        ids.formUnion(copiedLook?.recipe.look.identifiers ?? [])
+        ids.formUnion(pasteUndo?.luts ?? [])
         return ids
     }
     /// Repair old iOS RAW index entries without decoding pixels or changing originals/edits.
@@ -197,6 +214,86 @@ import SwiftData
             record.renderKey = previousKey
             throw error
         }
+        // Undo restores exactly what a paste replaced. A later edit makes that stale.
+        if pasteUndo?.contains(record.id) == true { pasteUndo = nil }
+    }
+    func copyLook(_ recipe: EditRecipe, from id: UUID?) {
+        copiedLook = LookClip(recipe, sourceID: id)
+    }
+    func copyLook(from id: UUID) throws {
+        guard let recipe = try recipe(id) else { return }
+        guard recipe.upstreamRevision == EditRecipe().upstreamRevision else {
+            throw LibraryFiles.Failure.image
+        }
+        copyLook(recipe, from: id)
+    }
+    /// Replace the chosen parts of each photo's edit with the copied look, as one saved change.
+    /// Crop and rotation stay with each photo. `undoPaste` puts every photo back.
+    @discardableResult func pasteLook(_ parts: Set<EditRecipe.Part>, to ids: Set<UUID>) async throws
+        -> PasteOutcome
+    {
+        guard let clip = copiedLook, !parts.isEmpty else { return PasteOutcome() }
+        try flushPending()
+        var outcome = PasteOutcome()
+        var changes: [(record: LibrarySchemaV1.Record, data: Data?, key: String, updated: Data)] = []
+        var luts = Set<String>()
+        for id in ids {
+            guard let record = records[id], let photo = photo(id) else { continue }
+            let saved = try record.recipeData.map { try JSONDecoder().decode(EditRecipe.self, from: $0) }
+            let base = saved ?? EditorDefaults.originalRecipe(temperature: nil)
+            guard base.upstreamRevision == clip.recipe.upstreamRevision else {
+                outcome.skipped += 1
+                continue
+            }
+            var next = base.taking(parts, from: clip.recipe, rawTarget: photo.isRAW)
+            if photo.metadata.width > 0, photo.metadata.height > 0 {
+                next.constrainFilmEdgeCrop(
+                    imageSize: CGSize(width: photo.metadata.width, height: photo.metadata.height))
+            }
+            guard next != base else { continue }
+            changes.append((record, record.recipeData, record.renderKey, try LibraryPhoto.recipeData(next)))
+            luts.formUnion(saved?.look.identifiers ?? [])
+        }
+        guard !changes.isEmpty else { return outcome }
+        for change in changes {
+            change.record.recipeData = change.updated
+            change.record.renderKey = LibraryPhoto.key(change.updated)
+        }
+        try saveRecipes(restoring: changes.map { ($0.record, $0.data, $0.key) })
+        pasteUndo = PasteUndo(
+            previous: Dictionary(uniqueKeysWithValues: changes.map { ($0.record.id, $0.data) }), luts: luts)
+        await images.discardPreviews()
+        outcome.pasted = changes.count
+        return outcome
+    }
+    func undoPaste() async throws {
+        try flushPending()  // A pending edit of one of these photos withdraws the undo.
+        guard let undo = pasteUndo else { return }
+        var changes: [(LibrarySchemaV1.Record, Data?, String)] = []
+        for (id, data) in undo.previous {
+            guard let record = records[id] else { continue }
+            changes.append((record, record.recipeData, record.renderKey))
+            record.recipeData = data
+            record.renderKey = data.map(LibraryPhoto.key) ?? "original"
+        }
+        try saveRecipes(restoring: changes)
+        pasteUndo = nil
+        await images.discardPreviews()
+    }
+    /// Save records whose recipes were just replaced, or put all of them back.
+    private func saveRecipes(restoring changes: [(LibrarySchemaV1.Record, Data?, String)]) throws {
+        do { try context.save() } catch {
+            for (record, data, key) in changes {
+                record.recipeData = data
+                record.renderKey = key
+            }
+            throw error
+        }
+        for (record, _, _) in changes {
+            if let index = photos.firstIndex(where: { $0.id == record.id }) {
+                photos[index] = try record.snapshot()
+            }
+        }
     }
     /// Commit reference changes before deleting files. Failure keeps original files and all other adjustments.
     func forceDeleteLUTs(_ ids: Set<String>) async throws {
@@ -226,6 +323,8 @@ import SwiftData
             }
         }
         luts.clearReferences(to: ids)
+        copiedLook = copiedLook?.removingLUTs(ids)
+        pasteUndo = nil
         await images.discardPreviews()
         try await luts.remove(ids, protected: usedLUTIdentifiers)
     }
@@ -294,6 +393,7 @@ import SwiftData
             saves[id]?.cancel()
             saves[id] = nil
             pending[id] = nil
+            if pasteUndo?.contains(id) == true { pasteUndo = nil }
             let staged = try await files.stageRemoval(photo)
             context.delete(record)
             let links = sources.values.filter { $0.photoID == id }

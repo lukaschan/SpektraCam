@@ -98,7 +98,7 @@ nonisolated struct EditRecipe: Codable, Equatable, Sendable {
     var choices: [String: String] = [:]
 
     init() {}
-    enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case source, tone, look, monochromeGrain, mix, version, upstreamRevision, filmID, printID,
             scanFilm,
             crop,
