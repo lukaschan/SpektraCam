@@ -342,13 +342,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Film and paper names identify the published data each simulation is modelled on. SpektraCam is not affiliated with or endorsed by their manufacturers."
+            "value" : "SpektraCam uses abbreviated aliases for film and print simulation profiles derived from Andrea Volpato’s spektrafilm project. These simulations draw on published technical data and modelling assumptions; they do not reproduce or guarantee the appearance or performance of physical films, papers or processing workflows. SpektraCam is not affiliated with, sponsored by or endorsed by the manufacturers of the referenced materials."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "胶片与相纸名称仅用于标明各模拟所依据的公开数据。SpektraCam 与相关厂商无关联，也未获其认可。"
+            "value" : "SpektraCam 使用简写别名标识源自 Andrea Volpato 的 spektrafilm 项目的胶片与印相模拟配置。这些模拟基于公开技术资料及建模假设，不保证重现实物胶片、相纸或冲洗流程的外观与性能。SpektraCam 与所参考材料的制造商无关联，亦未获其赞助或认可。"
           }
         }
       }
@@ -6509,13 +6509,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Effects use Portra 400."
+            "value" : "Effects use K·P400."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "效果使用 Portra 400 模型。"
+            "value" : "效果使用 K·P400 模型。"
           }
         }
       }

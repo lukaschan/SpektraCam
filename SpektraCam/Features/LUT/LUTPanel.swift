@@ -26,7 +26,7 @@ struct LUTPanel: View {
                 Text(
                     String(
                         localized: "lut.effects_note",
-                        defaultValue: "Effects use Portra 400.")
+                        defaultValue: "Effects use K·P400.")
                 ).font(.caption).foregroundStyle(.secondary)
             }.padding()
         }

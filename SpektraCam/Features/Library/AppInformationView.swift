@@ -126,7 +126,7 @@ struct AppInformationView: View {
                         String(
                             localized: "about.simulation_disclaimer",
                             defaultValue:
-                                "Film and paper names identify the published data each simulation is modelled on. SpektraCam is not affiliated with or endorsed by their manufacturers."
+                                "SpektraCam uses abbreviated aliases for film and print simulation profiles derived from Andrea Volpato’s spektrafilm project. These simulations draw on published technical data and modelling assumptions; they do not reproduce or guarantee the appearance or performance of physical films, papers or processing workflows. SpektraCam is not affiliated with, sponsored by or endorsed by the manufacturers of the referenced materials."
                         ))
                 }
             }

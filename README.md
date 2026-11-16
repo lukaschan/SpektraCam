@@ -45,6 +45,10 @@ If no camera offers a supported RAW format, the camera explains the limitation a
 **SpektraCam provides an approximate film simulation, not a precise reproduction of a film stock or process; It also unable to match the discrepancies among camera sensors.** 
 Film and print data come mainly from official manufacturer datasheets and published research, reconstructed and modelled by spektrafilm. Missing data are filled using model estimates and assumptions. The author did not built these profiles from its own film scans or physical measurements. [Data sources][profile-data] · [Model notes][model-notes]
 
+界面使用 `F·` 和 `K·` 简写别名标识胶片与印相模拟配置；这些名称不代表厂商认可，也不保证重现实物材料的外观或性能。SpektraCam 与所参考材料的制造商无关联，亦未获其赞助或认可。原始数据来源、署名及许可保留在项目资料中。
+
+The interface uses abbreviated `F·` and `K·` aliases for film and print simulation profiles. These labels do not imply manufacturer approval or guarantee the appearance or performance of physical materials. SpektraCam is not affiliated with, sponsored by or endorsed by the manufacturers of the referenced materials. Original data sources, attribution and licences are preserved in the project materials.
+
 厂商提供的曲线描述的是指定测试条件下的代表性的表现，不能保证每盒或每卷胶片的结果。各种因素，比如光源、曝光、冲洗方法和药液状态、印相、扫描、胶片批次和存放条件都会对结果造成差异。[厂商说明示例][kodak]
 
 Published curves describe representative behavior under specified test conditions, not a guarantee for each box or roll. Lighting, exposure, development method and chemistry, printing, scanning, film batch and storage can all change the result. [Manufacturer example][kodak]

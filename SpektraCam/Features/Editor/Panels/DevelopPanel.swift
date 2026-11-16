@@ -172,7 +172,7 @@ struct DevelopPanel: View {
     }
     private func stockLabel(_ stock: FilmStock, selected: Bool) -> some View {
         HStack(spacing: 4) {
-            Text(stock.compactName).font(.caption)
+            Text(verbatim: stock.name).font(.caption)
                 .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading).layoutPriority(1)
             Image(systemName: "checkmark").font(.caption.weight(.semibold))

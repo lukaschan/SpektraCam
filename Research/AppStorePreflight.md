@@ -38,10 +38,12 @@ Nothing here is committed or pushed.
   "SpektraCam" is not visibly taken, but only creating the record proves it, and a reviewer may
   read the app as a copy of those. Have a fallback name ready and say in the review notes that
   this is the open-source project at `github.com/runzeni/SpektraCam`.
-- **[5.2.1] Manufacturer names in the app.** Stock names ("Kodak Portra 400", "Fujifilm Pro 400H"…)
-  identify the published data each profile is modelled on. Kept in the app, with a new
-  non-affiliation line in About → Legal. Keep them **out of** the app name, subtitle, keywords and
-  screenshots captions; the drafts do.
+- **[5.2.1] Manufacturer references.** User-facing film and print names now use F· / K· aliases,
+  including VoiceOver labels and the LUT effects note. About → Legal explains the aliases,
+  simulation limitations and manufacturer non-affiliation in English and Simplified Chinese.
+  Original source attribution, profile identifiers and licences are preserved. Aliases do not
+  establish trademark clearance. Keep manufacturer branding **out of** the app name, subtitle,
+  keywords and screenshot captions; the drafts do.
 - **[China mainland] ICP filing.** Apps on the China mainland storefront need an ICP filing number
   in App Store Connect. Without one, deselect China mainland; Simplified Chinese still ships
   everywhere else.
