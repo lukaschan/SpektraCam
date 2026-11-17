@@ -57,12 +57,16 @@ struct ContentView: View {
                         try? await library.formulae.load()
                         #if DEBUG && targetEnvironment(simulator)
                             await FormulaValidation.run(library)
+                            await FormulaCardChecks.run(library)
                             // Stand in for the system pickers and "Open in SpektraCam".
                             let options = ProcessInfo.processInfo.arguments
                             for (index, option) in options.enumerated() where index + 1 < options.count {
                                 let file = URL(fileURLWithPath: options[index + 1])
                                 if option == "--ui-test-lut" { _ = try? await library.luts.importFile(file) }
                                 if option == "--ui-test-open" { openFormula(file) }
+                                if option == "--ui-test-open-link", let link = URL(string: options[index + 1]) {
+                                    openFormula(link)
+                                }
                             }
                         #endif
                         try? await library.repairRAWDimensions()
@@ -148,10 +152,14 @@ struct ContentView: View {
             Text(library?.saveFailure ?? "")
         }
     }
-    /// A `.rnformula` opened from Files, Messages or AirDrop. It is shown first, never added unasked.
+    /// A `.rnformula` opened from Files, Messages or AirDrop, or a link that carries a formula.
+    /// It is shown first, never added unasked.
     private func openFormula(_ url: URL) {
-        guard url.isFileURL else { return }
-        do { formulaArrival = try FormulaArrival(url: url) } catch {
+        guard url.isFileURL || FormulaLink.claims(url.absoluteString) else { return }
+        do {
+            formulaArrival =
+                try url.isFileURL ? FormulaArrival(url: url) : FormulaArrival(link: url.absoluteString)
+        } catch {
             formulaFailure = error.localizedDescription
         }
     }

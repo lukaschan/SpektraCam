@@ -11331,6 +11331,294 @@
           }
         }
       }
+    },
+    "formula.link.not_formula" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is not a formula link."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这不是配方链接。"
+          }
+        }
+      }
+    },
+    "formula.link.no_code" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No formula code was found in this image."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未在此图片中找到配方码。"
+          }
+        }
+      }
+    },
+    "formula.link.too_large" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This formula is too large for a link or code. Share its file instead."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此配方过大，无法生成链接或配方码。请改为共享配方文件。"
+          }
+        }
+      }
+    },
+    "formula.link.copy" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Link"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拷贝链接"
+          }
+        }
+      }
+    },
+    "formula.link.copied" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link Copied"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已拷贝链接"
+          }
+        }
+      }
+    },
+    "formula.import.card" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From Card Image"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从配方卡图片导入"
+          }
+        }
+      }
+    },
+    "formula.import.paste" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste Link"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴链接"
+          }
+        }
+      }
+    },
+    "formula.process.fine" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fine adjustments"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "微调项"
+          }
+        }
+      }
+    },
+    "formula.card.title" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formula Card"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配方卡"
+          }
+        }
+      }
+    },
+    "formula.card.make" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formula Card…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配方卡…"
+          }
+        }
+      }
+    },
+    "formula.card.kicker" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FORMULA"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配方"
+          }
+        }
+      }
+    },
+    "formula.card.more" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ %lld more, all in the code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另有 %lld 项，均已包含在配方码中"
+          }
+        }
+      }
+    },
+    "formula.card.scan" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan to get this formula"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫码获取此配方"
+          }
+        }
+      }
+    },
+    "formula.card.no_code" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too detailed for a code. Ask for the formula file."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置过多，无法生成配方码。请索取配方文件。"
+          }
+        }
+      }
+    },
+    "formula.card.photo" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照片"
+          }
+        }
+      }
+    },
+    "formula.card.no_photo" : {
+      "comment" : "Formulae: link, code and formula card. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No photo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不带照片"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

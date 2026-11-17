@@ -75,7 +75,6 @@ struct PhotoThumbnail: View {
                 }
             }
             .task(id: "\(photo.id)-\(photo.renderKey)") {
-                image = nil
                 failed = false
                 do {
                     let frame = try await images.image(photo, thumbnail: true)

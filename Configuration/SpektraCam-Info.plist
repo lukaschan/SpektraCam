@@ -42,6 +42,20 @@
 			</array>
 		</dict>
 	</array>
+	<!-- spektracam://f#… opens a formula that a link or QR code carries. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>io.github.runzeni.spektracam.formula-link</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>spektracam</string>
+			</array>
+		</dict>
+	</array>
 	<!-- A formula opened from another app is copied in, then read and removed. -->
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>

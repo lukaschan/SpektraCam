@@ -84,6 +84,7 @@ import Foundation
         precondition(recipe.numbers["camera.exposure_compensation_ev"] == nil)
         try checkParts()
         try checkFormula()
+        try checkFormulaLink()
         print(
             "PASS: \(all.count) parameter components, physical UI bounds, stock routes, retained values, recipe round-trip, parts and formula files"
         )
@@ -301,5 +302,62 @@ import Foundation
             preconditionFailure("A newer file format was read as if it were known")
         } catch Formula.Failure.newer {}
         precondition((try? Formula(data: Data("{}".utf8))) == nil && (try? Formula(data: Data("no".utf8))) == nil)
+    }
+
+    /// A link carries the whole formula file, including what this build cannot read, and
+    /// nothing that is not a formula link is taken for one.
+    static func checkFormulaLink() throws {
+        var edit = EditRecipe()
+        edit.filmID = "fujifilm_c200"
+        edit.printID = "fujifilm_crystal_archive_typeii"
+        edit.tone.contrast = 1.15
+        edit.numbers["film_render.grain.particle_area_um2"] = 0.8
+        edit.printLayout = PrintLayout.enlargerDefault
+        edit.filmEdgeLayout = FilmEdgeLayout.newDefault()
+        let formula = try Formula(name: "夜のタングステン / Tungsten", note: "f/8 · 1/60", parts: [.look, .darkroom], from: edit, luts: [])
+        var object = try JSONSerialization.jsonObject(with: formula.data()) as! [String: Any]
+        object["futureField"] = ["kept": [1, 2, 3]]
+        let file = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .prettyPrinted])
+
+        let link = try FormulaLink.url(for: file).absoluteString
+        precondition(link.hasPrefix("https://runzeni.github.io/spektracam/f#1."), "Unexpected link: " + link.prefix(60))
+        precondition(link.utf8.count <= FormulaLink.codeLimit, "A film-edge formula no longer fits a code: \(link.utf8.count)")
+        precondition(link.dropFirst(FormulaLink.page.count + 1).allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) },
+            "The formula is not URL-safe")
+        func read(_ text: String) -> Data? { try? FormulaLink.file(from: text) }
+        let back = try FormulaLink.file(from: "  " + link + "\n")
+        let (sent, received) = (try Formula(data: file), try Formula(data: back))
+        precondition(sent == received && received.parts == [.look, .darkroom], "A link changed the formula")
+        var kept = try JSONSerialization.jsonObject(with: file) as! [String: Any]
+        var stored = kept["recipe"] as! [String: Any]
+        precondition(FormulaLink.framing.allSatisfy { stored[$0] != nil }, "The stored file no longer names its framing")
+        for key in FormulaLink.framing { stored[key] = nil }
+        kept["recipe"] = stored
+        let same = try JSONSerialization.jsonObject(with: back) as! NSDictionary
+        precondition(same == kept as NSDictionary, "A link dropped fields this build cannot read")
+        // The app's own scheme, and the page with a trailing slash or in another case.
+        let direct = try FormulaLink.url(for: file, opensApp: true).absoluteString
+        precondition(direct.hasPrefix("spektracam://f#1.") && read(direct) == back)
+        let payload = String(link.dropFirst(FormulaLink.page.count))
+        precondition(read("https://Runzeni.github.io/SpektraCam/f/" + payload) == back)
+        precondition(read("https://runzeni.github.io/spektracam/f/index.html" + payload) == back)
+        // LUT files never ride in a link.
+        let cube = Data("LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n".utf8)
+        let carried = try FormulaLink.file(from: FormulaLink.url(for: Formula.attaching(file, luts: [(name: "Warm", cube: cube)])).absoluteString)
+        precondition(Formula.attachments(in: carried).isEmpty && carried == back)
+
+        precondition(FormulaLink.claims(link) && FormulaLink.claims(direct))
+        for other in ["https://example.com/f" + payload, "https://runzeni.github.io/", "https://runzeni.github.io/other" + payload, "file:///tmp/a.rnformula", ""] {
+            precondition(!FormulaLink.claims(other) && read(other) == nil, "Taken for a formula link: " + other)
+        }
+        for broken in ["#1.", "#1.!!!!", "#1.AAAA", "#abc", "#" + payload.dropFirst(4)] {
+            precondition(read(FormulaLink.page + broken) == nil, "A broken link was read: " + broken)
+        }
+        do {
+            _ = try FormulaLink.file(from: FormulaLink.page + "#2." + payload.dropFirst(3))
+            preconditionFailure("A newer packing was read as if it were known")
+        } catch Formula.Failure.newer {}
+        precondition(read(FormulaLink.page + "#1." + String(repeating: "A", count: FormulaLink.limit)) == nil)
+        print("formula link: \(file.count) byte file -> \(link.utf8.count) characters")
     }
 }

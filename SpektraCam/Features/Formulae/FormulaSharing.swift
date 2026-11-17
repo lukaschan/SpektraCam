@@ -7,11 +7,25 @@ struct FormulaArrival: Identifiable {
     let data: Data
     let formula: Formula
 
-    /// Read a file handed to the app. Nothing is added until the user says so.
+    /// A formula file's bytes, from a link, a code or a file.
+    init(data: Data) throws {
+        self.data = data
+        formula = try Formula(data: data, limit: Formula.sharedLimit)
+    }
+    /// A link that carries the formula, as pasted, opened or read from a code.
+    init(link: String) throws { try self.init(data: FormulaLink.file(from: link)) }
+    /// Read a file handed to the app: a formula, or a picture of a formula card with its code.
+    /// Nothing is added until the user says so.
     init(url: URL) throws {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        if UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true {
+            guard size <= 60 * 1024 * 1024 else { throw FormulaLink.Failure.noCode }
+            data = try FormulaCode.file(inImage: Data(contentsOf: url))
+            formula = try Formula(data: data, limit: Formula.sharedLimit)
+            return
+        }
         guard size <= Formula.sharedLimit else { throw Formula.Failure.unreadable }
         data = try Data(contentsOf: url)
         formula = try Formula(data: data, limit: Formula.sharedLimit)
@@ -131,6 +145,19 @@ struct FormulaFacts: View {
     }
 }
 
+/// The formula as a procedure, part by part: the same lines its card prints.
+struct FormulaProcessSections: View {
+    let library: PhotoLibrary
+    let formula: Formula
+    var body: some View {
+        ForEach(FormulaProcess(formula, luts: library.luts).stages) { stage in
+            Section(stage.title) {
+                ForEach(stage.rows) { row in LabeledContent(row.label, value: row.value) }
+            }
+        }
+    }
+}
+
 /// Import a `.cube` for a formula and say plainly when it is not the one the formula needs.
 private struct LUTRequest: ViewModifier {
     let library: PhotoLibrary
@@ -192,6 +219,7 @@ struct FormulaImportSheet: View {
                                     defaultValue: "Another version of this formula is already in your library."))
                     }
                 }
+                FormulaProcessSections(library: library, formula: arrival.formula)
             }
             .navigationTitle(String(localized: "formula.import.title", defaultValue: "Add Formula"))
             .navigationBarTitleDisplayMode(.inline)
@@ -270,6 +298,12 @@ struct FormulaDetailView: View {
     @State private var renaming = false
     @State private var name = ""
     @State private var note = ""
+    @State private var showCard = false
+    @State private var copied = false
+    /// The link that carries this formula, or nil when it is too large for one.
+    private var link: URL? {
+        try? FormulaLink.url(for: Data(contentsOf: library.formulae.fileURL(id)))
+    }
 
     var body: some View {
         if let formula = library.formulae.formula(id) {
@@ -304,6 +338,24 @@ struct FormulaDetailView: View {
                         }
                         .accessibilityIdentifier("formula.share.luts")
                     }
+                    if !formula.parts.isEmpty {
+                        Button(
+                            String(localized: "formula.card.make", defaultValue: "Formula Card…"),
+                            systemImage: "qrcode"
+                        ) { showCard = true }
+                        .accessibilityIdentifier("formula.card.make")
+                        Button(
+                            copied
+                                ? String(localized: "formula.link.copied", defaultValue: "Link Copied")
+                                : String(localized: "formula.link.copy", defaultValue: "Copy Link"),
+                            systemImage: copied ? "checkmark" : "link"
+                        ) {
+                            guard let link else { return }
+                            UIPasteboard.general.url = link
+                            copied = true
+                        }
+                        .disabled(link == nil).accessibilityIdentifier("formula.link.copy")
+                    }
                 } footer: {
                     if usesInstalledLUT {
                         Text(
@@ -314,6 +366,7 @@ struct FormulaDetailView: View {
                             ))
                     }
                 }
+                FormulaProcessSections(library: library, formula: formula)
             }
             .navigationTitle(formula.name)
             .navigationBarTitleDisplayMode(.inline)
@@ -328,6 +381,7 @@ struct FormulaDetailView: View {
                 }
             }
             .modifier(LUTRequest(library: library, wanted: $wanted, failure: $failure))
+            .sheet(isPresented: $showCard) { FormulaCardSheet(library: library, formula: formula) }
             .sheet(item: $replacing) { old in
                 LUTLibraryView(library: library, assigned: nil) { chosen in
                     guard let chosen, let lut = library.luts.items.first(where: { $0.id == chosen }) else { return }

@@ -78,7 +78,7 @@ for files, arguments in checks.values():
  if any(f.startswith('Metal') or f == 'ToneRenderer' for f in files) and 'MetalDispatch' not in files: files.append('MetalDispatch')
  if any(f in files for f in ['MetalFilmPipeline','SourceImageRenderer','ToneRenderer']) and 'PixelStore' not in files: files.append('PixelStore')
  if 'EditRecipe' in files:
-  for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout', 'RecipeParts', 'Formula']:
+  for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout', 'RecipeParts', 'Formula', 'FormulaLink']:
    if dependency not in files: files.append(dependency)
  if 'SourceImageRenderer' in files and 'GeometryRenderer' not in files: files.append('GeometryRenderer')
  if 'PhotoRenderer' in files:

@@ -26,7 +26,7 @@ struct PhotoDetailView: View {
     @State private var confirmRevert = false
     @State private var confirmDelete = false
     @State private var showPasteLook = false
-    @State private var formulaDraft: FormulaDraft?
+    @State private var showSaveFormula = false
     private struct ExportRequest: Identifiable {
         let id = UUID()
         let session: EditorSession?
@@ -77,9 +77,8 @@ struct PhotoDetailView: View {
                         },
                         paste: { showPasteLook = true }, undo: undoPaste),
                     formulae: FormulaStrip(
-                        library: library, photo: photo, canSave: photo.hasEdits && !working, applying: working,
-                        identifier: "photo", apply: applyFormula,
-                        save: { if let recipe = savedRecipe { formulaDraft = FormulaDraft(recipe: recipe) } })
+                        library: library, photo: photo, canSave: photo.hasEdits && !working,
+                        identifier: "photo", apply: applyFormula, save: { showSaveFormula = true })
                 )
                 .padding(.horizontal, 12).padding(.top, 4)
             }
@@ -154,8 +153,8 @@ struct PhotoDetailView: View {
                 PasteLookSheet(library: library, clip: clip, paste: pasteLook)
             }
         }
-        .sheet(item: $formulaDraft) { draft in
-            SaveFormulaSheet(library: library, recipe: draft.recipe)
+        .sheet(isPresented: $showSaveFormula) {
+            if let recipe = savedRecipe { SaveFormulaSheet(library: library, recipe: recipe) }
         }
         .failureAlert(String(localized: "photo.photo", defaultValue: "Photo"), message: $failure)
     }

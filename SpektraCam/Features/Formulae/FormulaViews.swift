@@ -1,11 +1,6 @@
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
-
-/// Capture at the tap, rather than reading a changing editor/photo from a sheet builder.
-struct FormulaDraft: Identifiable {
-    let id = UUID()
-    let recipe: EditRecipe
-}
 
 extension Formula {
     /// Why a formula cannot be applied here, or nil when it can.
@@ -42,7 +37,6 @@ struct FormulaStrip: View {
     /// it owns the renderer, and library images wait.
     var photo: LibraryPhoto? = nil
     var canSave = true
-    var applying = false
     let identifier: String
     let apply: (Formula) -> Void
     let save: () -> Void
@@ -53,7 +47,6 @@ struct FormulaStrip: View {
                 Text(String(localized: "formula.formulae", defaultValue: "Formulae"))
                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
-                if applying { ProgressView().controlSize(.small) }
                 Button(String(localized: "formula.save_as", defaultValue: "Save as Formula…"), action: save)
                     .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
                     .disabled(!canSave).accessibilityIdentifier(identifier + ".formula.save")
@@ -70,19 +63,14 @@ struct FormulaStrip: View {
                     LazyHStack(alignment: .top, spacing: 10) {
                         ForEach(library.formulae.ordered) { formula in
                             let problem = formula.problem(luts: library.luts)
-                            Group {
-                                if let photo {
-                                    Button { apply(formula) } label: {
-                                        tile(formula, photo: photo, problem: problem)
-                                    }
-                                    .buttonStyle(.plain)
-                                } else {
-                                    Button(formula.name) { apply(formula) }
-                                        .buttonStyle(.bordered)
-                                }
+                            Button {
+                                apply(formula)
+                            } label: {
+                                if let photo { tile(formula, photo: photo, problem: problem) } else { Text(formula.name) }
                             }
+                            .buttonStyle(photo == nil ? AnyButtonStyle(.bordered) : AnyButtonStyle(.plain))
                             .buttonBorderShape(.capsule).controlSize(.small)
-                            .disabled(problem != nil || applying)
+                            .disabled(problem != nil)
                             .accessibilityLabel(formula.name)
                             .accessibilityValue(problem ?? "")
                             .accessibilityIdentifier(identifier + ".formula." + formula.name)
@@ -110,6 +98,15 @@ struct FormulaStrip: View {
         }
         .contentShape(.rect)
     }
+}
+
+/// A type-erased button style, so one button can be a tile or a capsule.
+private struct AnyButtonStyle: PrimitiveButtonStyle {
+    private let body: (Configuration) -> AnyView
+    init<Style: PrimitiveButtonStyle>(_ style: Style) {
+        body = { AnyView(style.makeBody(configuration: $0)) }
+    }
+    func makeBody(configuration: Configuration) -> some View { body(configuration) }
 }
 
 /// Name a look and choose what it carries. Crop and rotation are never saved.
@@ -175,7 +172,6 @@ struct SaveFormulaSheet: View {
                                 || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         )
                         .accessibilityIdentifier("formula.save.confirm")
-                        .overlay { if saving { ProgressView().controlSize(.small) } }
                 }
             }
             .onAppear { naming = true }
@@ -248,6 +244,8 @@ struct FormulaLibraryView: View {
     @State private var name = ""
     @State private var note = ""
     @State private var showImport = false
+    @State private var showPhotos = false
+    @State private var picked: PhotosPickerItem?
     @State private var arrival: FormulaArrival?
     @State private var path: [UUID] = []
     private var formulae: FormulaLibrary { library.formulae }
@@ -353,8 +351,24 @@ struct FormulaLibraryView: View {
                     .accessibilityIdentifier("formula.library.select")
                 }
                 ToolbarItem(placement: .bottomBar) {
-                    Button(String(localized: "common.import", defaultValue: "Import"), systemImage: "plus") {
-                        showImport = true
+                    // A formula arrives as its file, as a card's code in a picture, or as a link.
+                    Menu {
+                        Button(String(localized: "library.from_files", defaultValue: "From Files"), systemImage: "folder") {
+                            showImport = true
+                        }
+                        .accessibilityIdentifier("formula.import.files")
+                        Button(
+                            String(localized: "formula.import.card", defaultValue: "From Card Image"),
+                            systemImage: "qrcode.viewfinder"
+                        ) { showPhotos = true }
+                        .accessibilityIdentifier("formula.import.card")
+                        Button(String(localized: "formula.import.paste", defaultValue: "Paste Link"), systemImage: "link") {
+                            let pasteboard = UIPasteboard.general
+                            arrive { try FormulaArrival(link: pasteboard.url?.absoluteString ?? pasteboard.string ?? "") }
+                        }
+                        .accessibilityIdentifier("formula.import.paste")
+                    } label: {
+                        Label(String(localized: "common.import", defaultValue: "Import"), systemImage: "plus")
                     }
                     .disabled(working).accessibilityIdentifier("formula.import")
                 }
@@ -399,9 +413,19 @@ struct FormulaLibraryView: View {
                 }
             }
             .task { do { try await formulae.load() } catch { failure = error.localizedDescription } }
-            .fileImporter(isPresented: $showImport, allowedContentTypes: [.spektraFormula, .json]) { result in
-                do { arrival = try FormulaArrival(url: result.get()) } catch {
-                    failure = error.localizedDescription
+            .fileImporter(isPresented: $showImport, allowedContentTypes: [.spektraFormula, .json, .image]) { result in
+                arrive { try FormulaArrival(url: result.get()) }
+            }
+            .photosPicker(isPresented: $showPhotos, selection: $picked, matching: .images)
+            .onChange(of: picked) { _, item in
+                guard let item else { return }
+                picked = nil
+                Task {
+                    let data = try? await item.loadTransferable(type: Data.self)
+                    arrive {
+                        guard let data else { throw FormulaLink.Failure.noCode }
+                        return try FormulaArrival(data: FormulaCode.file(inImage: data))
+                    }
                 }
             }
             .sheet(item: $arrival) { FormulaImportSheet(library: library, arrival: $0) }
@@ -465,6 +489,10 @@ struct FormulaLibraryView: View {
                 : String(localized: "formula.favorite", defaultValue: "Favorite"),
             systemImage: favorite ? "star.slash" : "star"
         ) { run { try await formulae.setFavorite(formula.id, !favorite) } }
+    }
+    /// Show what arrived before anything is added, or say why it could not be read.
+    private func arrive(_ read: () throws -> FormulaArrival) {
+        do { arrival = try read() } catch { failure = error.localizedDescription }
     }
     private func rename(_ formula: Formula) {
         name = formula.name

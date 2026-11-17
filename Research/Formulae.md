@@ -1,18 +1,21 @@
 # Formulae 配方
 
-Status: Phases A, B and C are implemented on `codex/formulae`; link, QR and formula card (D)
+Status: Phases A, B and C are implemented on `codex/formulae`. Of Phase D, the link, the QR code
+and the formula card are implemented; the starter set, a default formula and a Shortcuts action
 are not started. Nothing here ships in 1.0.
 
 ## Before Phase D — 2026-11-16
 
-- Formula saving now captures an immutable `FormulaDraft` at the tap, and a saved Formula's
-  recipe cannot be mutated. The strip uses native button styles and disables application while
-  developing. Changed thumbnail requests clear their previous image and show loading.
-- Regression checks save C200 as the first formula, edit the source to 400H and save another,
-  then reapply the first from both Photo and Edit. Separate checks compare settings and warm/fresh
-  renderer pixels across two photos, and ensure the formula files remain byte-for-byte unchanged.
-  These pass on Simulator. The original phone symptom has not been reproduced from its actual
-  saved file; an existing affected `.rnformula` is needed if it persists on the phone.
+- A report from the phone that the first saved formula followed later edits was not reproduced.
+  Regression checks (`FormulaRegressionTests`) save C200 as the first formula, edit the source to
+  400H and save another, then reapply the first from both Photo and Edit; separate checks compare
+  settings and warm/fresh renderer pixels across two photos, and ensure the formula files remain
+  byte-for-byte unchanged. They pass on Simulator with the Phase B/C saving code as it was, so the
+  rewrite made for the report (a `FormulaDraft` captured at the tap, an immutable recipe, a strip
+  disabled while developing, thumbnails cleared on every change) was withdrawn: it fixed nothing
+  the checks can show, and it kept formulae from being switched during a render and replaced
+  each thumbnail with a spinner whenever its photo changed. If the symptom persists on the
+  phone, the affected `.rnformula` is needed.
 - Covered enlarger paper is anchored to output white after scanner/tone processing, through
   the same seeded blade coverage. Its interior is untouched; only the perimeter is evaluated,
   using file-backed RGBA8 storage for the output and the same finishing for loupe regions.
@@ -54,6 +57,16 @@ Crop and rotation belong to the photograph and are never copied, pasted or saved
   Info.plist. `FormulaFile` is the share-sheet file. `FormulaImportSheet` previews a file
   from `onOpenURL` or the manager's Import before anything is added. `FormulaDetailView` is a
   formula's page: what it carries, the LUTs it needs, Rename and Share.
+- Link and code: `Models/FormulaLink.swift` packs the stored file (white space and framing
+  removed, raw DEFLATE, URL-safe Base64) after `#` in `https://runzeni.github.io/spektracam/f#1.…`,
+  or `spektracam://f#1.…` for the app's own scheme, which is declared in the merged Info.plist.
+  `Features/Formulae/FormulaCode.swift` draws the link as a QR code and reads codes from a picture.
+- `Features/Formulae/FormulaProcess.swift` reads a formula as a procedure in the editor's own
+  words. `FormulaCard` prints it with the code and an optional photo as a 1080 × 1350 picture;
+  `FormulaCardSheet` (Formula Card… on a formula's page) chooses the photo and shares it. Copy
+  Link is on the same page. The manager's Import takes a file, a card's picture or a pasted link.
+- `Site/f/index.html` is the page for the link: it unpacks the formula in the browser, shows it
+  and offers Open in SpektraCam and the file. It loads nothing and sends nothing.
 
 ## Rules that must keep holding
 
@@ -76,23 +89,40 @@ Crop and rotation belong to the photograph and are never copied, pasted or saved
   asks Replace or Keep Both.
 - "Choose Another LUT" is the only edit that changes a saved formula's look, and only the
   user makes it.
+- A link or code is the formula file, not a summary of it: fields this build cannot read
+  travel in it, and what it delivers is read by the same `Formula(data:)` as any file. LUT
+  files never travel in a link. A packing number other than `1` is a newer SpektraCam's.
+- A code's modules are a whole number of pixels on the card (four at 1080 px), and a link too
+  long for that (`FormulaLink.codeLimit`) gets no code; the card says to ask for the file.
 
 ## Checks
 
 `python3 Scripts/core-checks.py recipe library` covers the part model, the file format
-(including a newer writer and a hostile file), and paste, undo and the formula store across a
+(including a newer writer and a hostile file), the link (round trip, unknown fields, other
+addresses, broken and newer packings), and paste, undo and the formula store across a
 restart, and the exported share file. UI: `LookPasteTests`, `FormulaTests`,
-`FormulaSharingTests` (set `TEST_RUNNER_SPEKTRACAM_LAYOUT_PHOTO` and
-`TEST_RUNNER_SPEKTRACAM_SECOND_PHOTO` to two host images). On the Simulator, debug builds take
-`--ui-test-open <file>` and `--ui-test-lut <file>` in place of "Open in SpektraCam" and the
-system file picker.
+`FormulaSharingTests`, `FormulaRegressionTests`, `FormulaCardTests` (set
+`TEST_RUNNER_SPEKTRACAM_LAYOUT_PHOTO` and `TEST_RUNNER_SPEKTRACAM_SECOND_PHOTO` to two host
+images). On the Simulator, debug builds take `--ui-test-open <file>`, `--ui-test-open-link <link>`
+and `--ui-test-lut <file>` in place of "Open in SpektraCam", a tapped link and the system file
+picker. `--check-formula-card <folder>` renders cards and reads each code back through the
+import path, also from the picture at 720 px and as a 50 % JPEG.
 
 ## Not done
 
 - Not exercised by any automated test: the system share sheet itself, and a real "Open in
   SpektraCam" from Files, Messages or AirDrop. Both need a check on a phone.
+- The link's page is not published. Until `Site/f/index.html` is served at
+  `runzeni.github.io/spektracam/f`, a code scanned with the Camera app or a link tapped outside
+  SpektraCam leads nowhere; importing a card's picture and pasting a link work without it. The
+  page's script was run against the app's links, but the page was not viewed in a browser.
+- Universal links: opening the https link straight in the app needs the Associated Domains
+  entitlement and an `apple-app-site-association` file at the root of `runzeni.github.io`.
+  Neither exists; the page's Open in SpektraCam button uses `spektracam://` instead.
+- Not tried on a phone: scanning a card with a camera (from a screen or a print), the photo
+  picker route, and the `spektracam://` scheme opened from Safari.
+- No scanner inside the app. A card is imported from its picture.
 - Importing several formula files at once.
-- Link and QR that carry the formula, the formula card, a starter set, a default formula for
-  new edits and the camera, a Shortcuts action.
+- A starter set, a default formula for new edits and the camera, a Shortcuts action.
 - A photo does not yet remember which formula it was developed with.
 - In the editor the strip shows names only; the editor owns the renderer while it is open.

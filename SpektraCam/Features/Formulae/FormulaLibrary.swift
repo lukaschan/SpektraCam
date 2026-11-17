@@ -155,9 +155,16 @@ actor FormulaFiles {
         for id in ids { try? FileManager.default.removeItem(at: url(id)) }
     }
     func matches(_ id: UUID, _ data: Data) -> Bool {
-        guard let stored = try? Data(contentsOf: url(id)),
-            let a = try? JSONSerialization.jsonObject(with: stored) as? NSDictionary,
-            let b = try? JSONSerialization.jsonObject(with: data) as? NSDictionary
+        // A link leaves out the framing a formula never has; the file it came from is still the same.
+        func settings(_ data: Data) -> NSDictionary? {
+            guard var file = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            if var recipe = file["recipe"] as? [String: Any] {
+                for key in FormulaLink.framing { recipe[key] = nil }
+                file["recipe"] = recipe
+            }
+            return file as NSDictionary
+        }
+        guard let stored = try? Data(contentsOf: url(id)), let a = settings(stored), let b = settings(data)
         else { return false }
         return a == b
     }

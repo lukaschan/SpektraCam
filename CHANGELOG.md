@@ -6,6 +6,8 @@
 - Copy Look and Paste Look between photos, in the viewer, editor and library. A look has three parts: Look, Exposure and Darkroom. Crop and rotation are never pasted. A library paste can be undone.
 - Formulae: save a look under a name, apply it to one photo or a selection, and manage formulae beside LUTs in one sheet. Each formula is a `.rnformula` file.
 - Share a formula from its page in the manager, with or without the LUT files it uses. A formula opened from Files, Messages or AirDrop is previewed before it is added; one that needs a LUT you do not have says so, and links by itself when that LUT is imported.
+- Formula Card: a 1080 × 1350 picture with the formula's name, its process in plain words, an optional photo developed with it, and a QR code that carries the whole formula. Copy Link gives the same formula as a link. Import a formula from a card's picture, a pasted link or an opened link; nothing is uploaded.
+- A formula's page and the import preview list its process: film, print, tone, effects, exposure and darkroom settings.
 
 ## 1.0 — App Store submission candidate
 
