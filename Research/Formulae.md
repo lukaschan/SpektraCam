@@ -2,7 +2,8 @@
 
 Status: Phases A, B and C are implemented on `codex/formulae`. Of Phase D, the link, the QR code
 and the formula card are implemented; the starter set, a default formula and a Shortcuts action
-are not started. Nothing here ships in 1.0.
+are not started. The implemented Formulae features are included in the replacement 1.0 build 11
+submission candidate; the unpublished link page still needs deployment before submission.
 
 ## Before Phase D — 2026-11-16
 

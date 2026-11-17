@@ -4,6 +4,9 @@ Drafts for App Store Connect. Character counts are against Apple's limits (name 
 keywords 100, promotional text 170). No manufacturer names, no other platforms, no Apple product
 names in name, subtitle or keywords.
 
+Updated for the Formulae-based **1.0 (11)** candidate on 17 November 2026. Publish the Formula
+link page and finish device verification before using these drafts for submission.
+
 ## App information
 
 | Field | Value |
@@ -14,31 +17,33 @@ names in name, subtitle or keywords.
 | Primary language | English (U.S.); add Simplified Chinese |
 | Category | Photo & Video |
 | Price | Free |
-| Age rating | 4+ (no to every content question; no social features, no web access) |
+| Age rating | Expected 4+; complete Apple's current questionnaire from the actual features |
 | Content rights | Contains third-party content (spektrafilm profiles, CC BY-SA 4.0); rights held under that licence |
 | Privacy policy URL | `https://github.com/runzeni/SpektraCam/blob/main/PRIVACY.md` |
 | Support URL | `https://github.com/runzeni/SpektraCam/issues` |
 | Marketing URL | `https://github.com/runzeni/SpektraCam` |
 | Copyright | © 2026 Runze Ni |
-| Export compliance | No encryption |
+| Export compliance | No non-exempt encryption (`ITSAppUsesNonExemptEncryption = NO`) |
 | Availability | All territories except China mainland until an ICP filing number exists |
 
 ## App Privacy answers
 
-**Data Not Collected.** The developer receives nothing. Reasoning to keep on file: the only
-network request is MapKit reverse geocoding, which sends a photo's coordinates to Apple's own
-service to return a place name; it is not linked to identity, not retained by the app beyond the
-place name, and not available to the developer. If you prefer the most conservative reading,
-declare *Location → Precise Location → App Functionality, not linked, not tracking* instead.
+**Proposed: Data Not Collected**, subject to the developer confirming the final answers. Photos,
+edits, formulae and LUTs are stored locally; there are no developer analytics or advertising SDKs.
+MapKit receives coordinates for a real-time place-name request. Opening the external Formula
+page makes an ordinary request to GitHub Pages, with formula data kept in the fragment and decoded
+locally. No formula or photograph is uploaded to a developer service. Confirm the final answers
+against [Apple's definition of collection](https://developer.apple.com/app-store/app-privacy-details/),
+which concerns off-device access beyond servicing a request in real time.
 
 ## English (U.S.)
 
-**Subtitle** (30): `Film & darkroom photo editor`
+**Subtitle** (27): `Film & darkroom photo editor`
 
 **Promotional text** (≤170):
-Spectral film simulation, a darkroom with paper, easel and film edges, and a RAW camera. Free and open source — every feature included.
+Spectral film simulation, a RAW camera, a darkroom and reusable Formulae. Share a look as a file, link or Formula Card. Free and open source.
 
-**Keywords** (≤100): `film,analog,darkroom,raw,dng,grain,halation,lut,negative,slide,print,emulation,editor,proraw`
+**Keywords** (≤100): `film,analog,darkroom,raw,dng,grain,halation,lut,negative,slide,print,editor,formula,qr`
 
 **Description**
 
@@ -68,11 +73,19 @@ CAMERA
 • RAW capture as DNG, with Apple ProRAW where the device supports it
 • Lens selection, macro, exposure compensation and a live histogram
 
+FORMULAE
+• Save reusable looks with separate Look, Exposure and Darkroom parts
+• Copy and paste between photos, or apply a formula to a selection, with undo
+• Share .rnformula files, self-contained links and Formula Cards with a QR code
+• Import from a file, a card image or a pasted link, with a preview before adding
+• Missing LUTs are identified; LUT files are included in a shared file only when you choose
+
 ALSO
 • Import from Photos or Files; originals are never changed
 • Crop, straighten and flip, with cinema and medium-format aspect ratios
 • Up to two .cube 3D LUTs with separate mix, as an alternative to the film pipeline
 • Undo history, before/after compare, batch export to JPEG or PNG
+• Export an original captured RAW file without reprocessing it
 • English and Simplified Chinese
 
 GOOD TO KNOW
@@ -83,18 +96,18 @@ paper manufacturer.
 
 Source code and licences: github.com/runzeni/SpektraCam
 
-**What's New (1.0.0)**
-First release: spectral film and print simulation, Darkroom with paper, easel, film edges and
-distress, RAW camera, 3D LUTs and batch export.
+**What's New (1.0)**
+First release: spectral film and print simulation, Darkroom, RAW camera, 3D LUTs, batch export,
+and saved Formulae with file, link and QR Formula Card sharing.
 
 ## 简体中文
 
 **副标题**（30）：`胶片与暗房照片编辑`
 
 **宣传文本**：
-光谱级胶片模拟，带相纸、放大尺和片边的暗房，以及 RAW 相机。免费开源，全部功能均可使用。
+光谱级胶片模拟、RAW 相机、暗房与可重复使用的配方。通过文件、链接或带二维码的配方卡共享效果。免费开源。
 
-**关键词**（≤100）：`胶片,胶卷,暗房,模拟,负片,反转片,颗粒,光晕,相纸,印相,调色,滤镜,RAW,LUT,复古`
+**关键词**（≤100）：`胶片,胶卷,暗房,模拟,负片,反转片,颗粒,光晕,相纸,印相,调色,滤镜,配方,配方卡,RAW,LUT,复古`
 
 **描述**
 
@@ -113,7 +126,7 @@ SpektraCam 按胶片成像的方式处理照片：经过负片、放大机和相
 • 相机柔光与放大机柔光
 
 暗房
-• 相纸尺寸、白边和可手动放置的放大尺
+• 相纸尺寸、白边和可手动放置的尺板
 • 35 mm、120 和电影画幅的胶片边缘，带齿孔
 • 灰尘、划痕、灰雾与漏光，从干净的冲扫店扫描到老相机
 • 看片台上的放大镜，用于检查细节
@@ -122,11 +135,19 @@ SpektraCam 按胶片成像的方式处理照片：经过负片、放大机和相
 • 拍摄 DNG 格式的 RAW 照片；设备支持时可用 Apple ProRAW
 • 镜头切换、微距、曝光补偿与实时直方图
 
+配方
+• 保存可重复使用的效果，分别选择个性化、曝光与暗房部分
+• 在照片间复制粘贴，或将配方应用到所选照片，支持撤销
+• 通过 .rnformula 文件、包含配方本身的链接或带二维码的配方卡共享
+• 从文件、配方卡图片或粘贴的链接导入，添加前先预览
+• 明确提示缺少的 LUT；只有你选择附带时，共享文件才会包含 LUT 文件
+
 其他
 • 从“照片”或“文件”导入；原图不会被修改
 • 裁切、校正和翻转，提供电影与中画幅宽高比
 • 最多两个 .cube 3D LUT，各自独立混合，可替代胶片管线
 • 撤销历史、前后对比，批量导出 JPEG 或 PNG
+• 直接导出拍摄的原始 RAW 文件，无需重新处理
 • 支持英文与简体中文
 
 须知
@@ -134,22 +155,23 @@ SpektraCam 按胶片成像的方式处理照片：经过负片、放大机和相
 
 源代码与许可协议：github.com/runzeni/SpektraCam
 
-**新功能（1.0.0）**
-首个版本：光谱级胶片与印相模拟，带相纸、放大尺、胶片边缘和做旧效果的暗房，RAW 相机，3D LUT 与批量导出。
+**新功能（1.0）**
+首个版本：光谱级胶片与印相模拟、暗房、RAW 相机、3D LUT、批量导出，以及支持文件、链接与二维码配方卡共享的配方。
 
 ## Screenshots
 
-Capture on a device, portrait, without manufacturer names in captions. Suggested set of six:
-Library → Develop panel with a stock chosen → Effects (grain/halation) → Darkroom with film edge →
-Darkroom print on paper with loupe → Camera. Repeat in Simplified Chinese.
+Supply current iPhone and 13-inch iPad screenshots using the sizes accepted by
+[Apple's screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/).
+Use actual app captures with images you may publish, without alpha channels. Suggested views:
+Develop, Darkroom, Formulae manager, Formula Card, LUTs and Camera (real hardware).
+The verification captures use synthetic charts and are not a finished marketing set.
 
 ## App Review notes
 
 ```
 1. SCREEN RECORDING
-[link — record on a physical iPhone from launch: import a photo, Develop, Effects,
-Darkroom, Export → Save to Photos (shows the add-only Photos prompt), then Camera
-(shows the camera and location prompts) and one RAW capture]
+A physical-device demonstration recording is to be supplied separately after the release
+candidate device pass. The app's RAW camera requires supported hardware.
 
 2. PURPOSE
 SpektraCam is a free, open-source photo editor and RAW camera. It simulates
@@ -164,13 +186,24 @@ No account, login or purchase. All features are available on first launch.
   opens paper, film edge and distress controls.
 - The camera button opens RAW capture (needs a physical device; ProRAW and lens
   choices depend on the hardware).
+- Library → Formulae opens the Formulae/LUTs manager. Develop a photo, open its information
+  panel and choose Save as Formula. Look, Exposure and Darkroom are selectable parts;
+  crop and rotation are excluded. Apply a saved formula from a photo's information panel
+  or to a selection through Apply Formula.
+- A formula's page offers Share, Copy Link and Formula Card. A card may contain a chosen
+  developed photo and a QR code. Manager → Import offers From Files, From Card Image and
+  Paste Link. Every route shows an import preview before adding anything.
+- Formula links carry settings after # and never carry LUT file contents. A formula requiring
+  a missing LUT is not applied until the LUT is installed or explicitly replaced.
+- HTTPS formula links open a static browser page with Open in SpektraCam and a file download.
+  Open in SpektraCam uses the spektracam:// scheme; universal links are not enabled.
 - About → Legal has the privacy policy, support link and licences.
 There are no feature flags, remote configuration or hidden features.
 
 4. EXTERNAL SERVICES
-None operated by the developer. The only network request is Apple MapKit reverse
-geocoding, used to show a place name for photos that contain GPS coordinates.
-No analytics, ads or third-party SDKs.
+Apple MapKit reverse geocoding resolves coordinates into photo place names. An external
+formula link opens a static GitHub Pages page and decodes the URL fragment locally; there is
+no formula upload, account service or backend. No analytics, ads or third-party SDKs.
 
 5. REGIONAL DIFFERENCES
 The app behaves the same in every region. Languages: English and Simplified Chinese.

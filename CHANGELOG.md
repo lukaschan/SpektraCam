@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.0 — App Store submission candidate, build 11
+
+- Replace the earlier build 10 submission candidate with the Formulae version, on `release/1.0-formulae`.
+- Localize the formula document type in English and Simplified Chinese, and let the localization checker handle document descriptions alongside permission strings.
 
 - Accent color: Magenta, Orange, Blue or Black & White, chosen in About.
 - Copy Look and Paste Look between photos, in the viewer, editor and library. A look has three parts: Look, Exposure and Darkroom. Crop and rotation are never pasted. A library paste can be undone.
@@ -9,7 +12,7 @@
 - Formula Card: a 1080 × 1350 picture with the formula's name, its process in plain words, an optional photo developed with it, and a QR code that carries the whole formula. Copy Link gives the same formula as a link. Import a formula from a card's picture, a pasted link or an opened link; nothing is uploaded.
 - A formula's page and the import preview list its process: film, print, tone, effects, exposure and darkroom settings.
 
-## 1.0 — App Store submission candidate
+## Earlier 1.0 submission candidate, build 10
 
 - Freeze the current editor, RAW camera, adaptive iPhone/iPad interface and Darkroom workflow for the first App Store submission (version 1.0, build 10).
 

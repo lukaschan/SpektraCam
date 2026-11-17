@@ -1,5 +1,12 @@
 # App Store preflight — SpektraCam
 
+> Historical report. The intended first submission is now the Formulae-based **1.0 (11)**,
+> prepared 17 November 2026. See [the current handoff](AppStore-v1.0-Submission.md) and its
+> package validation report. The privacy and support URLs now return 200; the Formula link
+> page returns 404. The old instruction to exclude Formulae and the build-10 freeze are superseded.
+> A signed archive and App Store IPA export have been produced for build 11. Upload, Apple
+> server validation, physical-device sign-off and the distribution-permission question remain separate.
+
 Audited 15 November 2026 against the working tree on top of `30c3671` (v0.3), using the
 `app-store-preflight-skills` checklists (all-apps list plus the privacy, design, metadata and
 entitlement rules). App type: free photo editor and RAW camera; no accounts, purchases,

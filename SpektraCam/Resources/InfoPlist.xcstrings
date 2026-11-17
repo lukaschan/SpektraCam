@@ -82,7 +82,22 @@
       }
     },
     "SpektraCam Formula" : {
-
+      "comment" : "Name of the formula document type shown by iOS when opening a shared .rnformula file.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SpektraCam Formula"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SpektraCam 配方"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
