@@ -23,13 +23,10 @@ struct PhotoDetailView: View {
     @State private var failure: String?
     @State private var layout = WorkspaceLayout.stacked
     @State private var systemVerticalBar = false
-    /// A tap on the photo clears everything but the photo; another brings it back.
-    @State private var immersive = false
     @State private var confirmRevert = false
     @State private var confirmDelete = false
     @State private var showPasteLook = false
-    @State private var showSaveFormula = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var formulaDraft: FormulaDraft?
     private struct ExportRequest: Identifiable {
         let id = UUID()
         let session: EditorSession?
@@ -46,13 +43,11 @@ struct PhotoDetailView: View {
     }
     var body: some View {
         ZStack {
-            AlbumPager(photos: photos, images: library.images, selection: $selectedID) {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { immersive.toggle() }
-            }
+            AlbumPager(photos: photos, images: library.images, selection: $selectedID)
             if working { ProgressView().padding().background(.regularMaterial, in: .capsule) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(immersive ? Color.black : PhotoTheme.canvas)
+        .background(PhotoTheme.canvas)
         .overlay(alignment: .bottom) {
             PhotoViewerControls(
                 photos: photos, images: library.images, selection: $selectedID,
@@ -62,11 +57,8 @@ struct PhotoDetailView: View {
                 showsActions: !systemVerticalBar
             )
             .padding(.horizontal, 16).padding(.bottom, 12)
-            .opacity(immersive ? 0 : 1).allowsHitTesting(!immersive)
         }
         .onSystemVerticalBar { systemVerticalBar = $0 }
-        .toolbarVisibility(immersive ? .hidden : .automatic, for: .navigationBar, .bottomBar)
-        .statusBarHidden(immersive)
         .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .overlay(alignment: .top) {
             if let photo {
@@ -85,11 +77,11 @@ struct PhotoDetailView: View {
                         },
                         paste: { showPasteLook = true }, undo: undoPaste),
                     formulae: FormulaStrip(
-                        library: library, photo: photo, canSave: photo.hasEdits && !working,
-                        identifier: "photo", apply: applyFormula, save: { showSaveFormula = true })
+                        library: library, photo: photo, canSave: photo.hasEdits && !working, applying: working,
+                        identifier: "photo", apply: applyFormula,
+                        save: { if let recipe = savedRecipe { formulaDraft = FormulaDraft(recipe: recipe) } })
                 )
                 .padding(.horizontal, 12).padding(.top, 4)
-                .opacity(immersive ? 0 : 1).allowsHitTesting(!immersive)
             }
         }
         .navigationTitle(String(localized: "photo.photo", defaultValue: "Photo"))
@@ -162,8 +154,8 @@ struct PhotoDetailView: View {
                 PasteLookSheet(library: library, clip: clip, paste: pasteLook)
             }
         }
-        .sheet(isPresented: $showSaveFormula) {
-            if let recipe = savedRecipe { SaveFormulaSheet(library: library, recipe: recipe) }
+        .sheet(item: $formulaDraft) { draft in
+            SaveFormulaSheet(library: library, recipe: draft.recipe)
         }
         .failureAlert(String(localized: "photo.photo", defaultValue: "Photo"), message: $failure)
     }

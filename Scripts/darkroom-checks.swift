@@ -61,7 +61,7 @@ import Foundation
             precondition(abs(PrintGeometry.fillMargin(imageSize: CGSize(width: 600, height: 400), layout: square)) < 1e-12,
                          "Matching proportions needed a fill border")
         }
-        precondition(abs(Easel.penumbra(magnification: 4) - (4.5 / 40 + 0.05)) < 1e-12, "Easel penumbra formula")
+        precondition(abs(Easel.penumbra(magnification: 4) - (4.5 / 40 + 0.06)) < 1e-12, "Easel penumbra formula")
         let legacyLayout = try JSONDecoder().decode(PrintLayout.self, from: Data("{\"paper\":\"fourBySix\",\"scale\":0.8}".utf8))
         precondition(!legacyLayout.handSet && legacyLayout.easelSeed == 1 && legacyLayout.blade == .natural,
                      "Saved layouts did not default to a machine-set natural easel")

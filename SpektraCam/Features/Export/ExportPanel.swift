@@ -1,18 +1,26 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ExportPanel: View {
     private let session: EditorSession?
     @State private var original: OriginalPhotoExporter?
+    @State private var raw: OriginalRAWExporter?
     init(session: EditorSession) {
         self.session = session
+        _raw = State(initialValue: session.photo.sourceDescription?.isRAW == true
+            ? OriginalRAWExporter(data: session.photo.data, filename: session.sourceFilename,
+                type: session.photo.sourceType, width: session.photo.width, height: session.photo.height) : nil)
         _original = State(initialValue: nil)
     }
     init(originalURL: URL, sourceFilename: String? = nil) {
         session = nil
+        _raw = State(initialValue: UTType(filenameExtension: originalURL.pathExtension)?.conforms(to: .rawImage) == true
+            ? OriginalRAWExporter(source: originalURL, filename: sourceFilename) : nil)
         _original = State(initialValue: OriginalPhotoExporter(source: originalURL, sourceFilename: sourceFilename))
     }
     @Environment(\.dismiss) private var dismiss
     @State private var format = PhotoExporter.Format.jpeg
+    @State private var exportsRAW = false
     /// The last size chosen is kept for the next export.
     @AppStorage("export.size") private var storedSize = PhotoExporter.Size.original.rawValue
     private var size: PhotoExporter.Size {
@@ -35,53 +43,57 @@ struct ExportPanel: View {
     @State private var saveFailure: String?
     @State private var renderTask: Task<(URL, Int, Int), Error>?
     private struct Request: Hashable {
-        let format: String, size: String, quality: Double, retry: Int
+        let format: String, size: String, quality: Double, retry: Int, raw: Bool
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    ExportSizePicker(size: Binding(get: { size }, set: { storedSize = $0.rawValue }), allowsPrint: hasPaper)
-                    LabeledContent(String(localized: "export.output", defaultValue: "Output"),
-                                   value: url != nil ? dimensions : expected)
-                        .accessibilityIdentifier("export.output")
-                    Picker(
-                        String(localized: "export.format", defaultValue: "Format"),
-                        selection: $format
-                    ) {
-                        ForEach(PhotoExporter.Format.allCases) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented)
-                    if format == .jpeg {
-                        Picker(
-                            String(localized: "export.jpeg_quality", defaultValue: "JPEG quality"),
-                            selection: $quality
-                        ) {
-                            Text(String(localized: "export.maximum", defaultValue: "Maximum")).tag(
-                                1.0)
-                            Text(String(localized: "export.high", defaultValue: "High")).tag(0.95)
-                            Text(String(localized: "export.standard", defaultValue: "Standard"))
-                                .tag(0.85)
-                        }.pickerStyle(.segmented)
+                if raw != nil {
+                    Section {
+                        Picker(String(localized: "export.file", defaultValue: "File"), selection: $exportsRAW) {
+                            Text(String(localized: "export.processed", defaultValue: "Processed photo")).tag(false)
+                            Text(String(localized: "export.original_raw", defaultValue: "Original RAW")).tag(true)
+                        }
+                        .pickerStyle(.segmented).accessibilityIdentifier("export.file")
                     }
-                    LabeledContent(
-                        String(localized: "export.color_space", defaultValue: "Color space"),
-                        value: String(
-                            localized: "export.sdr_srgb_8_bit", defaultValue: "SDR · sRGB · 8-bit"))
-                    if url != nil {
-                        if let saveFailure {
-                            Text(saveFailure).font(.footnote).foregroundStyle(.secondary)
+                }
+                if exportsRAW {
+                    Section {
+                        Text(String(localized: "export.original_raw_note",
+                            defaultValue: "The original capture, with its metadata and full resolution."))
+                            .font(.footnote).foregroundStyle(.secondary)
+                        exportStatus
+                    }
+                } else {
+                    Section {
+                        ExportSizePicker(size: Binding(get: { size }, set: { storedSize = $0.rawValue }), allowsPrint: hasPaper)
+                        LabeledContent(String(localized: "export.output", defaultValue: "Output"),
+                                       value: url != nil ? dimensions : expected)
+                            .accessibilityIdentifier("export.output")
+                        Picker(
+                            String(localized: "export.format", defaultValue: "Format"),
+                            selection: $format
+                        ) {
+                            ForEach(PhotoExporter.Format.allCases) { Text($0.rawValue).tag($0) }
+                        }.pickerStyle(.segmented)
+                        if format == .jpeg {
+                            Picker(
+                                String(localized: "export.jpeg_quality", defaultValue: "JPEG quality"),
+                                selection: $quality
+                            ) {
+                                Text(String(localized: "export.maximum", defaultValue: "Maximum")).tag(
+                                    1.0)
+                                Text(String(localized: "export.high", defaultValue: "High")).tag(0.95)
+                                Text(String(localized: "export.standard", defaultValue: "Standard"))
+                                    .tag(0.85)
+                            }.pickerStyle(.segmented)
                         }
-                    } else if let failure {
-                        Text(failure).foregroundStyle(.secondary)
-                        Button(String(localized: "common.retry", defaultValue: "Retry")) {
-                            retry += 1
-                        }
-                    } else {
-                        ProgressView(
-                            String(
-                                localized: "export.preparing_image",
-                                defaultValue: "Preparing image…"))
+                        LabeledContent(
+                            String(localized: "export.color_space", defaultValue: "Color space"),
+                            value: String(
+                                localized: "export.sdr_srgb_8_bit", defaultValue: "SDR · sRGB · 8-bit"))
+                        exportStatus
                     }
                 }
             }
@@ -110,7 +122,7 @@ struct ExportPanel: View {
             }
             .task(
                 id: Request(
-                    format: format.rawValue, size: size.rawValue, quality: quality, retry: retry)
+                    format: format.rawValue, size: size.rawValue, quality: quality, retry: retry, raw: exportsRAW)
             ) {
                 await prepareExport()
             }
@@ -131,16 +143,26 @@ struct ExportPanel: View {
                 session?.discardExport()
                 if let url { try? FileManager.default.removeItem(at: url) }
                 if let original { Task { await original.discard() } }
+                if let raw { Task { await raw.discard() } }
             }
         }
         .presentationDetents([.fraction(0.68), .large], selection: $detent)
         .presentationDragIndicator(.visible)
     }
+    @ViewBuilder private var exportStatus: some View {
+        if url != nil {
+            if let saveFailure { Text(saveFailure).font(.footnote).foregroundStyle(.secondary) }
+        } else if let failure {
+            Text(failure).foregroundStyle(.secondary)
+            Button(String(localized: "common.retry", defaultValue: "Retry")) { retry += 1 }
+        } else {
+            ProgressView(String(localized: "export.preparing_image", defaultValue: "Preparing image…"))
+        }
+    }
     private var saveButton: some View {
         Button(action: saveToPhotos) {
             HStack(spacing: 7) {
-                Image(systemName: saved ? "checkmark" : "square.and.arrow.down").foregroundStyle(
-                    .white)
+                Image(systemName: saved ? "checkmark" : "square.and.arrow.down")
                 Text(
                     saved
                         ? String(
@@ -188,10 +210,12 @@ struct ExportPanel: View {
         let requestedSize = size
         let requestedFormat = format
         let requestedQuality = quality
+        let requestedRAW = exportsRAW
         let job = Task {
             if let previous { _ = await previous.result }
             if let previousURL { try? FileManager.default.removeItem(at: previousURL) }
             try Task.checkCancellation()
+            if requestedRAW, let raw { return try await raw.export() }
             if let session {
                 return try await session.export(
                     size: requestedSize, format: requestedFormat, quality: requestedQuality)

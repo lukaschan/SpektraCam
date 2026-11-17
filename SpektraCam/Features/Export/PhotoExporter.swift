@@ -4,6 +4,62 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
+/// Exports the stored RAW bytes without decoding, developing, or re-encoding them.
+actor OriginalRAWExporter {
+    private let source: URL?
+    private let data: Data?
+    private let filename: String?
+    private let type: String?
+    private let width: Int, height: Int
+    private var folder: URL?
+
+    init(data: Data, filename: String?, type: String?, width: Int, height: Int) {
+        source = nil
+        self.data = data
+        self.filename = filename
+        self.type = type
+        self.width = width
+        self.height = height
+    }
+    init(source: URL, filename: String?) {
+        self.source = source
+        data = nil
+        self.filename = filename ?? source.lastPathComponent
+        type = PhotoSource.typeHint(for: source)
+        width = 0
+        height = 0
+    }
+    func export() throws -> (URL, Int, Int) {
+        try Task.checkCancellation()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("RAW-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            let originalName = filename.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Original"
+            var name = originalName.isEmpty ? "Original" : originalName
+            if URL(fileURLWithPath: name).pathExtension.isEmpty {
+                name += "." + (type.flatMap { UTType($0)?.preferredFilenameExtension } ?? "dng")
+            }
+            let output = directory.appendingPathComponent(name)
+            if let source {
+                try FileManager.default.copyItem(at: source, to: output)
+            } else if let data {
+                try data.write(to: output, options: .atomic)
+            } else { throw PhotoExporter.Failure.render }
+            try Task.checkCancellation()
+            if let folder { try? FileManager.default.removeItem(at: folder) }
+            folder = directory
+            return (output, width, height)
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+    }
+    func discard() {
+        if let folder { try? FileManager.default.removeItem(at: folder) }
+        folder = nil
+    }
+}
+
 /// Full-resolution SDR geometry export. Film processing must supply its own renderer.
 nonisolated enum PhotoExporter {
     enum Format: String, CaseIterable, Identifiable, Sendable {

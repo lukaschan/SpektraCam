@@ -28,7 +28,7 @@ struct EditorView: View {
     @State private var toolBeforeDarkroomCrop: EditorTool?
     @State private var showOriginal = false
     @State private var showPasteLook = false
-    @State private var showSaveFormula = false
+    @State private var formulaDraft: FormulaDraft?
     @State private var showResetConfirmation = false
     @State private var showRenderProgress = false
     @State private var layout = WorkspaceLayout.stacked
@@ -57,8 +57,8 @@ struct EditorView: View {
         .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .onSystemVerticalBar { systemVerticalBar = $0 }
         .background(EditorNavigationGuard().allowsHitTesting(false))
-        .sheet(isPresented: $showSaveFormula) {
-            SaveFormulaSheet(library: library, recipe: session.recipe)
+        .sheet(item: $formulaDraft) { draft in
+            SaveFormulaSheet(library: library, recipe: draft.recipe)
         }
         .sheet(isPresented: $showPasteLook) {
             if let clip = library.copiedLook {
@@ -310,7 +310,7 @@ struct EditorView: View {
                                 copy: { library.copyLook(session.recipe, from: photoID) },
                                 paste: { showPasteLook = true }),
                             formulae: FormulaStrip(
-                                library: library, canSave: session.hasEdits, identifier: "editor",
+                                library: library, canSave: session.hasEdits, applying: session.isBusy, identifier: "editor",
                                 apply: { formula in
                                     session.update(key: "formula.apply") {
                                         $0 = $0.taking(
@@ -318,7 +318,7 @@ struct EditorView: View {
                                             rawTarget: session.photo.rawTemperature != nil)
                                     }
                                 },
-                                save: { showSaveFormula = true }))
+                                save: { formulaDraft = FormulaDraft(recipe: session.recipe) }))
                         HStack {
                             Spacer()
                             Button(compareTitle, systemImage: "square.on.square") {

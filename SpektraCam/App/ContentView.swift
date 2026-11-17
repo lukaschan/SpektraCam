@@ -56,6 +56,7 @@ struct ContentView: View {
                         try? await library.luts.load()
                         try? await library.formulae.load()
                         #if DEBUG && targetEnvironment(simulator)
+                            await FormulaValidation.run(library)
                             // Stand in for the system pickers and "Open in SpektraCam".
                             let options = ProcessInfo.processInfo.arguments
                             for (index, option) in options.enumerated() where index + 1 < options.count {

@@ -1,6 +1,12 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Capture at the tap, rather than reading a changing editor/photo from a sheet builder.
+struct FormulaDraft: Identifiable {
+    let id = UUID()
+    let recipe: EditRecipe
+}
+
 extension Formula {
     /// Why a formula cannot be applied here, or nil when it can.
     @MainActor func problem(luts: LUTLibrary) -> String? {
@@ -36,6 +42,7 @@ struct FormulaStrip: View {
     /// it owns the renderer, and library images wait.
     var photo: LibraryPhoto? = nil
     var canSave = true
+    var applying = false
     let identifier: String
     let apply: (Formula) -> Void
     let save: () -> Void
@@ -46,6 +53,7 @@ struct FormulaStrip: View {
                 Text(String(localized: "formula.formulae", defaultValue: "Formulae"))
                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
+                if applying { ProgressView().controlSize(.small) }
                 Button(String(localized: "formula.save_as", defaultValue: "Save as Formula…"), action: save)
                     .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
                     .disabled(!canSave).accessibilityIdentifier(identifier + ".formula.save")
@@ -62,14 +70,19 @@ struct FormulaStrip: View {
                     LazyHStack(alignment: .top, spacing: 10) {
                         ForEach(library.formulae.ordered) { formula in
                             let problem = formula.problem(luts: library.luts)
-                            Button {
-                                apply(formula)
-                            } label: {
-                                if let photo { tile(formula, photo: photo, problem: problem) } else { Text(formula.name) }
+                            Group {
+                                if let photo {
+                                    Button { apply(formula) } label: {
+                                        tile(formula, photo: photo, problem: problem)
+                                    }
+                                    .buttonStyle(.plain)
+                                } else {
+                                    Button(formula.name) { apply(formula) }
+                                        .buttonStyle(.bordered)
+                                }
                             }
-                            .buttonStyle(photo == nil ? AnyButtonStyle(.bordered) : AnyButtonStyle(.plain))
                             .buttonBorderShape(.capsule).controlSize(.small)
-                            .disabled(problem != nil)
+                            .disabled(problem != nil || applying)
                             .accessibilityLabel(formula.name)
                             .accessibilityValue(problem ?? "")
                             .accessibilityIdentifier(identifier + ".formula." + formula.name)
@@ -97,15 +110,6 @@ struct FormulaStrip: View {
         }
         .contentShape(.rect)
     }
-}
-
-/// A type-erased button style, so one button can be a tile or a capsule.
-private struct AnyButtonStyle: PrimitiveButtonStyle {
-    private let body: (Configuration) -> AnyView
-    init<Style: PrimitiveButtonStyle>(_ style: Style) {
-        body = { AnyView(style.makeBody(configuration: $0)) }
-    }
-    func makeBody(configuration: Configuration) -> some View { body(configuration) }
 }
 
 /// Name a look and choose what it carries. Crop and rotation are never saved.
@@ -171,6 +175,7 @@ struct SaveFormulaSheet: View {
                                 || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         )
                         .accessibilityIdentifier("formula.save.confirm")
+                        .overlay { if saving { ProgressView().controlSize(.small) } }
                 }
             }
             .onAppear { naming = true }

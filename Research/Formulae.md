@@ -3,6 +3,30 @@
 Status: Phases A, B and C are implemented on `codex/formulae`; link, QR and formula card (D)
 are not started. Nothing here ships in 1.0.
 
+## Before Phase D — 2026-11-16
+
+- Formula saving now captures an immutable `FormulaDraft` at the tap, and a saved Formula's
+  recipe cannot be mutated. The strip uses native button styles and disables application while
+  developing. Changed thumbnail requests clear their previous image and show loading.
+- Regression checks save C200 as the first formula, edit the source to 400H and save another,
+  then reapply the first from both Photo and Edit. Separate checks compare settings and warm/fresh
+  renderer pixels across two photos, and ensure the formula files remain byte-for-byte unchanged.
+  These pass on Simulator. The original phone symptom has not been reproduced from its actual
+  saved file; an existing affected `.rnformula` is needed if it persists on the phone.
+- Covered enlarger paper is anchored to output white after scanner/tone processing, through
+  the same seeded blade coverage. Its interior is untouched; only the perimeter is evaluated,
+  using file-backed RGBA8 storage for the output and the same finishing for loupe regions.
+  Paper spread increased from 0.05 to 0.06 mm for a very small softness increase.
+- Export offers Original RAW for RAW sources, alongside Processed photo. Sharing and saving use
+  a byte-for-byte copy, with its original filename/extension and metadata, without a RAW decode.
+- A photo tap leaves the viewer controls visible. Easel is now 尺板 in Simplified Chinese.
+- Remember flash status is off by default; leaving the camera resets flash unless enabled.
+- Magenta remains the default accent. Black & White uses standard system-green switches;
+  switch state is separate from navigation tint, preserving the native thumb and accessibility.
+  See Apple's [toggles](https://developer.apple.com/design/human-interface-guidelines/toggles),
+  [Liquid Glass colour](https://developer.apple.com/design/human-interface-guidelines/color), and
+  [adoption guidance](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass).
+
 A formula is a named, reusable look. It is one recipe without its framing, split into three
 parts that follow the process:
 

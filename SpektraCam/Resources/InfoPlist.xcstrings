@@ -4,7 +4,6 @@
     "CFBundleDisplayName" : {
       "comment" : "Bundle display name",
       "extractionState" : "extracted_with_value",
-      "shouldTranslate" : false,
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12,12 +11,12 @@
             "value" : "SpektraCam"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "CFBundleName" : {
       "comment" : "Bundle name",
       "extractionState" : "extracted_with_value",
-      "shouldTranslate" : false,
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -25,7 +24,8 @@
             "value" : "SpektraCam"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "NSCameraUsageDescription" : {
       "comment" : "App explanation in the iOS permission prompt. iOS supplies the prompt buttons. Explain the purpose clearly.",
@@ -80,6 +80,9 @@
           }
         }
       }
+    },
+    "SpektraCam Formula" : {
+
     }
   },
   "version" : "1.0"

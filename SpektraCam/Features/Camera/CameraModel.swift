@@ -30,7 +30,15 @@ import UIKit
     /// LVF hold: the user switched the camera off to save power. Only the user ends it.
     private(set) var held = false
     private(set) var flashAvailable = false
-    var flashOn = false
+    static let rememberFlashKey = "camera.rememberFlash"
+    private static let flashKey = "camera.flashOn"
+    var flashOn = false {
+        didSet {
+            if UserDefaults.standard.bool(forKey: Self.rememberFlashKey) {
+                UserDefaults.standard.set(flashOn, forKey: Self.flashKey)
+            }
+        }
+    }
     @ObservationIgnored private var importTask: Task<Void, Never>?
     @ObservationIgnored private var biasSetAt = Date.distantPast
     private let location = CameraLocation()
@@ -40,7 +48,12 @@ import UIKit
     private var starting = false
     private var closed = false
     @ObservationIgnored private var backgroundTask = UIBackgroundTaskIdentifier.invalid
-    init(library: PhotoLibrary) { self.library = library }
+    init(library: PhotoLibrary) {
+        self.library = library
+        if UserDefaults.standard.bool(forKey: Self.rememberFlashKey) {
+            flashOn = UserDefaults.standard.bool(forKey: Self.flashKey)
+        }
+    }
     /// A capture is possible again as soon as its file is written; importing does not block it.
     /// Only a failed import with captures still waiting holds the shutter.
     var canCapture: Bool {
@@ -313,6 +326,10 @@ import UIKit
         }
     #endif
     func close() async {
+        if !UserDefaults.standard.bool(forKey: Self.rememberFlashKey) {
+            flashOn = false
+            UserDefaults.standard.removeObject(forKey: Self.flashKey)
+        }
         closed = true
         wantsActive = false
         outputReady = false

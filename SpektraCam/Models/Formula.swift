@@ -42,7 +42,7 @@ nonisolated struct Formula: Identifiable, Equatable, Sendable {
     var parts: [EditRecipe.Part]
     /// Parts in the file that need a newer SpektraCam. They stay in the file as written.
     var unreadable: [String]
-    var recipe: EditRecipe
+    let recipe: EditRecipe
     var luts: [LUT]
 
     /// A new formula from an edit. Only the chosen parts are kept, so a part the author left

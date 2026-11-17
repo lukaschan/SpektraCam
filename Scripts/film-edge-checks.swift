@@ -722,7 +722,7 @@ import UniformTypeIdentifiers
             precondition(abs(b[i].x - b[i].y) < 0.002 && abs(b[i].x - b[i].z) < 0.002, "B&W did not include the edge")
         }
         // An enlarger print's margin is the paper's own white (its unexposed base), never table shadow.
-        precondition(b[0].x > 0.6 && abs(b[0].x - b[b.count - 1].x) < 0.005, "Paper inherited edge density or table shadows: \(b[0]) vs \(b[b.count - 1])")
+        precondition(b[0].x >= 254.0 / 255 && abs(b[0].x - b[b.count - 1].x) < 0.005, "Paper inherited edge density or table shadows: \(b[0]) vs \(b[b.count - 1])")
         // Export sizes resolve against the native output and never enlarge. A crop exports its own
         // pixels; on paper the picture keeps one source pixel per output pixel.
         do {

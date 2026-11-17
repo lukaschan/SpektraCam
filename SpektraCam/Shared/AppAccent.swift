@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 /// The interface tint chosen in About. Stored by name, so adding a choice never changes
-/// what a saved one means. Magenta is the asset-catalog accent and stays the default.
+/// what a saved one means. Magenta is the default; Black & White remains an optional theme.
 enum AppAccent: String, CaseIterable, Identifiable, Sendable {
     case magenta, orange, blue, mono
     static let key = "app.accent"
@@ -32,6 +32,11 @@ enum AppAccent: String, CaseIterable, Identifiable, Sendable {
         }
     }
     var color: Color { Color(uiColor: uiColor) }
+    /// Switch state is semantic, separate from navigation tint. Apple's standard green keeps
+    /// the light thumb distinct in both appearances and includes accessible color variants.
+    var switchColor: Color {
+        self == .mono ? Color(uiColor: .systemGreen) : color
+    }
     /// Text and glyphs on a shape filled with the accent.
     var foreground: Color { self == .mono ? Color(uiColor: .systemBackground) : .white }
     /// An unselected control beside an accent-colored selected one. Black & White has no hue
@@ -51,10 +56,20 @@ extension ShapeStyle where Self == OnAccentStyle {
     static var onAccent: OnAccentStyle { OnAccentStyle() }
 }
 
+/// Keep the system's Liquid Glass switch, thumb position, accessibility and on/off labels.
+/// Only its track tint differs from the tint used by navigation and prominent actions.
+private struct AppSwitchStyle: ToggleStyle {
+    @Environment(\.appAccent) private var accent
+    func makeBody(configuration: Configuration) -> some View {
+        Toggle(configuration).toggleStyle(.switch).tint(accent.switchColor)
+    }
+}
+
 private struct AppAccentModifier: ViewModifier {
     @AppStorage(AppAccent.key) private var accent = AppAccent.magenta
     func body(content: Content) -> some View {
         content.tint(accent.color).environment(\.appAccent, accent)
+            .toggleStyle(AppSwitchStyle())
             .onChange(of: accent, initial: true) { _, accent in
                 // Alerts, menus and system pickers take their tint from the window.
                 for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
