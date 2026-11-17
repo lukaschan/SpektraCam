@@ -66,7 +66,7 @@ actor MetalStages {
         var shape = SIMD2<UInt32>(UInt32(count), UInt32(samples))
         encoder.setBytes(&shape, length: MemoryLayout.size(ofValue: shape), index: inputs.count + 1)
         let width = min(pipeline.maxTotalThreadsPerThreadgroup, pipeline.threadExecutionWidth * 4)
-        encoder.dispatchThreads(
+        encoder.dispatchGrid(
             MTLSize(width: count, height: 1, depth: 1),
             threadsPerThreadgroup: MTLSize(width: width, height: 1, depth: 1))
         encoder.endEncoding()

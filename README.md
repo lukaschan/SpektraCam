@@ -1,21 +1,21 @@
 # SpektraCam
 
-**v0.2.3 · iPhone · iOS 26.0+**（fork 版将最低版本由上游的 iOS 27.2 降至 26.0）
+**v1.0 · iPhone · iPad · iOS 26+**
 
-此App是基于 Andrea Volpato 的 [spektrafilm][upstream] 原生移植的 iPhone 照片编辑器。
+此App是基于 Andrea Volpato 的 [spektrafilm][upstream] 原生移植的 iPhone 与 iPad 照片编辑器。
 免费、开源，支持简体中文与英文。
 
-This App is a free, open-source iPhone photo editor built on a native port of Andrea Volpato’s [spektrafilm][upstream]. Supports Simplified Chinese and English.
+This App is a free, open-source photo editor for iPhone and iPad built on a native port of Andrea Volpato’s [spektrafilm][upstream]. Supports Simplified Chinese and English.
 
 ## 功能 / Features
 
 从“照片”或“文件”导入，保留原始文件并且单独保存编辑。
-有裁剪、胶片与印相模拟、调整、颗粒、光晕和柔光，以及 JPEG/PNG 导出功能。
-界面目前仅支持 iPhone 竖屏。
+有裁切、胶片与印相模拟、调整、颗粒、光晕和柔光，以及 JPEG/PNG 导出功能。
+界面随可用空间调整：竖向时控制面板位于照片下方；横向时（iPad、iPhone Duo 及 iPhone 横屏）控制面板位于照片右侧，工具栏纵向排列在最右侧。
 
 Import from Photos or Files. Keep originals and save edits separately. 
 Crop, simulate film and prints, adjust color and tone, add grain, halation and diffusion, then export JPEG or PNG. 
-The interface currently supports iPhone in portrait only.
+The interface follows the space it is given: taller than wide, controls sit below the photo; wider than tall (iPad, iPhone Duo, iPhone in landscape), controls sit in a column beside the photo with the tools in a rail on the trailing edge.
 
 简单的RAW 相机：拍摄 DNG；Apple ProRAW 和镜头支持取决于设备。
 也可以跳过spektrafilm管线，直接使用最多两个独立混合的 `.cube` 3D LUT。
@@ -25,6 +25,18 @@ The simple RAW camera captures DNG; Apple ProRAW and lens support depend on the 
 You can also choose to bypass the spektrafilm pipeline and use up to two `.cube` 3D LUT slots have separate Mix controls. 
 Use LUTs for encoded sRGB images; Log/HDR input transforms are not supported.
 
+### 相机兼容性 / Camera compatibility
+
+镜头和格式按当前设备的 AVFoundation 实际能力检测，不按机型名称判断；只显示可拍摄 RAW 的镜头。
+RAW 与 Apple ProRAW 不同：例如 iPhone 11 Pro 的广角和长焦可拍摄 Bayer RAW，但不支持 Apple ProRAW，其超广角不提供 RAW 输出。
+Apple ProRAW 适用于 iPhone 12 Pro 及后续支持的 Pro 机型；可用格式和分辨率取决于当前镜头。
+若设备没有支持的 RAW 镜头，相机页面会说明原因，仍可导入和编辑照片。模拟器不能验证真实相机的 RAW 能力。
+
+Lenses and formats are detected from AVFoundation’s current capture configuration, rather than a model-name list. Only RAW-capable lenses are offered.
+RAW and Apple ProRAW are different: for example, [iPhone 11 Pro][iphone11-raw] supports Bayer RAW on its wide and telephoto cameras, but has no Apple ProRAW support or ultrawide RAW output.
+[Apple ProRAW][proraw] is available on iPhone 12 Pro and later supported Pro models; formats and resolutions depend on the selected lens.
+If no camera offers a supported RAW format, the camera explains the limitation and photo import/editing remain available. Simulator checks cannot verify physical camera capabilities.
+
 ## 局限 / Limitations
 
 **SpektraCam  只是提供近似胶片模拟，并不能精确还原某款胶片或实际工艺，也无法匹配不同相机传感器带来的差异。** 
@@ -32,6 +44,10 @@ Use LUTs for encoded sRGB images; Log/HDR input transforms are not supported.
 
 **SpektraCam provides an approximate film simulation, not a precise reproduction of a film stock or process; It also unable to match the discrepancies among camera sensors.** 
 Film and print data come mainly from official manufacturer datasheets and published research, reconstructed and modelled by spektrafilm. Missing data are filled using model estimates and assumptions. The author did not built these profiles from its own film scans or physical measurements. [Data sources][profile-data] · [Model notes][model-notes]
+
+界面使用 `F·` 和 `K·` 简写别名标识胶片与印相模拟配置；这些名称不代表厂商认可，也不保证重现实物材料的外观或性能。SpektraCam 与所参考材料的制造商无关联，亦未获其赞助或认可。原始数据来源、署名及许可保留在项目资料中。
+
+The interface uses abbreviated `F·` and `K·` aliases for film and print simulation profiles. These labels do not imply manufacturer approval or guarantee the appearance or performance of physical materials. SpektraCam is not affiliated with, sponsored by or endorsed by the manufacturers of the referenced materials. Original data sources, attribution and licences are preserved in the project materials.
 
 厂商提供的曲线描述的是指定测试条件下的代表性的表现，不能保证每盒或每卷胶片的结果。各种因素，比如光源、曝光、冲洗方法和药液状态、印相、扫描、胶片批次和存放条件都会对结果造成差异。[厂商说明示例][kodak]
 
@@ -51,10 +67,10 @@ Export is currently SDR, sRGB, 8-bit only. Export at full resolution is limited 
 
 ## 构建 / Build
 
-使用 Xcode 27.2 打开 [SpektraCam.xcodeproj](SpektraCam.xcodeproj)，选择模拟器或 iPhone 后运行（工程为 Xcode 27 新格式，Xcode 26 无法打开；fork 发布的 IPA 最低支持 iOS 26.0）。
+使用 Xcode 27.2 打开 [SpektraCam.xcodeproj](SpektraCam.xcodeproj)，选择模拟器或 iPhone 后运行。最低支持 iOS 26（工程为 Xcode 27 新格式，Xcode 26 无法打开）。
 真机安装需要选择自己的开发团队。Python 3 用于本机测试；UI 测试需先在测试模拟器中加入两张不同照片。
 
-Open [SpektraCam.xcodeproj](SpektraCam.xcodeproj) in Xcode 27.2, select a Simulator or iPhone, and run. (The project uses Xcode 27's new format and cannot be opened by Xcode 26; the fork's IPA builds support iOS 26.0+.) Select your development team for device installation. Python 3 runs the native checks; UI tests need two different photos in the test Simulator.
+Open [SpektraCam.xcodeproj](SpektraCam.xcodeproj) in Xcode 27.2, select a Simulator or iPhone, and run. The deployment target is iOS 26. (The project uses Xcode 27's new format and cannot be opened by Xcode 26.) Select your development team for device installation. Python 3 runs the native checks; UI tests need two different photos in the test Simulator.
 
 ```sh
 python3 Scripts/core-checks.py
@@ -63,9 +79,9 @@ python3 Scripts/build-and-run.py --ui-tests
 
 ## 隐私 / Privacy
 
-无账户、广告、追踪或分析 SDK。照片、编辑与 LUT 保存在设备本地。可选定位会写入拍摄位置；Apple 地图服务可能接收照片坐标以查询地名。导出、分享、系统备份与 TestFlight 诊断遵循对应的系统设置与隐私条款。
+无账户、广告、追踪或分析 SDK。照片、编辑与 LUT 保存在设备本地。可选定位会写入拍摄位置；Apple 地图服务可能接收照片坐标以查询地名。导出、共享、系统备份与 TestFlight 诊断遵循对应的系统设置与隐私条款。详见[隐私政策](PRIVACY.md)。
 
-No accounts, ads, tracking or analytics SDKs. Photos, edits and LUTs stay on the device. Optional location access adds capture coordinates; Apple MapKit may receive photo coordinates to resolve place names. Export, sharing, system backups and TestFlight diagnostics follow the relevant system settings and privacy terms.
+No accounts, ads, tracking or analytics SDKs. Photos, edits and LUTs stay on the device. Optional location access adds capture coordinates; Apple MapKit may receive photo coordinates to resolve place names. Export, sharing, system backups and TestFlight diagnostics follow the relevant system settings and privacy terms. See the [privacy policy](PRIVACY.md).
 
 ## 许可与致谢 / License and credits
 
@@ -77,6 +93,8 @@ Code: [GPLv3](LICENSE). spektrafilm profiles and LUT data: [CC BY-SA 4.0](SPEKTR
 [profile-data]: https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/src/spektrafilm/profiles/io.py
 [model-notes]: https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/README.md#introduction
 [kodak]: https://www.kodakprofessional.com/sites/default/files/wysiwyg/pro/resources/e4000_ektachrome_100.pdf
+[proraw]: https://support.apple.com/en-us/119916
+[iphone11-raw]: https://www.lux.camera/inside-the-iphone-11-camera-part-1-a-completely-new-camera/
 
 ## AltStore 订阅源（本 fork）
 

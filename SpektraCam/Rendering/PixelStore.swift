@@ -15,7 +15,7 @@ nonisolated final class PixelStore: @unchecked Sendable {
     struct Failure: LocalizedError {
         var errorDescription: String? {
             String(
-                localized: "pixel_store.not_enough_storage",
+                localized: "render.error.storage",
                 defaultValue:
                     "There is not enough free storage to render this size. Free some space or choose a smaller export size.")
         }

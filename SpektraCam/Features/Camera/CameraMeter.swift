@@ -1,11 +1,14 @@
 @preconcurrency import AVFoundation
 import Foundation
+import OSLog
 
 nonisolated struct CameraReadings: Sendable {
     var histogram = Array(repeating: Double(0), count: 64)
     var seconds = Double(0)
     var aperture = Float(0)
     var iso = Float(0)
+    /// The device's own exposure bias, so the slider follows Camera Control.
+    var bias = Float(0)
 }
 
 nonisolated struct CameraLens: Identifiable, Equatable, Sendable {
@@ -15,7 +18,7 @@ nonisolated struct CameraLens: Identifiable, Equatable, Sendable {
     let macro: Bool
     let primary: Bool
     var title: String {
-        front ? String(localized: "camera_meter.front", defaultValue: "Front") : String(millimeters)
+        front ? String(localized: "camera.front", defaultValue: "Front") : String(millimeters)
     }
 }
 
@@ -35,7 +38,7 @@ nonisolated final class CameraMeter: NSObject, AVCaptureVideoDataOutputSampleBuf
     ) {
         let now = ProcessInfo.processInfo.systemUptime
         if lastUpdate == -.infinity {
-            print("Camera first preview frame: \(now - started) s")
+            Log.camera.debug("First preview frame: \(now - self.started) s")
         }
         guard now - lastUpdate >= 0.2, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer),
             CVPixelBufferGetPlaneCount(buffer) >= 1
@@ -63,6 +66,7 @@ nonisolated final class CameraMeter: NSObject, AVCaptureVideoDataOutputSampleBuf
         publish(
             CameraReadings(
                 histogram: bins.map { $0 / peak }, seconds: device.exposureDuration.seconds,
-                aperture: device.lensAperture, iso: device.iso))
+                aperture: device.lensAperture, iso: device.iso,
+                bias: device.exposureTargetBias))
     }
 }

@@ -92,5 +92,42 @@ import ImageIO
             precondition(coarse == nil, "\(name): detail offered when the preview is already sharp")
         }
         print("PASS: zoomed region matches the full export through turns, mirrors, crop, diffusion and monochrome")
+        // Darkroom loupe: a patch of the film-edge canvas must match the whole canvas render.
+        for (name, change) in [
+            ("35 mm lab scan", { (l: inout FilmEdgeLayout) in l.distress.apply(.lab) }),
+            // Negative prints are enlarger prints on an easel.
+            ("35 mm enlarger print, dusty", { (l: inout FilmEdgeLayout) in l.distress.dust = 0.5; l.distress.edgeFog = 0.3; l.printZoom = 0.93 }),
+            ("6 × 7", { (l: inout FilmEdgeLayout) in l.format = .roll120; l.rollFrame = .six7 }),
+        ] as [(String, (inout FilmEdgeLayout) -> Void)] {
+            let worker = PhotoRenderer(
+                source: image, directory: directory, data: encoded as Data, previewMaximum: 720)
+            var recipe = EditRecipe()
+            recipe.flags["camera.auto_exposure"] = false
+            recipe.flags["film_render.grain.active"] = false
+            recipe.flags["print_render.glare.active"] = false
+            var layout = FilmEdgeLayout()
+            change(&layout)
+            recipe.filmEdgeLayout = layout
+            recipe.crop = layout.constrainedCrop(recipe.crop, imageSize: CGSize(width: width, height: height))
+            let full = try await worker.renderFilmEdge(recipe, maximum: nil)
+            for visible in [CGRect(x: 0, y: 0, width: 0.22, height: 0.3), CGRect(x: 0.4, y: 0.72, width: 0.25, height: 0.28)] {
+                let started = Date()
+                guard let detail = try await worker.renderEdgeDetail(recipe, visible: visible)
+                else { preconditionFailure("\(name): no loupe patch") }
+                let seconds = Date().timeIntervalSince(started)
+                let rect = CGRect(
+                    x: (detail.rect.minX * Double(full.width)).rounded(), y: (detail.rect.minY * Double(full.height)).rounded(),
+                    width: Double(detail.image.width), height: Double(detail.image.height))
+                let a = bytes(detail.image), b = bytes(full.cropping(to: rect)!)
+                precondition(a.count == b.count, "\(name): size")
+                var maximum = 0, total = 0
+                var worst = 0, count = 0
+                for i in a.indices where i % 4 != 3 { let d = abs(Int(a[i]) - Int(b[i])); if d > maximum { worst = i / 4 }; if d > 8 { count += 1 }; maximum = max(maximum, d); total += d }
+                if maximum > 4 { print("  worst at patch (\(worst % detail.image.width), \(worst / detail.image.width)) + origin \(rect.origin), \(count) values over 8") }
+                print(String(format: "loupe %@: %dx%d of %dx%d, max %d/255, mean %.3f; %.2fs", name, detail.image.width, detail.image.height, full.width, full.height, maximum, Double(total) / Double(a.count * 3 / 4), seconds))
+                precondition(maximum <= 4, "\(name): loupe patch differs from the canvas by \(maximum)")
+            }
+        }
+        print("PASS: loupe patch matches the whole film-edge canvas")
     }
 }

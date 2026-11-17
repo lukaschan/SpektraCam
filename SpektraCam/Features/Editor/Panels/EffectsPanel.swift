@@ -37,7 +37,7 @@ struct EffectsPanel: View {
                 )
                 .confirmationDialog(
                     String(
-                        localized: "effects.use_stock_grain_settings",
+                        localized: "effects.use_stock_grain_confirm",
                         defaultValue: "Use stock grain settings?"), isPresented: $confirmStockGrain,
                     titleVisibility: .visible
                 ) {
@@ -67,13 +67,6 @@ struct EffectsPanel: View {
                 }
                 .disabled(session.recipe.look.mode == .lut)
             case .diffusion:
-                Text(
-                    String(
-                        localized: "effects.diffusion_can_require_substantial_memory_during_full",
-                        defaultValue:
-                            "Diffusion can require substantial memory during full-size export.")
-                ).font(.caption)
-                    .foregroundStyle(.secondary)
                 EffectSection(
                     title: String(
                         localized: "effects.camera_diffusion", defaultValue: "Camera diffusion"),

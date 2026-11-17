@@ -1,0 +1,917 @@
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -24,6 +24,18 @@
+ The simple RAW camera captures DNG; Apple ProRAW and lens support depend on the device. 
+ You can also choose to bypass the spektrafilm pipeline and use up to two `.cube` 3D LUT slots have separate Mix controls. 
+ Use LUTs for encoded sRGB images; Log/HDR input transforms are not supported.
++
++### 相机兼容性 / Camera compatibility
++
++镜头和格式按当前设备的 AVFoundation 实际能力检测，不按机型名称判断；只显示可拍摄 RAW 的镜头。
++RAW 与 Apple ProRAW 不同：例如 iPhone 11 Pro 的广角和长焦可拍摄 Bayer RAW，但不支持 Apple ProRAW，其超广角不提供 RAW 输出。
++Apple ProRAW 适用于 iPhone 12 Pro 及后续支持的 Pro 机型；可用格式和分辨率取决于当前镜头。
++若设备没有支持的 RAW 镜头，相机页面会说明原因，仍可导入和编辑照片。模拟器不能验证真实相机的 RAW 能力。
++
++Lenses and formats are detected from AVFoundation’s current capture configuration, rather than a model-name list. Only RAW-capable lenses are offered.
++RAW and Apple ProRAW are different: for example, [iPhone 11 Pro][iphone11-raw] supports Bayer RAW on its wide and telephoto cameras, but has no Apple ProRAW support or ultrawide RAW output.
++[Apple ProRAW][proraw] is available on iPhone 12 Pro and later supported Pro models; formats and resolutions depend on the selected lens.
++If no camera offers a supported RAW format, the camera explains the limitation and photo import/editing remain available. Simulator checks cannot verify physical camera capabilities.
+ 
+ ## 局限 / Limitations
+ 
+@@ -77,3 +89,5 @@
+ [profile-data]: https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/src/spektrafilm/profiles/io.py
+ [model-notes]: https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/README.md#introduction
+ [kodak]: https://www.kodakprofessional.com/sites/default/files/wysiwyg/pro/resources/e4000_ektachrome_100.pdf
++[proraw]: https://support.apple.com/en-us/119916
++[iphone11-raw]: https://www.lux.camera/inside-the-iphone-11-camera-part-1-a-completely-new-camera/
+diff --git a/Research/AdaptiveValidation.md b/Research/AdaptiveValidation.md
+new file mode 100644
+--- /dev/null
++++ b/Research/AdaptiveValidation.md
+@@ -0,0 +1,40 @@
++# Adaptive camera and rendering checks
++
++The Duo launch failure was a Metal validation abort in library thumbnail rendering:
++`Dispatch Threads with Non-Uniform Threadgroup Size is not supported on this device`.
++The failing stack reached `MetalFilmPipeline.encodeGraph` through `LibraryImages.rebuild`.
++Camera dismissal can expose pending thumbnail work, so an apparent unresponsive library
++does not establish that a camera event handler consumed a tap.
++
++## Implementation rules
++
++- Dispatch independent pixel kernels through `MTLComputeCommandEncoder.dispatchGrid`.
++  It rounds up uniform threadgroups, which every Metal GPU supports. Every kernel must
++  guard its logical dimensions before memory access. Keep explicit fixed-size dispatches
++  for cooperative reductions, whose barriers require all lanes to participate.
++- Do not add device-name or simulator checks to rendering. Audit both buffer and texture
++  paths when changing GPU submission, including tone, diffusion, grain, and tiled rendering.
++- Hardware capture uses the same `canCapture` predicate as the shutter and is disabled
++  outside the active scene. The on-screen shutter can separately resume a user hold.
++- Treat a closed camera as terminal: late events cannot restore readiness or start capture.
++- Discover lenses from AVFoundation and probe each attached input's RAW output formats before
++  offering it. Recheck after switching. Distinguish Bayer RAW from ProRAW; an unsupported
++  camera must preserve access to import/editing. A Simulator demo checks UI policy only.
++- Keep the optics row identical across layouts. Center the shutter independently of accessory
++  controls and navigation insets; verify its actual window coordinates in UI tests.
++
++## Regression gate
++
++Run `python3 Scripts/layout-matrix.py --camera-only` with phone, Duo, and iPad simulators booted.
++Run Duo once closed and once unfolded. Run iPad full screen and in a resized window.
++The suite makes its own odd-sized image and checks LVF hold across background/foreground,
++rotation, both camera exits, reopening, actual library actions, film rendering, grading,
++and preservation of editor navigation. Logs and result bundles are retained under `--shots`.
++The suite also exercises Bayer-only and no-RAW configurations. Physical-device checks remain
++necessary to validate lens capability discovery, capture dimensions, flash, and hardware buttons.
++
++For the full editor/Darkroom layout tour, supply `--photo /absolute/path/to/photo.jpg`.
++For GPU bounds and numerical checks, run
++`python3 Scripts/core-checks.py metal-dispatch metal-color metal-film metal-grain metal-diffusion tone`
++in an environment with GPU access. `metal-dispatch` checks logical output and untouched
++canary memory for tiny, aligned, partial, and odd two-dimensional grids.
+diff --git a/Scripts/core-checks.py b/Scripts/core-checks.py
+--- a/Scripts/core-checks.py
++++ b/Scripts/core-checks.py
+@@ -35,6 +35,7 @@
+  'metering':(['SpectralCore','MeteringCore'],['Reference/Fixtures/metering-stages.json']),
+  'gamut':(['SpectralCore','AppearanceCore','GamutCore'],['Reference/Fixtures']),
+ }
++checks['metal-dispatch'] = (['MetalDispatch'], [])
+ checks['histogram'] = (['PhotoHistogram'], [])
+ checks['geotag'] = (['CameraLocation','PhotoMetadata'], [])
+ checks['raw-input'] = (checks['recipe'][0] + ['PhotoColorBridge','SourceImageRenderer','PhotoMetadata','ImportedPhoto'], [])
+@@ -74,6 +75,7 @@
+ checks['darkroom-orientation'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer'])), ['.'])
+ checks['darkroom'] = (list(dict.fromkeys(checks['export'][0] + checks['recipe'][0] + ['PrintCompositor'])), [])
+ for files, arguments in checks.values():
++ if any(f.startswith('Metal') or f == 'ToneRenderer' for f in files) and 'MetalDispatch' not in files: files.append('MetalDispatch')
+  if any(f in files for f in ['MetalFilmPipeline','SourceImageRenderer','ToneRenderer']) and 'PixelStore' not in files: files.append('PixelStore')
+  if 'EditRecipe' in files:
+   for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout']:
+diff --git a/Scripts/layout-matrix.py b/Scripts/layout-matrix.py
+--- a/Scripts/layout-matrix.py
++++ b/Scripts/layout-matrix.py
+@@ -5,16 +5,19 @@
+ has run on a phone, a tablet and iPhone Duo. Boot the simulators first; unfold the Duo in
+ Xcode's Device Hub to cover its inner display. Screenshots go to --shots/<device>/.
+ """
+-import argparse, json, os, pathlib, subprocess, sys
++import argparse, json, os, pathlib, subprocess, sys, time
+ 
+ ROOT = pathlib.Path(__file__).resolve().parents[1]
+ ENV = dict(os.environ, DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer")
+ CLASSES = {"phone": "iPhone 1", "duo": "iPhone Duo", "tablet": "iPad"}
+ 
+ parser = argparse.ArgumentParser(description=__doc__)
+-parser.add_argument("--photo", required=True, help="A non-square host image the tests import.")
++parser.add_argument("--photo", help="A non-square host image the tests import.")
+ parser.add_argument("--shots", default="/tmp/spektracam-layout", help="Host directory for screenshots.")
++parser.add_argument("--camera-only", action="store_true", help="Run the self-contained camera/rendering round trips.")
+ args = parser.parse_args()
++if not args.camera_only and not args.photo:
++    parser.error("--photo is required unless --camera-only is selected")
+ 
+ listing = subprocess.run([ENV["DEVELOPER_DIR"] + "/usr/bin/simctl", "list", "devices", "booted", "--json"],
+                          env=ENV, text=True, capture_output=True, check=True)
+@@ -28,14 +31,21 @@
+         continue
+     shots = pathlib.Path(args.shots) / label
+     shots.mkdir(parents=True, exist_ok=True)
+-    env = dict(ENV, TEST_RUNNER_SPEKTRACAM_LAYOUT_PHOTO=args.photo, TEST_RUNNER_SPEKTRACAM_LAYOUT_SHOTS=str(shots))
++    env = dict(ENV, TEST_RUNNER_SPEKTRACAM_LAYOUT_SHOTS=str(shots))
++    if args.photo: env["TEST_RUNNER_SPEKTRACAM_LAYOUT_PHOTO"] = args.photo
++    suites = ["-only-testing:SpektraCamUITests/CameraLifecycleTests"]
++    if not args.camera_only: suites.append("-only-testing:SpektraCamUITests/AdaptiveLayoutTests")
+     result = subprocess.run(
+         [ENV["DEVELOPER_DIR"] + "/usr/bin/xcodebuild", "-project", str(ROOT / "SpektraCam.xcodeproj"), "-scheme", "SpektraCam",
+          "-configuration", "Debug", "-sdk", "iphonesimulator", "-destination", "id=" + device["udid"],
+          "-derivedDataPath", "/private/tmp/spektrafilm-build", "CODE_SIGNING_ALLOWED=NO", "-parallel-testing-enabled", "NO",
+-         "-only-testing:SpektraCamUITests/AdaptiveLayoutTests", "test"],
++         "-resultBundlePath", str(shots / (str(time.time_ns()) + ".xcresult")),
++         *suites, "test"],
+         env=env, text=True, capture_output=True)
++    (shots / "build-and-test.log").write_text(result.stdout + result.stderr)
+     lines = [l.split("AdaptiveLayoutTests ")[-1] for l in result.stdout.splitlines() if "Test Case" in l and ("passed" in l or "failed" in l or "skipped" in l)]
+     print(f"{label} ({device['name']}):", *lines, sep="\n  ")
++    if result.returncode:
++        print("\n".join((result.stdout + result.stderr).splitlines()[-25:]))
+     failed = failed or result.returncode != 0
+ sys.exit(1 if failed else 0)
+diff --git a/Scripts/metal-checks.py b/Scripts/metal-checks.py
+--- a/Scripts/metal-checks.py
++++ b/Scripts/metal-checks.py
+@@ -2,6 +2,6 @@
+ import os,pathlib,subprocess
+ root=pathlib.Path(__file__).resolve().parents[1];out=pathlib.Path('/private/tmp/spektrafilm-build')
+ xcode=pathlib.Path('/Applications/Xcode.app/Contents/Developer');env=os.environ.copy();env['DEVELOPER_DIR']=str(xcode)
+-args=[str(xcode/'Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc'),'-sdk',str(xcode/'Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.2.sdk'),'-module-cache-path',str(out/'SymbolModuleCache'),str(root/'SpektraCam/Rendering/Metal/MetalStages.swift'),str(root/'Scripts/metal-checks.swift'),'-o',str(out/'metal-checks')]
++args=[str(xcode/'Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc'),'-sdk',str(xcode/'Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.2.sdk'),'-module-cache-path',str(out/'SymbolModuleCache'),str(root/'SpektraCam/Rendering/Metal/MetalDispatch.swift'),str(root/'SpektraCam/Rendering/Metal/MetalStages.swift'),str(root/'Scripts/metal-checks.swift'),'-o',str(out/'metal-checks')]
+ subprocess.run(args,env=env,check=True)
+ subprocess.run([str(out/'metal-checks'),str(root)],env=env,check=True)
+diff --git a/Scripts/metal-dispatch-checks.swift b/Scripts/metal-dispatch-checks.swift
+new file mode 100644
+--- /dev/null
++++ b/Scripts/metal-dispatch-checks.swift
+@@ -0,0 +1,46 @@
++import Foundation
++import Metal
++
++@main struct Checks {
++    static func main() throws {
++        guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
++            throw NSError(domain: "MetalDispatchChecks", code: 1,
++                          userInfo: [NSLocalizedDescriptionKey: "No accessible Metal device"])
++        }
++        let source = """
++            #include <metal_stdlib>
++            using namespace metal;
++            kernel void fill(device uint *output [[buffer(0)]], constant uint2 &size [[buffer(1)]],
++                             uint2 p [[thread_position_in_grid]]) {
++                if(p.x >= size.x || p.y >= size.y) return;
++                uint i = p.y * size.x + p.x;
++                output[i] = i;
++            }
++            """
++        let library = try device.makeLibrary(source: source, options: nil)
++        let pipeline = try device.makeComputePipelineState(function: library.makeFunction(name: "fill")!)
++        for (width, height) in [(1, 1), (127, 1), (128, 1), (129, 1), (517, 337)] {
++            let count = width * height
++            let sentinel = UInt32.max
++            let buffer = device.makeBuffer(length: (count + 128) * 4, options: .storageModeShared)!
++            let pixels = buffer.contents().assumingMemoryBound(to: UInt32.self)
++            pixels.initialize(repeating: sentinel, count: count + 128)
++            let command = queue.makeCommandBuffer()!
++            let encoder = command.makeComputeCommandEncoder()!
++            encoder.setComputePipelineState(pipeline)
++            encoder.setBuffer(buffer, offset: 0, index: 0)
++            var size = SIMD2<UInt32>(UInt32(width), UInt32(height))
++            encoder.setBytes(&size, length: MemoryLayout.size(ofValue: size), index: 1)
++            encoder.dispatchGrid(
++                MTLSize(width: width, height: height, depth: 1),
++                threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
++            encoder.endEncoding()
++            command.commit()
++            command.waitUntilCompleted()
++            precondition(command.status == .completed, "GPU dispatch failed: \(String(describing: command.error))")
++            precondition((0..<count).allSatisfy { pixels[$0] == UInt32($0) }, "Missing or aliased pixels")
++            precondition((count..<count + 128).allSatisfy { pixels[$0] == sentinel }, "Out-of-bounds writes")
++        }
++        print("PASS: uniform Metal dispatch covers tiny, aligned, partial, and odd 2D grids; canaries intact")
++    }
++}
+diff --git a/Scripts/metal-grain-checks.swift b/Scripts/metal-grain-checks.swift
+--- a/Scripts/metal-grain-checks.swift
++++ b/Scripts/metal-grain-checks.swift
+@@ -43,7 +43,7 @@
+         for (i, b) in [buffer(counters), buffer(keys), output].enumerated() {
+             encoder.setBuffer(b, offset: 0, index: i)
+         }
+-        encoder.dispatchThreads(
++        encoder.dispatchGrid(
+             MTLSize(width: 3, height: 1, depth: 1),
+             threadsPerThreadgroup: MTLSize(width: 3, height: 1, depth: 1))
+         encoder.endEncoding()
+diff --git a/SpektraCam/Features/Camera/CameraModel.swift b/SpektraCam/Features/Camera/CameraModel.swift
+--- a/SpektraCam/Features/Camera/CameraModel.swift
++++ b/SpektraCam/Features/Camera/CameraModel.swift
+@@ -4,7 +4,7 @@
+ 
+ @MainActor @Observable final class CameraModel {
+     enum State: Equatable {
+-        case starting, ready, paused, denied, unavailable
++        case starting, ready, paused, denied, unavailable, rawUnsupported
+         case failed(String)
+     }
+     private(set) var state = State.starting
+@@ -44,9 +44,15 @@
+     /// A capture is possible again as soon as its file is written; importing does not block it.
+     /// Only a failed import with captures still waiting holds the shutter.
+     var canCapture: Bool {
+-        state == .ready && outputReady && !busy && (saveFailure == nil || pendingCount == 0)
++        !closed && wantsActive && !held && state == .ready && outputReady && !busy
++            && (saveFailure == nil || pendingCount == 0)
++    }
++    var canFlip: Bool {
++        guard let selectedLens else { return false }
++        return lenses.contains { $0.front != selectedLens.front }
+     }
+     func toggleHold() async {
++        guard !closed, wantsActive, !busy, state == .ready || held else { return }
+         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+         if held {
+             held = false
+@@ -85,8 +91,9 @@
+         state = .starting
+         do {
+             let configuration = try await service.start()
++            guard !closed else { return }
+             apply(configuration)
+-            if wantsActive {
++            if wantsActive && !held {
+                 state = .ready
+                 pauseReason = nil
+                 location.setActive(true)
+@@ -101,13 +108,14 @@
+             switch error {
+             case CameraFailure.denied: state = .denied
+             case CameraFailure.unavailable: state = .unavailable
++            case CameraFailure.rawUnavailable: state = .rawUnsupported
+             default: state = .failed(error.localizedDescription)
+             }
+         }
+     }
+     func monitor() async {
+         for await event in service.events {
+-            guard !Task.isCancelled else { return }
++            guard !Task.isCancelled, !closed else { return }
+             switch event {
+             case .readings(let value):
+                 readings = value
+@@ -128,6 +136,7 @@
+         }
+     }
+     func takePhoto() async {
++        guard !closed, wantsActive else { return }
+         // The shutter wakes a held camera instead of failing silently.
+         if held {
+             await toggleHold()
+@@ -276,14 +285,24 @@
+         /// A stand-in camera for layout checks: every control is live, the viewfinder is empty.
+         static let demo = ProcessInfo.processInfo.arguments.contains("--ui-test-camera-demo")
+         private func applyDemo() {
++            if ProcessInfo.processInfo.arguments.contains("--ui-test-camera-no-raw") {
++                lenses = []
++                formats = []
++                outputReady = false
++                state = .rawUnsupported
++                return
++            }
++            let bayerOnly = ProcessInfo.processInfo.arguments.contains("--ui-test-camera-bayer-only")
+             lenses = [
+                 CameraLens(id: "13", millimeters: 13, front: false, macro: true, primary: false),
+                 CameraLens(id: "24", millimeters: 24, front: false, macro: false, primary: true),
+                 CameraLens(id: "120", millimeters: 120, front: false, macro: false, primary: false),
+                 CameraLens(id: "front", millimeters: 23, front: true, macro: false, primary: false),
+             ]
+-            if selectedLens == nil { selectedLens = lenses[1] }
+-            formats = CameraFormat.allCases
++            if bayerOnly { lenses = lenses.filter { $0.primary || $0.id == "120" } }
++            if selectedLens == nil { selectedLens = lenses.first(where: \.primary) }
++            formats = bayerOnly ? [.bayerRAW] : CameraFormat.allCases
++            if !formats.contains(format), let first = formats.first { format = first }
+             maximumMegapixels = 48
+             flashAvailable = selectedLens?.front != true
+             outputReady = true
+@@ -296,6 +315,8 @@
+     func close() async {
+         closed = true
+         wantsActive = false
++        outputReady = false
++        state = .paused
+         location.setActive(false)
+         await service.shutdown()
+     }
+diff --git a/SpektraCam/Features/Camera/CameraService.swift b/SpektraCam/Features/Camera/CameraService.swift
+--- a/SpektraCam/Features/Camera/CameraService.swift
++++ b/SpektraCam/Features/Camera/CameraService.swift
+@@ -130,14 +130,16 @@
+             flashAvailable: device.hasFlash && output.supportedFlashModes.contains(.on))
+     }
+     private func configure() throws {
++        // Keep rear sensors explicit for Bayer RAW. The system front-camera proxy follows
++        // folding automatically on Duo; its reported common capabilities are authoritative.
+         let discovered = AVCaptureDevice.DiscoverySession(
+             deviceTypes: [
+                 .builtInUltraWideCamera, .builtInWideAngleCamera, .builtInTelephotoCamera,
+             ],
+             mediaType: .video, position: .unspecified
+-        ).devices.filter { !$0.isVirtualDevice }
++        ).devices.filter { !$0.isVirtualDevice || $0.position == .front }
+         devices = Dictionary(uniqueKeysWithValues: discovered.map { ($0.uniqueID, $0) })
+-        lenses = discovered.map {
++        let candidates = discovered.map {
+             CameraLens(
+                 id: $0.uniqueID, millimeters: Int($0.nominalFocalLengthIn35mmFilm.rounded()),
+                 front: $0.position == .front,
+@@ -148,7 +150,7 @@
+         guard
+             let device = discovered.first(where: {
+                 $0.position == .back && $0.deviceType == .builtInWideAngleCamera
+-            })
++            }) ?? discovered.first
+         else { throw CameraFailure.unavailable }
+         session.beginConfiguration()
+         defer { session.commitConfiguration() }
+@@ -161,14 +163,37 @@
+         session.addInput(input)
+         guard session.canAddOutput(output) else { throw CameraFailure.configuration }
+         session.addOutput(output)
++        // RAW is an output capability of an attached input, not a property of a model name.
++        // Probe once, before starting the session, so unsupported sensors never become controls.
++        lenses = []
++        for candidate in candidates {
++            guard let device = devices[candidate.id] else { continue }
++            let candidateInput: AVCaptureDeviceInput
++            do { candidateInput = try inputs[candidate.id] ?? AVCaptureDeviceInput(device: device) }
++            catch { continue }
++            for attached in session.inputs { session.removeInput(attached) }
++            guard session.canAddInput(candidateInput) else { continue }
++            session.addInput(candidateInput)
++            if !rawPixelFormats().isEmpty {
++                inputs[candidate.id] = candidateInput
++                lenses.append(candidate)
++            }
++        }
++        guard let selected = lenses.first(where: { !$0.front && $0.primary })
++            ?? lenses.first(where: { !$0.front }) ?? lenses.first,
++            let selectedDevice = devices[selected.id], let selectedInput = inputs[selected.id]
++        else { throw CameraFailure.rawUnavailable }
++        for attached in session.inputs { session.removeInput(attached) }
++        guard session.canAddInput(selectedInput) else { throw CameraFailure.configuration }
++        session.addInput(selectedInput)
+         if session.canAddOutput(video) {
+             session.addOutput(video)
+             video.alwaysDiscardsLateVideoFrames = true
+             video.automaticallyConfiguresOutputBufferDimensions = false
+             video.deliversPreviewSizedOutputBuffers = true
+         }
+-        try configureOutput(device: device, macro: false)
+-        activeLens = lenses.first { $0.id == device.uniqueID }
++        try configureOutput(device: selectedDevice, macro: false)
++        activeLens = selected
+         observeSession()
+     }
+     private func configureOutput(device: AVCaptureDevice, macro: Bool) throws {
+@@ -187,10 +212,8 @@
+             device.autoFocusRangeRestriction = macro ? .near : .none
+         }
+         device.unlockForConfiguration()
+-        let supportsProRAW = output.isAppleProRAWSupported
+-        if output.isAppleProRAWEnabled != supportsProRAW {
+-            output.isAppleProRAWEnabled = supportsProRAW
+-        }
++        formats = rawPixelFormats()
++        guard !formats.isEmpty else { throw CameraFailure.rawUnavailable }
+         output.maxPhotoQualityPrioritization = .quality
+         // Shorten the time from press to capture and between captures where the format allows.
+         if output.isZeroShutterLagSupported { output.isZeroShutterLagEnabled = true }
+@@ -208,12 +231,6 @@
+         {
+             output.maxPhotoDimensions = selected
+         }
+-        formats = [:]
+-        for value in output.availableRawPhotoPixelFormatTypes {
+-            if AVCapturePhotoOutput.isAppleProRAWPixelFormat(value) { formats[.proRAW] = value }
+-            if AVCapturePhotoOutput.isBayerRAWPixelFormat(value) { formats[.bayerRAW] = value }
+-        }
+-        guard !formats.isEmpty else { throw CameraFailure.rawUnavailable }
+         if session.outputs.contains(video) {
+             guard
+                 let type = [
+@@ -238,6 +255,19 @@
+         prepareCapture()
+         Log.camera.debug(
+             "Photo size: \(self.output.maxPhotoDimensions.width)×\(self.output.maxPhotoDimensions.height)")
++    }
++    /// Query only after attaching a video input and the photo output to the session.
++    private func rawPixelFormats() -> [CameraFormat: OSType] {
++        let supportsProRAW = output.isAppleProRAWSupported
++        if output.isAppleProRAWEnabled != supportsProRAW {
++            output.isAppleProRAWEnabled = supportsProRAW
++        }
++        var result: [CameraFormat: OSType] = [:]
++        for value in output.availableRawPhotoPixelFormatTypes {
++            if AVCapturePhotoOutput.isAppleProRAWPixelFormat(value) { result[.proRAW] = value }
++            if AVCapturePhotoOutput.isBayerRAWPixelFormat(value) { result[.bayerRAW] = value }
++        }
++        return result
+     }
+     /// Camera Control: a light press and slide adjusts exposure for the active lens.
+     private func configureControls(device: AVCaptureDevice) {
+diff --git a/SpektraCam/Features/Camera/CameraView.swift b/SpektraCam/Features/Camera/CameraView.swift
+--- a/SpektraCam/Features/Camera/CameraView.swift
++++ b/SpektraCam/Features/Camera/CameraView.swift
+@@ -59,34 +59,29 @@
+             .safeAreaInset(edge: .bottom) {
+                 VStack(spacing: 14) {
+                     importFailure
+-                    if layout == .stacked {
+-                        // The rows keep their place while the camera starts or is on hold, so
+-                        // the shutter never moves under the thumb.
+-                        Group {
+-                            exposureControl
++                    // The same optics row in every window shape. Equal side controls and
++                    // independent centering keep lens selection in the same predictable place.
++                    Group {
++                        exposureControl
++                        ZStack {
+                             HStack {
+                                 flashButton
+-                                Spacer(minLength: 8)
+-                                lensPicker
+-                                Spacer(minLength: 8)
++                                Spacer()
+                                 flipButton
+                             }
++                            lensPicker
+                         }
+-                        .disabled(!ready)
++                    }
++                    .disabled(!ready)
++                    if layout == .stacked {
+                         ZStack {
+                             HStack {
+                                 libraryButton
+                                 Spacer()
+                                 holdButton
+                             }
+-                            shutterButton
++                            shutterSlot
+                         }
+-                    } else {
+-                        HStack(spacing: 16) {
+-                            lensPicker
+-                            exposureControl
+-                        }
+-                        .disabled(!ready)
+                     }
+                 }
+                 .padding(.horizontal, 20).padding(.bottom, 12)
+@@ -94,20 +89,28 @@
+             .safeAreaInset(edge: .trailing) {
+                 // Wider than tall: the shutter column moves under the thumb on the trailing edge.
+                 if layout == .sideBySide {
+-                    VStack(spacing: 14) {
+-                        Group {
+-                            flipButton
+-                            flashButton
+-                        }
+-                        .disabled(!ready)
+-                        Spacer(minLength: 0)
+-                        shutterButton
++                    VStack {
++                        libraryButton
+                         Spacer(minLength: 0)
+                         holdButton
+-                        libraryButton
+-                    }
++                    }
++                    .frame(width: 78)
++                    .overlay { shutterSlot }
+                     .padding(.vertical).padding(.trailing, 12)
+                 }
++            }
++        }
++        .overlayPreferenceValue(CameraShutterBounds.self) { anchor in
++            if let anchor {
++                GeometryReader { proxy in
++                    let slot = proxy[anchor]
++                    // The slot supplies the edge placement; the full presentation supplies
++                    // the center axis. Neither accessory widths nor system bars can shift it.
++                    shutterButton.position(
++                        x: layout == .stacked ? proxy.size.width / 2 : slot.midX,
++                        y: layout == .sideBySide ? proxy.size.height / 2 : slot.midY)
++                }
++                .ignoresSafeArea(.container)
+             }
+         }
+         .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
+@@ -152,10 +155,9 @@
+             if !ready { status }
+         }
+             .padding(.horizontal, layout == .stacked ? 6 : 12)
+-            // Volume buttons and Camera Control take the photo, as in the system camera. The
+-            // interaction belongs to the viewfinder and only while there is a camera to fire:
+-            // on the whole screen it swallowed toolbar taps on iPhone Duo.
+-            .onCameraCaptureEvent(isEnabled: ready || model.held) { event in
++            // Hardware capture follows the same readiness as the shutter. A held camera has
++            // no running session, so volume buttons retain their system behavior until resumed.
++            .onCameraCaptureEvent(isEnabled: scenePhase == .active && model.canCapture) { event in
+                 if event.phase == .ended { Task { await model.takePhoto() } }
+             }
+     }
+@@ -181,6 +183,16 @@
+                         defaultValue: "RAW capture needs a physical device."))
+             )
+             .accessibilityIdentifier("camera.unavailable")
++        case .rawUnsupported:
++            ContentUnavailableView(
++                String(localized: "camera.raw_unavailable", defaultValue: "RAW Capture Unavailable"),
++                systemImage: "camera",
++                description: Text(
++                    String(
++                        localized: "camera.raw_unsupported_note",
++                        defaultValue: "This device’s cameras do not provide a supported RAW format. You can still import and edit photos."))
++            )
++            .accessibilityIdentifier("camera.rawUnsupported")
+         case .denied:
+             ContentUnavailableView {
+                 Label(
+@@ -213,6 +225,12 @@
+ 
+     // MARK: Controls
+ 
++    private var shutterSlot: some View {
++        Color.clear.frame(width: 78, height: 78)
++            .anchorPreference(key: CameraShutterBounds.self, value: .bounds) { $0 }
++            .allowsHitTesting(false)
++    }
++
+     private var exposureControl: some View {
+         CameraExposureControl(
+             value: Binding(get: { model.exposureBias }, set: model.setExposureBias),
+@@ -312,7 +330,7 @@
+         }
+         .buttonStyle(.plain)
+         .accessibilityLabel(String(localized: "camera.flip_camera", defaultValue: "Flip Camera"))
+-        .disabled(model.busy || !model.lenses.contains(where: \.front))
++        .disabled(model.busy || !model.canFlip)
+         .accessibilityIdentifier("camera.flip")
+     }
+ 
+@@ -385,11 +403,11 @@
+         .accessibilityIdentifier("camera.shutter")
+     }
+ 
+-    /// Bayer RAW is the sensor's binned 12 MP readout; only ProRAW offers the full resolution.
+     private var megapixels: Int {
+         model.format == .proRAW && model.highResolution ? model.maximumMegapixels : 12
+     }
+-    private var formatSummary: String { (model.format == .proRAW ? "PRO" : "RAW") + " \(megapixels)" }
++    // Bayer RAW dimensions come from the sensor, not a universal 12 MP promise.
++    private var formatSummary: String { model.format == .proRAW ? "PRO \(megapixels)" : "RAW" }
+     @ViewBuilder private var formatControl: some View {
+         if !model.formats.isEmpty {
+             Menu {
+@@ -421,11 +439,18 @@
+                 Text(verbatim: formatSummary).font(.caption.weight(.semibold)).monospacedDigit()
+             }
+             .disabled(model.busy).accessibilityIdentifier("camera.format")
+-            .accessibilityLabel(model.format.title + ", \(megapixels) MP")
++            .accessibilityLabel(model.format == .proRAW ? model.format.title + ", \(megapixels) MP" : model.format.title)
+         } else {
+             Text("DNG").font(.caption.weight(.semibold)).accessibilityLabel(
+                 String(localized: "camera.dng_raw", defaultValue: "DNG RAW"))
+         }
++    }
++}
++
++private struct CameraShutterBounds: PreferenceKey {
++    nonisolated static var defaultValue: Anchor<CGRect>? { nil }
++    nonisolated static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
++        value = nextValue() ?? value
+     }
+ }
+ 
+diff --git a/SpektraCam/Rendering/Metal/MetalColorPipeline.swift b/SpektraCam/Rendering/Metal/MetalColorPipeline.swift
+--- a/SpektraCam/Rendering/Metal/MetalColorPipeline.swift
++++ b/SpektraCam/Rendering/Metal/MetalColorPipeline.swift
+@@ -56,7 +56,7 @@
+         encoder.setBytes(&shape, length: MemoryLayout.size(ofValue: shape), index: 10)
+         encoder.setBytes(&flags, length: MemoryLayout.size(ofValue: flags), index: 11)
+         let threads = min(kernel.maxTotalThreadsPerThreadgroup, kernel.threadExecutionWidth * 4)
+-        encoder.dispatchThreads(
++        encoder.dispatchGrid(
+             MTLSize(width: input.count, height: 1, depth: 1),
+             threadsPerThreadgroup: MTLSize(width: threads, height: 1, depth: 1))
+         encoder.endEncoding()
+diff --git a/SpektraCam/Rendering/Metal/MetalDiffusion.swift b/SpektraCam/Rendering/Metal/MetalDiffusion.swift
+--- a/SpektraCam/Rendering/Metal/MetalDiffusion.swift
++++ b/SpektraCam/Rendering/Metal/MetalDiffusion.swift
+@@ -202,7 +202,7 @@
+             prepare.setBytes(&dimensions, length: 16, index: 2)
+             prepare.setBytes(&border, length: 4, index: 3)
+             prepare.setBytes(&wholeSample, length: 4, index: 4)
+-            prepare.dispatchThreads(
++            prepare.dispatchGrid(
+                 MTLSize(width: fw, height: fh, depth: 1),
+                 threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
+             prepare.endEncoding()
+@@ -300,7 +300,7 @@
+         prepare.setBytes(&dimensions, length: 16, index: 2)
+         prepare.setBytes(&border, length: 4, index: 3)
+         prepare.setBytes(&edge, length: 4, index: 4)
+-        prepare.dispatchThreads(
++        prepare.dispatchGrid(
+             MTLSize(width: fw, height: fh, depth: 1),
+             threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
+         prepare.endEncoding()
+@@ -387,7 +387,7 @@
+     private func dispatch(
+         _ encoder: MTLComputeCommandEncoder, _ pipeline: MTLComputePipelineState, _ count: Int
+     ) {
+-        encoder.dispatchThreads(
++        encoder.dispatchGrid(
+             MTLSize(width: count, height: 1, depth: 1),
+             threadsPerThreadgroup: MTLSize(
+                 width: min(128, pipeline.maxTotalThreadsPerThreadgroup), height: 1, depth: 1))
+diff --git a/SpektraCam/Rendering/Metal/MetalDispatch.swift b/SpektraCam/Rendering/Metal/MetalDispatch.swift
+new file mode 100644
+--- /dev/null
++++ b/SpektraCam/Rendering/Metal/MetalDispatch.swift
+@@ -0,0 +1,15 @@
++import Metal
++
++extension MTLComputeCommandEncoder {
++    /// Uniform threadgroups work on every Metal device, including Simulator GPUs that do not
++    /// support nonuniform dispatch. Kernels must guard the logical bounds before accessing data.
++    nonisolated func dispatchGrid(_ grid: MTLSize, threadsPerThreadgroup group: MTLSize) {
++        guard grid.width > 0, grid.height > 0, grid.depth > 0 else { return }
++        dispatchThreadgroups(
++            MTLSize(
++                width: 1 + (grid.width - 1) / group.width,
++                height: 1 + (grid.height - 1) / group.height,
++                depth: 1 + (grid.depth - 1) / group.depth),
++            threadsPerThreadgroup: group)
++    }
++}
+diff --git a/SpektraCam/Rendering/Metal/MetalFilmPipeline.swift b/SpektraCam/Rendering/Metal/MetalFilmPipeline.swift
+--- a/SpektraCam/Rendering/Metal/MetalFilmPipeline.swift
++++ b/SpektraCam/Rendering/Metal/MetalFilmPipeline.swift
+@@ -441,7 +441,7 @@
+         }
+         var n = UInt32(count)
+         e.setBytes(&n, length: 4, index: 4)
+-        e.dispatchThreads(
++        e.dispatchGrid(
+             MTLSize(width: count, height: 1, depth: 1),
+             threadsPerThreadgroup: MTLSize(
+                 width: min(128, function.maxTotalThreadsPerThreadgroup), height: 1, depth: 1))
+@@ -761,7 +761,7 @@
+         e.setBytes(&a, length: 16, index: 2)
+         e.setBytes(&b, length: 16, index: 3)
+         e.setBytes(&c, length: 16, index: 4)
+-        e.dispatchThreads(
++        e.dispatchGrid(
+             MTLSize(width: (payload.w + f - 1) / f, height: (payload.h + f - 1) / f, depth: 1),
+             threadsPerThreadgroup: MTLSize(width: 16, height: 8, depth: 1))
+         e.endEncoding()
+@@ -854,7 +854,7 @@
+             var shape = SIMD4<UInt32>(
+                 UInt32(run.paddedWidth), UInt32(run.proxyWidth), UInt32(run.proxyHeight), 0)
+             crop.setBytes(&shape, length: 16, index: 2)
+-            crop.dispatchThreads(
++            crop.dispatchGrid(
+                 MTLSize(width: run.proxyWidth * run.proxyHeight, height: 1, depth: 1),
+                 threadsPerThreadgroup: MTLSize(
+                     width: min(128, function.maxTotalThreadsPerThreadgroup), height: 1, depth: 1))
+@@ -918,7 +918,7 @@
+         }
+         func dispatch(_ e: MTLComputeCommandEncoder, _ name: String, _ requestedCount: Int? = nil) {
+             let n = requestedCount ?? count
+-            e.dispatchThreads(
++            e.dispatchGrid(
+                 MTLSize(width: n, height: 1, depth: 1),
+                 threadsPerThreadgroup: MTLSize(
+                     width: min(128, functions[name]!.maxTotalThreadsPerThreadgroup), height: 1,
+diff --git a/SpektraCam/Rendering/Metal/MetalGrain.swift b/SpektraCam/Rendering/Metal/MetalGrain.swift
+--- a/SpektraCam/Rendering/Metal/MetalGrain.swift
++++ b/SpektraCam/Rendering/Metal/MetalGrain.swift
+@@ -44,7 +44,7 @@
+         var key = SIMD2<UInt32>(UInt32(truncatingIfNeeded: seed), UInt32(truncatingIfNeeded: seed >> 32))
+         encoder.setBytes(&shape, length: MemoryLayout.size(ofValue: shape), index: 3)
+         encoder.setBytes(&key, length: MemoryLayout.size(ofValue: key), index: 4)
+-        encoder.dispatchThreads(
++        encoder.dispatchGrid(
+             MTLSize(width: density.count, height: 1, depth: 1),
+             threadsPerThreadgroup: MTLSize(
+                 width: min(128, kernel.maxTotalThreadsPerThreadgroup), height: 1, depth: 1))
+diff --git a/SpektraCam/Rendering/Metal/MetalStages.swift b/SpektraCam/Rendering/Metal/MetalStages.swift
+--- a/SpektraCam/Rendering/Metal/MetalStages.swift
++++ b/SpektraCam/Rendering/Metal/MetalStages.swift
+@@ -66,7 +66,7 @@
+         var shape = SIMD2<UInt32>(UInt32(count), UInt32(samples))
+         encoder.setBytes(&shape, length: MemoryLayout.size(ofValue: shape), index: inputs.count + 1)
+         let width = min(pipeline.maxTotalThreadsPerThreadgroup, pipeline.threadExecutionWidth * 4)
+-        encoder.dispatchThreads(
++        encoder.dispatchGrid(
+             MTLSize(width: count, height: 1, depth: 1),
+             threadsPerThreadgroup: MTLSize(width: width, height: 1, depth: 1))
+         encoder.endEncoding()
+diff --git a/SpektraCam/Rendering/ToneRenderer.swift b/SpektraCam/Rendering/ToneRenderer.swift
+--- a/SpektraCam/Rendering/ToneRenderer.swift
++++ b/SpektraCam/Rendering/ToneRenderer.swift
+@@ -359,7 +359,7 @@
+ 
+         parameters.withUnsafeBytes { encoder.setBytes($0.baseAddress!, length: $0.count, index: 0) }
+         let group = pipeline.threadExecutionWidth
+-        encoder.dispatchThreads(
++        encoder.dispatchGrid(
+             MTLSize(width: width, height: height, depth: 1),
+             threadsPerThreadgroup: MTLSize(
+                 width: group, height: max(1, pipeline.maxTotalThreadsPerThreadgroup / group),
+diff --git a/SpektraCam/Resources/Localizable.xcstrings b/SpektraCam/Resources/Localizable.xcstrings
+--- a/SpektraCam/Resources/Localizable.xcstrings
++++ b/SpektraCam/Resources/Localizable.xcstrings
+@@ -1,6 +1,40 @@
+ {
+   "sourceLanguage" : "en",
+   "strings" : {
++    "camera.raw_unavailable" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "RAW Capture Unavailable"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "无法拍摄 RAW"
++          }
++        }
++      }
++    },
++    "camera.raw_unsupported_note" : {
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "This device’s cameras do not provide a supported RAW format. You can still import and edit photos."
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "此设备的相机不提供受支持的 RAW 格式。你仍可导入和编辑照片。"
++          }
++        }
++      }
++    },
+     "%lld³" : {
+       "comment" : "Fixed brand, acronym or mathematical notation. Do not translate.",
+       "extractionState" : "manual",
+diff --git a/SpektraCamUITests/CameraLifecycleTests.swift b/SpektraCamUITests/CameraLifecycleTests.swift
+new file mode 100644
+--- /dev/null
++++ b/SpektraCamUITests/CameraLifecycleTests.swift
+@@ -0,0 +1,124 @@
++import UIKit
++import XCTest
++
++/// Run unchanged on phone, Duo (both displays), and iPad (full screen and windowed).
++final class CameraLifecycleTests: XCTestCase {
++    @MainActor func testPortraitRoundTrip() throws { try roundTrip(.portrait) }
++    @MainActor func testLandscapeRoundTrip() throws { try roundTrip(.landscapeLeft) }
++
++    @MainActor private func roundTrip(_ orientation: UIDeviceOrientation) throws {
++        continueAfterFailure = false
++        XCUIDevice.shared.orientation = orientation
++        // Odd dimensions exercise partial GPU groups in thumbnails, previews, and grading.
++        let format = UIGraphicsImageRendererFormat()
++        format.scale = 1
++        let image = UIGraphicsImageRenderer(size: CGSize(width: 517, height: 337), format: format)
++            .image { context in
++                UIColor.gray.setFill()
++                context.fill(CGRect(x: 0, y: 0, width: 517, height: 337))
++                UIColor.orange.setFill()
++                context.fill(CGRect(x: 0, y: 0, width: 259, height: 169))
++            }
++        let photo = FileManager.default.temporaryDirectory.appendingPathComponent("camera-round-trip.png")
++        try XCTUnwrap(image.pngData()).write(to: photo)
++        defer { try? FileManager.default.removeItem(at: photo) }
++        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.spektracam")
++        app.launchArguments = [
++            "--ui-test-library", "--reset-test-library", "--ui-test-camera-demo",
++            "--ui-test-import", photo.path,
++        ]
++        app.launch()
++        let cell = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'library.photo.'")).firstMatch
++        XCTAssertTrue(cell.waitForExistence(timeout: 30))
++        for useLibraryButton in [false, true] {
++            app.buttons["camera.open"].tap()
++            let shutter = app.buttons["camera.shutter"]
++            XCTAssertTrue(app.buttons["camera.lens.24"].waitForExistence(timeout: 10))
++            XCTAssertTrue(shutter.isEnabled)
++            let window = app.windows.firstMatch.frame
++            if window.width > window.height && window.width >= 560 {
++                XCTAssertEqual(shutter.frame.midY, window.midY, accuracy: 1, "Landscape shutter is off center")
++            } else {
++                XCTAssertEqual(shutter.frame.midX, window.midX, accuracy: 1, "Portrait shutter is off center")
++            }
++            let flash = app.buttons["camera.flash"].frame
++            let flip = app.buttons["camera.flip"].frame
++            XCTAssertEqual(app.buttons["camera.lens.24"].frame.midY, flash.midY, accuracy: 1)
++            XCTAssertEqual(flip.midY, flash.midY, accuracy: 1)
++            app.buttons["camera.hold"].tap()
++            let hold = app.descendants(matching: .any)["camera.hold.screen"]
++            XCTAssertTrue(hold.waitForExistence(timeout: 5))
++            if !useLibraryButton {
++                XCUIDevice.shared.press(.home)
++                app.activate()
++                XCTAssertTrue(hold.waitForExistence(timeout: 5), "Foregrounding ended a user hold")
++            }
++            shutter.tap()
++            XCTAssertTrue(hold.waitForNonExistence(timeout: 5))
++            XCTAssertTrue(shutter.isEnabled)
++            XCUIDevice.shared.orientation = orientation.isLandscape ? .portrait : .landscapeLeft
++            app.buttons[useLibraryButton ? "camera.library" : "camera.close"].tap()
++            XCTAssertTrue(app.buttons["camera.close"].waitForNonExistence(timeout: 10))
++            // A visible or hittable library is insufficient: prove that a real action works.
++            app.buttons["library.info"].tap()
++            XCTAssertTrue(app.buttons["about.importFiles"].waitForExistence(timeout: 5))
++            app.buttons["Done"].tap()
++        }
++        cell.tap()
++        XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 10))
++        app.buttons["photo.develop"].tap()
++        let film = app.buttons["develop.mode.spektrafilm"]
++        XCTAssertTrue(film.waitForExistence(timeout: 30))
++        film.tap()
++        let preview = app.images["Edited photo"]
++        XCTAssertTrue(preview.waitForExistence(timeout: 30))
++        XCTAssertTrue(app.activityIndicators["Rendering preview"].waitForNonExistence(timeout: 30))
++        app.buttons["editor.tool.adjust"].tap()
++        let slider = app.sliders["tone.exposure"]
++        XCTAssertTrue(slider.waitForExistence(timeout: 10))
++        slider.adjust(toNormalizedSliderPosition: 0.6)
++        XCTAssertTrue(app.activityIndicators["Rendering preview"].waitForNonExistence(timeout: 30))
++        // Dismiss from inside the editor too; its navigation state must survive the camera.
++        app.buttons["camera.open"].tap()
++        XCTAssertTrue(app.buttons["camera.close"].waitForExistence(timeout: 10))
++        app.buttons["camera.close"].tap()
++        XCTAssertTrue(app.buttons["camera.close"].waitForNonExistence(timeout: 10))
++        app.buttons["editor.back"].tap()
++        XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 15))
++        let screenshot = XCTAttachment(screenshot: app.screenshot())
++        screenshot.name = "Camera returned to a working rendered photo"
++        screenshot.lifetime = .keepAlways
++        add(screenshot)
++    }
++
++    @MainActor func testBayerOnlyCamera() {
++        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.spektracam")
++        app.launchArguments = ["--ui-test-library", "--reset-test-library", "--ui-test-camera-demo", "--ui-test-camera-bayer-only"]
++        app.launch()
++        XCTAssertTrue(app.buttons["camera.open"].waitForExistence(timeout: 15))
++        app.buttons["camera.open"].tap()
++        XCTAssertTrue(app.buttons["camera.lens.24"].waitForExistence(timeout: 10))
++        XCTAssertTrue(app.buttons["camera.lens.120"].exists)
++        XCTAssertFalse(app.buttons["camera.lens.13"].exists)
++        XCTAssertFalse(app.buttons["camera.flip"].isEnabled)
++        XCTAssertTrue(app.buttons["camera.format"].label.contains("Bayer RAW"))
++        app.buttons["camera.lens.120"].tap()
++        XCTAssertTrue(app.buttons["camera.lens.120"].isSelected)
++        app.buttons["camera.close"].tap()
++        XCTAssertTrue(app.buttons["library.info"].waitForExistence(timeout: 10))
++    }
++
++    @MainActor func testNoRAWCameraKeepsLibraryAvailable() {
++        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.spektracam")
++        app.launchArguments = ["--ui-test-library", "--reset-test-library", "--ui-test-camera-demo", "--ui-test-camera-no-raw"]
++        app.launch()
++        XCTAssertTrue(app.buttons["camera.open"].waitForExistence(timeout: 15))
++        app.buttons["camera.open"].tap()
++        XCTAssertTrue(app.descendants(matching: .any)["camera.rawUnsupported"].waitForExistence(timeout: 10))
++        XCTAssertFalse(app.buttons["camera.shutter"].isEnabled)
++        XCTAssertFalse(app.buttons["camera.flip"].isEnabled)
++        app.buttons["camera.close"].tap()
++        app.buttons["library.info"].tap()
++        XCTAssertTrue(app.buttons["about.importFiles"].waitForExistence(timeout: 10))
++    }
++}

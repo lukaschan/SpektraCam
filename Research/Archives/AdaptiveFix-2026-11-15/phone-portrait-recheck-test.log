@@ -1,0 +1,135 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -project SpektraCam.xcodeproj -scheme SpektraCam -configuration Debug -sdk iphonesimulator -destination id=5208EE70-99A9-46FB-827E-8AC10F2B547B -derivedDataPath /private/tmp/spektracam-adaptive-validation CODE_SIGNING_ALLOWED=NO -parallel-testing-enabled NO "-only-testing:SpektraCamUITests/CameraLifecycleTests/testPortraitRoundTrip" -resultBundlePath /Users/runzeni/dev/Xcode/SpektraCam-adaptive/Research/Archives/AdaptiveFix-2026-11-15/phone-portrait-recheck.xcresult test-without-building
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+    SDKROOT = iphonesimulator27.2
+
+Writing result bundle at path:
+	/Users/runzeni/dev/Xcode/SpektraCam-adaptive/Research/Archives/AdaptiveFix-2026-11-15/phone-portrait-recheck.xcresult
+
+2026-11-15 21:05:00.857808-0500 SpektraCamUITests-Runner[71980:31379761] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-11-15 21:05:02.593.
+Test Suite 'SpektraCamUITests.xctest' started at 2026-11-15 21:05:02.594.
+Test Suite 'CameraLifecycleTests' started at 2026-11-15 21:05:02.594.
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testPortraitRoundTrip]' started.
+    t =     0.00s Start Test at 2026-11-15 21:05:02.595
+    t =     0.02s Set Up
+    t =     0.02s Setting device orientation to Portrait
+    t =     0.02s     Device orientation changed to Portrait
+    t =     0.03s     Wait for com.apple.springboard to idle
+    t =     0.04s Open io.github.runzeni.spektracam
+    t =     0.04s     Launch io.github.runzeni.spektracam
+2026-11-15 21:05:02.693 xcodebuild[71971:31379469] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-11-15 21:05:02.693 xcodebuild[71971:31379469] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[71980]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.6Bkzfr/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x105b4c310) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.2.8117.0.6Bkzfr/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.2.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x105ba0398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     2.55s         Setting up automation session
+    t =     4.22s         Wait for io.github.runzeni.spektracam to idle
+    t =     5.78s Waiting 30.0s for Button (First Match) to exist
+    t =     6.82s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =     6.82s         Checking existence of `Button (First Match)`
+    t =     6.88s Tap "camera.open" Button
+    t =     6.88s     Wait for io.github.runzeni.spektracam to idle
+    t =     6.89s     Find the "camera.open" Button
+    t =     6.93s     Check for interrupting elements affecting "camera.open" Button
+    t =     6.95s     Synthesize event
+    t =     7.24s     Wait for io.github.runzeni.spektracam to idle
+    t =     7.96s Waiting 10.0s for "camera.lens.24" Button to exist
+    t =     9.00s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.lens.24" Button`
+    t =     9.00s         Checking existence of `"camera.lens.24" Button`
+    t =     9.06s Find the "camera.shutter" Button
+    t =     9.08s Find the Window (First Match)
+    t =     9.09s Find the "camera.shutter" Button
+    t =     9.12s Find the "camera.flash" Button
+    t =     9.14s Find the "camera.flip" Button
+    t =     9.17s Find the "camera.lens.24" Button
+    t =     9.20s Tap "camera.hold" Button
+    t =     9.20s     Wait for io.github.runzeni.spektracam to idle
+    t =     9.20s     Find the "camera.hold" Button
+    t =     9.23s     Check for interrupting elements affecting "camera.hold" Button
+    t =     9.25s     Synthesize event
+    t =     9.54s     Wait for io.github.runzeni.spektracam to idle
+    t =    10.25s Waiting 5.0s for "camera.hold.screen" Any to exist
+    t =    11.28s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.hold.screen" Any`
+    t =    11.28s         Checking existence of `"camera.hold.screen" Any`
+    t =    11.32s Pressing Home button
+    t =    11.79s Open io.github.runzeni.spektracam
+    t =    11.79s     Activate io.github.runzeni.spektracam
+    t =    12.27s         Wait for io.github.runzeni.spektracam to idle
+    t =    12.45s Waiting 5.0s for "camera.hold.screen" Any to exist
+    t =    13.48s     Checking `Expect predicate `existsNoRetry == 1` for object "camera.hold.screen" Any`
+    t =    13.48s         Checking existence of `"camera.hold.screen" Any`
+    t =    13.53s Tap "camera.shutter" Button
+    t =    13.53s     Wait for io.github.runzeni.spektracam to idle
+    t =    13.53s     Find the "camera.shutter" Button
+    t =    13.56s     Check for interrupting elements affecting "camera.shutter" Button
+    t =    13.59s     Synthesize event
+    t =    13.87s     Wait for io.github.runzeni.spektracam to idle
+    t =    13.88s Waiting 5.0s for "camera.hold.screen" Any to not exist
+    t =    14.91s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.hold.screen" Any`
+    t =    14.91s         Checking existence of `"camera.hold.screen" Any`
+    t =    14.96s Find the "camera.shutter" Button
+    t =    14.99s Setting device orientation to Landscape Left
+    t =    14.99s     Device orientation changed to Landscape Left
+    t =    14.99s     Wait for io.github.runzeni.spektracam to idle
+    t =    15.00s Tap "camera.close" Button
+    t =    15.00s     Wait for io.github.runzeni.spektracam to idle
+    t =    15.00s     Find the "camera.close" Button
+    t =    15.03s     Check for interrupting elements affecting "camera.close" Button
+    t =    15.05s     Synthesize event
+    t =    15.35s     Wait for io.github.runzeni.spektracam to idle
+    t =    15.83s         Interface orientation changed to Landscape Right
+    t =    16.75s Waiting 10.0s for "camera.close" Button to not exist
+    t =    17.78s     Checking `Expect predicate `existsNoRetry == 0` for object "camera.close" Button`
+    t =    17.78s         Checking existence of `"camera.close" Button`
+    t =    17.82s Tap "library.info" Button
+    t =    17.82s     Wait for io.github.runzeni.spektracam to idle
+    t =    17.82s     Find the "library.info" Button
+    t =    17.84s     Check for interrupting elements affecting "library.info" Button
+    t =    17.86s     Synthesize event
+    t =    18.15s     Wait for io.github.runzeni.spektracam to idle
+    t =    18.58s Waiting 5.0s for "about.importFiles" Button to exist
+    t =    19.61s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    19.61s         Checking existence of `"about.importFiles" Button`
+    t =    19.67s         Capturing element debug description
+    t =    20.60s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    20.60s         Checking existence of `"about.importFiles" Button`
+    t =    20.63s         Capturing element debug description
+    t =    21.67s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    21.67s         Checking existence of `"about.importFiles" Button`
+    t =    21.72s         Capturing element debug description
+    t =    22.65s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    22.65s         Checking existence of `"about.importFiles" Button`
+    t =    22.68s         Capturing element debug description
+    t =    23.58s     Checking `Expect predicate `existsNoRetry == 1` for object "about.importFiles" Button`
+    t =    23.58s         Checking existence of `"about.importFiles" Button`
+    t =    23.62s         Capturing element debug description
+    t =    23.62s     Checking existence of `"about.importFiles" Button`
+    t =    23.65s Collecting debug information to assist test failure triage
+    t =    23.65s     Requesting snapshot of accessibility hierarchy for app with pid 72010
+/Users/runzeni/dev/Xcode/SpektraCam-adaptive/SpektraCamUITests/CameraLifecycleTests.swift:64: error: -[SpektraCamUITests.CameraLifecycleTests testPortraitRoundTrip] : XCTAssertTrue failed
+    t =    23.71s Tear Down
+Test Case '-[SpektraCamUITests.CameraLifecycleTests testPortraitRoundTrip]' failed (23.952 seconds).
+Test Suite 'CameraLifecycleTests' failed at 2026-11-15 21:05:26.549.
+	 Executed 1 test, with 1 failure (0 unexpected) in 23.952 (23.955) seconds
+Test Suite 'SpektraCamUITests.xctest' failed at 2026-11-15 21:05:26.549.
+	 Executed 1 test, with 1 failure (0 unexpected) in 23.952 (23.956) seconds
+Test Suite 'Selected tests' failed at 2026-11-15 21:05:26.550.
+	 Executed 1 test, with 1 failure (0 unexpected) in 23.952 (23.957) seconds
+2026-11-15 21:05:26.855 xcodebuild[71971:31379510]  IDETestOperationsObserverDebug: Failure collecting diagnostics from simulator: Process exited with error 72:
+ xcrun: error: unable to find utility "simctl", not a developer tool or in PATH
+
+2026-11-15 21:05:26.859 xcodebuild[71971:31379469] [MT] IDETestOperationsObserverDebug: 26.817 elapsed -- Testing started completed.
+2026-11-15 21:05:26.859 xcodebuild[71971:31379469] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-15 21:05:26.859 xcodebuild[71971:31379469] [MT] IDETestOperationsObserverDebug: 26.817 sec, +26.817 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runzeni/dev/Xcode/SpektraCam-adaptive/Research/Archives/AdaptiveFix-2026-11-15/phone-portrait-recheck.xcresult
+
+Failing tests:
+	CameraLifecycleTests.testPortraitRoundTrip()
+
+** TEST EXECUTE FAILED **
+
+Testing started

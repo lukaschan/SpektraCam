@@ -2,6 +2,99 @@
 
 Updated 2026-11-10. This file is the repository handoff point; read it before continuing Darkroom work. Changes are local and uncommitted. Preserve the preexisting Xcode project version/signing edits.
 
+## Nov 14 (night) — Scans: framing, direct camera scans, inverted holder
+
+- `FilmEdgeLayout.scanZoom` (0.75–1.05, default 0.85): non-enlarger canvases are the scanner's crop window, gate / zoom. Its edge is a digital crop.
+- `FilmEdgeDistress.scanHolder` / `invertedScan` (resolved, not saved): negative scans (direct and inverted) have a holder, open along the strip (`carrierHalf.along = 1e4`) and masking across at gate + 0.83 mm on 35 mm (12.83 mm; KS hole inner edge 12.68 mm). Measured on P1485707 at 318 px/mm (hole pitch 1513 px = 4.75 mm): ≈ 0.17 mm of hole shows. Positive scans have no holder (`carrierHalf = 1e4`). Default `scanZoom` 0.9.
+- Inverted scan: no holder at the print stage; the final linear stage runs `[.endpoint]` then `[.invertedHolder]` (CPU `invertedHolder`, Metal `edge_inverted_holder`, mode 32). c = penumbra(d + 0.02·wear, holder blur) (core only, no tail); q = max(P, 0)·s + 0.012; v = 1 / (c^γ / q + (1 − c) / (1.1 W)), γ = (1.4, 1.0, 0.75), W = (1, 0.82, 0.78); noise ×10^(n σ (1 − c)), σ = 0.7 (1 − c) min(1, c / 0.15) + 0.08, streaked 3:1 along the strip at max(0.015 mm, 2.7 px radius) / max(0.045 mm, 5.4 px radius); s = 1 − 0.55 e^(d/0.07) inside the opening. To-scale proof at 100 px/mm against P1485707.
+- `FilmEdgeGeometry.registration`: seeded ±0.3 mm along-strip shift of the source holes (`e[16].z`); destination (cinema print) holes fixed.
+- `PrintLayout.marginRange` = −0.2…0.2, shown in %; Fill = `PrintGeometry.fillMargin` (negative when proportions differ). Film-edge enlarger prints default to `PrintLayout.enlargerDefault` (5 × 7).
+- `NumericEntry` is a popover (`presentationCompactAdaptation(.popover)`) with the label's rounding, step nudges with repeat, range hint, reset, Done. Value labels sit in a quiet capsule.
+
+## Nov 14 (evening) — Worn blade edges, easel border and Fill
+
+**Negative scan** (`FilmEdgeType.invertedScan`, shown after Negative print): the print route's positive (`scanFilm = false`, same material defaults as Negative print) with `enlargerPrint = false`, so the scanner holder replaces the easel. The holder blocks the exposure and comes out paper-light; the thin rebate is dark (navy on a colour negative, as in P1485659); clear holes are black. No sheet by default (`printedLayout == nil`). Auto never selects it. Checked: no easel/sheet, inverted, holder light vs rebate dark; included in the CPU/Metal parity loop.
+
+**Blade edge, measured on IMG_1670/1674** (≈ 25.7 px/mm on the print): the blade line is crisp, 10–90 % in about 3.5–5.5 px (0.14–0.21 mm including the phone lens), with fine nicks and small steps but no ruled straightness. The gate edge on 1670 is the soft, rough one.
+
+- **One edge profile.** `FilmEdgeNoise.wear` (Metal `fe_wear`: 0.65 × broad 0.9 mm + 0.35 × fine 0.16 mm value noise) now drives both the camera gate's wear and the easel blades. On a film-edge enlarger print the blade is the carrier with `carrierRoughness = Easel.Kind.wear` (CPU and Metal, parity checked). On a clean print `Easel.mask` computes the same profile and the penumbra into an 8-bit mask (edge bands only), used by `PrintCompositor`, the Darkroom preview and the loupe.
+- **Easel pills:** Precise / Natural / Worn = 0.004 / 0.009 / 0.02 mm on the film (× magnification on paper). Blade penumbra uses h = 4.5 mm and 0.05 mm paper spread (≈ 0.16 mm on a 4 × 6, matching the measured 0.14–0.21 mm). Proof: `Claude/Edge-proof-nov14/blade-edge_real-vs-precise-natural-worn.png` in the vault.
+- **SwiftUI mask fix:** SwiftUI masks by alpha, so the grey blade mask needs `.luminanceToAlpha()`; without it the clean-print preview and loupe showed a hard edge (exports were right). Preview and loupe now draw one `PrintSheet` view, clipped to the sheet, so a borderless sheet never shows a border under the loupe.
+- **Hand-set placement is unchanged** (0.8 % of the sheet, 0.3°, 0.18 mm) but now **off by default**.
+- **Border replaces Image scale.** `PrintLayout.margin` is the narrowest white border as a fraction of the sheet's long side (mm on sized paper, % as image). The sheet never moves or resizes with it; as image it keeps the picture's proportions and the picture is inset. Nil is automatic: none for a clean print as image, 4 % on a sized sheet and around every film-edge enlarger print. **Fill** is borderless (covers the sheet, no blades). Old saved `scale` decodes as a border (< 1) or Fill (> 1). The film-edge canvas is placed so its nominal easel opening (`FilmEdgeLayout.easelFrame`) sits at the border; `EditRecipe.printedLayout` / `printContent` decide the sheet and what is on it.
+- **Defaults:** new film edges are Natural gate + Lab scan (the gate choice is no longer remembered), enlarger zoom 97 %. **Negative direct scan** moved last in the type row. Explanatory notes under controls removed; the zoom readout is one line. Dark-mode accent darkened to #C8238E.
+- Planned export size on paper now comes from the same integer sheet as the export; native sheet size uses a fine reference to avoid one-pixel rounding.
+
+**Verification:** darkroom (incl. blade wander precise < natural < worn, determinism, legacy scale), film-edge (CPU/Metal parity with worn blades, easel wear bounded), orientation, session benchmark, recipe, library, Metal, geometry: all PASS with `--optimized`.
+
+## Nov 14 (later) — Square gate corners, export sizes, a leaner Darkroom
+
+- **Gate corner:** IMG_1675 (two Multigrade prints with rebate bands) shows inner corners of about 0.08–0.1 mm on film at about 97 px/mm. The 35 mm gate corner went from 0.4 mm to 0.1 mm.
+- **120 bodies:** "Hasselblad V" is now **V** and "Toy camera" is now **Holga**. Saved raw values are unchanged.
+- **Export sizes:** the renderer already cropped correctly (a 50 % crop exported at its own 3000 × 2000). The faults were in what the sizes meant:
+  - on paper, "Full" made the sheet as large as the picture, so the picture was resampled;
+  - the panel showed the uncropped original;
+  - fixed S/M/L caps made L equal to Full on crops.
+
+  Now `PhotoExporter.Size` is **Original / Long edge / Percent / Print (ppi)**, resolved against the native output and never enlarged. On paper the picture keeps one source pixel per output pixel (`PrintCompositor.nativeSize`), and a sheet that crops the picture keeps only the pixels shown. The planned W × H and MP appear before rendering (`PhotoRenderer.exportDimensions`), and the last choice is remembered. The presentation render uses the same picture size as export.
+- **Darkroom simplified:**
+  - Auto and the four edge types are one row of pills;
+  - **Negative print is always an enlarger print** (`EditRecipe.renderedFilmEdgeLayout`), so the toggle and the Hand print preset are gone, and the easel appears for that type;
+  - the Filed roughness, Edge reflection and Leak colour sliders are removed; leak colour follows the leak path;
+  - unused strings were pruned.
+- **Faster checks:** `core-checks.py --optimized` compiles with `-O -assert-config Debug`, which keeps every precondition and its message. `check-darkroom.py` uses it. The film-edge suite runs in about 40 s instead of about 25 min.
+- **Known, older failure:** `tone-checks` still expects recipe version 4; the current version has been 5 since the Darkroom PoC.
+
+## Nov 14 — Enlarger prints and the easel (one model for B&W and RA-4)
+
+Runze's Ilford Multigrade prints (with a rebate border, borderless, and a close-up) and the RA-4 references showed that the old Hand print was wrong. Real prints have straight easel blades and a clean picture, with no filed edge, fog or vignette. The black border is a thin band of rebate that tapers where the projection is not quite square to the easel. B&W and colour use the same optics, so they share one model; monochrome stays an output choice.
+
+Measurements from the full-resolution HEICs (hole pitch about 181 px per film mm in IMG_1673):
+- **Blade edge:** about 8 px from paper to black, ≈ 0.04 mm on film including phone blur.
+- **Gate edge into the picture:** a ramp of about 0.15 mm on film.
+- **Holes:** as black as the rebate, with a thin light outline at the cut wall (our hole rim).
+- **IMG_1670:** the band runs from zero on one side to about 0.3 mm on film on others.
+
+**Model**
+- **Easel (paper stage, `PrintLayout`/`PrintGeometry`/`Easel`):** each blade's edge lies about h = 3 mm above the emulsion. The lens pupil seen from the paper spans 1/(N(1+M)), so the penumbra is h/(N(1+M)) plus about 0.03 mm of paper spread. At f/8 that is about 0.1 mm on a 4×6.
+- **Hand-set easel** (default on, with a toggle and a "New placement" dice):
+  - every print: margins up to 0.8 % of the sheet's long side uneven, never more than 45 % of a margin;
+  - clean print: the blade penumbra fades the picture into the paper;
+  - film-edge enlarger print: the projection is up to 0.3° off square and up to 0.18 mm off centre in the opening, so the black band tapers. Off gives a centred machine print.
+- **Enlarger zoom** (film edge, 90–110 %, default 98.5 %): the projected frame relative to the easel opening, with blades keeping the frame's proportions. The border is 18(1/z − 1) mm at the ends and 12(1/z − 1) mm at the sides. About 90 % reaches the holes; above 100 % the blades crop. The canvas is the opening plus a 2.5 % margin of the same sheet.
+- **Enlarger print carrier:** straight, square-cornered, opaque, with no halo or reflection. Filed roughness and edge reflection apply only to scan holders and are hidden for enlarger prints. The Hand print preset is now just "enlarger print".
+- **Metal:** `e[16]` carries the easel offset; scratches moved to `e[17…]`.
+
+**Checks:**
+- Paper: hand-set bounds, penumbra 0.05–0.2 mm, top-left vs CoreGraphics placement, legacy layouts default to hand-set.
+- Film edge: clean preset; default shows a rebate band and no holes; 90 % reaches the holes; 105 % crops; opening and canvas follow the zoom; straight blade; hand-set ranges; machine print square; scans ignore the easel; CPU/Metal parity for a hand-set enlarger print.
+
+## Nov 12 (later) — LUT / creative route fixed; test charts
+
+Runze reported that the edge looks wrong with a LUT. Any recipe whose Develop differs from the edge material uses the creative composite: a LUT, Develop off, a cross-family stock, and also every scan or cinema type with the default Portra recipe. A probe rendered all four types through Spektrafilm, a LUT and Develop off and found three faults:
+
+1. **Dashed black and white seam at the gate.** Rebate-only scratches were also applied to the composited centre wherever the gate mask was above zero. They now stay in the material render; only crossing scratches and dust are drawn over the centre.
+2. **Darker 1 px border.** The centre image ended at the nominal gate, but the soft, worn or bulged gate opens past it, so its transparent border blended in. It is now clamped to its extent before placing.
+3. **Leaks and fog stopped at the gate.** The centre is now prepared framed at gate size (the same framing as the support), and front/back leak and fog are added to it as exposure before the LUT or tone (`FilmEdgeRenderer.exposeCenter`, in the film graph's mid-grey units, linear up to 0.5 then a soft shoulder). With Mix below 100 % the developed endpoint uses the same framing.
+
+New regression checks cover Develop off and a real LUT on all four types: no bright rim, dark seams in fewer than 2 % of columns, and a front leak brightens the LUT picture.
+
+**Test charts:** `swift Scripts/make-test-images.swift [folder]` writes eight synthetic charts: gate edges, step wedge with colour patches, night, overcast, portrait grid, square 120, flat grey and fine detail. Each answers one question about the edge, LUT or loupe. Copies are in the vault (`Claude/Test-images/`, with a README), so they can be imported on the phone via Files. No real photos are in the repo.
+
+## Nov 12 — Gate types, RA-4 hand print, picture-side rim, loupe (distress revision 4)
+
+New reference: Runze's Kodak 5294 (Ektachrome 100D) slide scan, `IMG_0190 copy.jpg`, outside the repo.
+
+- **Gate is separate from distress.** `FilmEdgeLayout.gate` (`FilmEdgeGate`) describes the camera and holder. There are four pill types: **Precise**, **Natural** (default) and **Loose**/**Rough**. Precise has softness 30 µm, wear 20 µm and no tilt or bulge. Natural has the same with a crisper/stronger holder, 0.2° tilt and 25 % bulge. Loose and Rough have softness 50 µm, wear 40 µm, more holder blur, 0.5°/0.8° tilt and 60 %/100 % bulge. The last type chosen is remembered (`darkroom.gateKind`). The old gate shapes (rounded/bulge/dip/keystone) were removed.
+- **Tilt and bulge add up:** the gate gives the setup's inherent misalignment (direction from the seed), and distress "Handling" adds crooked loading (±3°) and film curl (±100 %). Bulge bows the gate outline up to ~0.22/0.15 mm.
+- **Distress presets:** Clean (30 % rebate scratches by default), Lab scan (50 %), Hand print, Old camera (100 % scratches, 1° crooked loading, curl, dust, fog, leak) and Light leak. Removed controls: roughness scale (fixed), fog depth (derived from edge fog), light through holes (driven by edge fog), and holder blur/detail (now in the gate).
+- **Hand print = enlarger RA-4 print** (`enlargerPrint`). The filed carrier sits in the negative plane: crisp edge (0.04 mm), no scan-holder specks or tail, opening stopped short of the holes (0.55 mm reveal), and edge reflection as the inward bleed. The result is a black filed border on white paper ([Photrio](https://www.photrio.com/forum/threads/black-frames-what-about-the-negative.55164)). A strongly tilted strip can still show slivers.
+- **Holder model:** a crisp defocused core plus a faint tail (8 % over 0.12 mm), with abrasion specks. The paper shoulder makes the tail visible on inverted negatives and invisible against a slide's black holder, as in the scans.
+- **Picture-side rim:** the hole-wall light-piping rim now has a bright yellow **core** (light reaching red and green layers; separate uniform `e[15]`) on the edge facing the picture. It sits under a warm streaky halo and sparkle points 0.05 mm into the rebate (P1485695). Slides reuse the same mechanism.
+- **Cine perforations:** the format pills are 35 mm · 35 mm cine · 120. "35 mm cine" forces BH-1866 (5294 is BH-1866 per Kodak's [sell sheet](https://www.kodak.com/content/products-brochures/Film/EKTACHROME-100D-sell-sheet-EN.pdf)); 35 mm still follows the stock (Vision3 → BH).
+- **UI:** manual scan method and format are pills. Darkroom Back saves and returns to the photo page. A **loupe** (`DarkroomLoupe`) sits at the upper right, can be dragged over the print, and shows 100 % of a full-resolution frame (≤ 4096 px, rendered after the preview settles); double-tap gives 200 %. It is toggled from the top-left button and the on/off state is remembered.
+- Tests: the exact-geometry fixtures use the Precise gate. There are new checks for gate types, tilt/bulge, the enlarger print hiding holes, the holder tail, and the picture-side rim core. UI tests were updated for pills and Back to photo.
+
 ## Nov 11 — Edge refinement from Runze's scans (distress revision 3)
 
 References: Runze's camera scans P1485659 (Gold 200), P1485695 and P1485707 (UltraMax 400), kept outside the repository. Edge cache key `v15`.

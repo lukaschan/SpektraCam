@@ -40,11 +40,11 @@ import UniformTypeIdentifiers
             "Neutral entry unexpectedly started a film render or saved an edit")
         let unchangedPreview = session.displayImage
         session.setPresentationInteraction(key: "darkroom.layout", active: true)
-        for value in [0.8, 0.6] {
+        for value in [0.1, 0.2] {
             session.update(key: "darkroom.layout") {
                 var layout = PrintLayout()
                 layout.paper = .eightByTen
-                layout.scale = value
+                layout.margin = value
                 $0.printLayout = layout
             }
             try await Task.sleep(for: .milliseconds(450))
@@ -55,7 +55,7 @@ import UniformTypeIdentifiers
         precondition(session.recipe.printLayout == nil && !session.canUndo && !session.isProcessingFilm,
             "A finishing gesture split its undo group or restarted film processing")
         session.redo()
-        precondition(session.recipe.printLayout?.scale == 0.6 && !session.isProcessingFilm)
+        precondition(session.recipe.printLayout?.margin == 0.2 && !session.isProcessingFilm)
         session.undo()
         session.update(key: "look.mode") { $0.look.enabled = true; $0.flags["film_render.grain.active"] = false }
         func waitForIdle() async throws {
@@ -101,12 +101,13 @@ import UniformTypeIdentifiers
         session.update(key: "darkroom.layout") {
             var layout = PrintLayout()
             layout.paper = .eightByTen
-            layout.scale = 0.8
+            layout.margin = 0.1
             $0.printLayout = layout
         }
         let printed = try await session.export(size: .small, format: .png, quality: 1)
-        precondition(printed.1 == 1024 && printed.2 == 819,
-            "Session export ignored the saved paper geometry or exceeded its pixel budget")
+        // The 1024 px picture at 80 % keeps its pixels: a 1280 px sheet, capped at 1080 by the long edge.
+        precondition(printed.1 == 1080 && printed.2 == 864,
+            "Session export ignored the saved paper geometry or exceeded its pixel budget: \(printed.1)×\(printed.2)")
         let printedSource = CGImageSourceCreateWithURL(printed.0 as CFURL, nil)!
         let printedImage = CGImageSourceCreateImageAtIndex(printedSource, 0, nil)!
         precondition(printedImage.bitsPerComponent == 8 && printedImage.colorSpace?.model == .rgb)

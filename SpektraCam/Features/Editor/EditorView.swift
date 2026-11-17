@@ -26,15 +26,31 @@ struct EditorView: View {
     @State private var showOriginal = false
     @State private var showResetConfirmation = false
     @State private var showRenderProgress = false
+    @State private var layout = WorkspaceLayout.stacked
+    @State private var systemVerticalBar = false
 
     var body: some View {
-        Group {
-            if showDarkroom {
-                DarkroomWorkspace(session: session, suspended: showExport, adjustCrop: openDarkroomCrop)
-            } else {
-                editorWorkspace
+        HStack(spacing: 0) {
+            Group {
+                if showDarkroom {
+                    DarkroomWorkspace(
+                        session: session, suspended: showExport, layout: layout,
+                        adjustCrop: openDarkroomCrop)
+                } else {
+                    editorWorkspace
+                }
+            }
+            if layout == .sideBySide && !systemVerticalBar {
+                EditorToolRail(
+                    activeTool: toolSelection, darkroomActive: showDarkroom,
+                    openDarkroom: openDarkroom, export: { showExport = true }
+                )
+                .padding(.horizontal, 8)
             }
         }
+        .background(PhotoTheme.canvas)
+        .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
+        .onSystemVerticalBar { systemVerticalBar = $0 }
         .background(EditorNavigationGuard().allowsHitTesting(false))
         .navigationTitle(
             showDarkroom
@@ -44,32 +60,18 @@ struct EditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            EditorToolbar(activeTool: Binding(
-                get: { showDarkroom ? nil : activeTool },
-                set: { tool in
-                    cropReturnsToDarkroom = tool == .crop && showDarkroom && session.recipe.filmEdgeLayout != nil
-                    if cropReturnsToDarkroom { toolBeforeDarkroomCrop = activeTool }
-                    activeTool = tool
-                    showDarkroom = false
-                }), darkroomActive: showDarkroom,
-                openDarkroom: { setExpanded(false); cropReturnsToDarkroom = false; showDarkroom = true },
-                export: { showExport = true })
+            // A wide space has its own tool rail, unless the system already keeps a bar on the side.
+            if layout == .stacked || systemVerticalBar {
+                EditorToolbar(
+                    activeTool: toolSelection, darkroomActive: showDarkroom,
+                    systemVerticalBar: systemVerticalBar,
+                    openDarkroom: openDarkroom, export: { showExport = true })
+            }
             ToolbarItem(placement: .topBarLeading) {
-                Button(
-                    showDarkroom
-                        ? String(localized: "darkroom.back_to_editor", defaultValue: "Back to editor")
-                        : String(localized: "editor.close_editor", defaultValue: "Close Editor"),
-                    systemImage: showDarkroom ? "chevron.left" : "xmark",
-                    action: {
-                        if showDarkroom { showDarkroom = false }
-                        else { finish() }
-                    }
-                )
-                .photoActionStyle()
-                .accessibilityLabel(
-                    showDarkroom
-                        ? String(localized: "darkroom.back_to_editor", defaultValue: "Back to editor")
-                        : String(localized: "editor.close_editor", defaultValue: "Close Editor"))
+                // Darkroom is the last step: back saves the edit and returns to the photo, like Close.
+                Button(closeTitle, systemImage: showDarkroom ? "chevron.left" : "xmark", action: finish)
+                    .photoActionStyle()
+                    .accessibilityLabel(closeTitle)
                 .accessibilityIdentifier(showDarkroom ? "darkroom.back" : "editor.back")
             }
             .sharedBackgroundVisibility(.hidden)
@@ -91,7 +93,7 @@ struct EditorView: View {
                     Divider()
                     Button(
                         String(
-                            localized: "editor.reset_all_edits_17b6fe",
+                            localized: "editor.reset_all_edits",
                             defaultValue: "Reset All Edits"), role: .destructive
                     ) { showResetConfirmation = true }
                     .disabled(!session.hasEdits)
@@ -116,17 +118,10 @@ struct EditorView: View {
                     String(localized: "editor.saving_edits", defaultValue: "Saving edits…"))
             }
         }
-        .alert(
+        .failureAlert(
             String(localized: "editor.couldn_t_save_edits", defaultValue: "Couldn’t save edits"),
-            isPresented: Binding(
-                get: { closeFailure != nil }, set: { if !$0 { closeFailure = nil } })
-        ) {
-            Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) {}
-        } message: {
-            Text(closeFailure ?? "")
-        }
+            message: $closeFailure)
         .task {
-            guard !Task.isCancelled else { return }
             await library.images.beginEditing(owner: session.id)
             guard !Task.isCancelled else {
                 await library.images.endEditing(owner: session.id)
@@ -146,11 +141,11 @@ struct EditorView: View {
             panelExpanded = false
         }
         .alert(
-            String(localized: "editor.reset_all_edits", defaultValue: "Reset all edits?"),
+            String(localized: "editor.reset_all_edits_confirm", defaultValue: "Reset all edits?"),
             isPresented: $showResetConfirmation
         ) {
             Button(
-                String(localized: "editor.reset_all_edits_17b6fe", defaultValue: "Reset All Edits"),
+                String(localized: "editor.reset_all_edits", defaultValue: "Reset All Edits"),
                 role: .destructive
             ) {
                 session.resetAll()
@@ -176,7 +171,56 @@ struct EditorView: View {
             }
         }
     }
-    private var editorWorkspace: some View {
+    private var closeTitle: String {
+        showDarkroom
+            ? String(localized: "darkroom.back_to_photo", defaultValue: "Back to photo")
+            : String(localized: "editor.close_editor", defaultValue: "Close Editor")
+    }
+    private var compareTitle: String {
+        showOriginal
+            ? String(localized: "editor.show_edited", defaultValue: "Show Edited")
+            : String(localized: "editor.show_original", defaultValue: "Show Original")
+    }
+    /// Choosing a tool leaves Darkroom; choosing Crop from a film edge returns there afterwards.
+    private var toolSelection: Binding<EditorTool?> {
+        Binding(
+            get: { showDarkroom ? nil : activeTool },
+            set: { tool in
+                cropReturnsToDarkroom = tool == .crop && showDarkroom && session.recipe.filmEdgeLayout != nil
+                if cropReturnsToDarkroom { toolBeforeDarkroomCrop = activeTool }
+                activeTool = tool
+                showDarkroom = false
+            })
+    }
+    private func openDarkroom() {
+        setExpanded(false)
+        cropReturnsToDarkroom = false
+        showDarkroom = true
+    }
+    @ViewBuilder private var editorWorkspace: some View {
+        if layout == .sideBySide { sideBySideWorkspace } else { stackedWorkspace }
+    }
+    /// The photo keeps the leading side; the open tool's controls fill a column beside it.
+    private var sideBySideWorkspace: some View {
+        GeometryReader { workspace in
+            HStack(spacing: 0) {
+                canvas
+                if activeTool == .crop {
+                    ScrollView { toolPanel.padding(.top, 12) }
+                        .scrollBounceBehavior(.basedOnSize)
+                        .background(.background, in: .rect(cornerRadius: 24))
+                        .clipShape(.rect(cornerRadius: 24))
+                        .frame(width: WorkspaceLayout.panelWidth(in: workspace.size.width))
+                        .padding(.leading, 8).padding(.vertical, 8)
+                } else if activeTool != nil {
+                    inspector(height: nil)
+                        .frame(width: WorkspaceLayout.panelWidth(in: workspace.size.width))
+                        .padding(.leading, 8).padding(.vertical, 8)
+                }
+            }
+        }
+    }
+    private var stackedWorkspace: some View {
         VStack(spacing: 0) {
             GeometryReader { workspace in
                 canvas.overlay(alignment: .bottom) {
@@ -228,6 +272,8 @@ struct EditorView: View {
                 PhotoViewport(
                     image: showOriginal
                         ? UIImage(cgImage: session.photo.preview) : session.displayImage,
+                    // Beside its controls the photo has the full height, so it sits in the middle.
+                    topAligned: layout == .stacked,
                     onTap: { point in
                         if panelExpanded && point.y < inspectorFrame.minY - 44 {
                             setExpanded(false)
@@ -242,26 +288,14 @@ struct EditorView: View {
                             onInteraction: { if panelExpanded { setExpanded(false) } })
                         HStack {
                             Spacer()
-                            Button(
-                                showOriginal
-                                    ? String(
-                                        localized: "editor.show_edited", defaultValue: "Show Edited"
-                                    )
-                                    : String(
-                                        localized: "editor.show_original",
-                                        defaultValue: "Show Original"),
-                                systemImage: "square.on.square"
-                            ) {
+                            Button(compareTitle, systemImage: "square.on.square") {
                                 showOriginal.toggle()
                                 if panelExpanded { setExpanded(false) }
                             }
                             .tint(showOriginal ? Color.accentColor : Color.primary)
                             .accessibilityAddTraits(showOriginal ? .isSelected : [])
                             .photoActionStyle()
-                            .accessibilityLabel(
-                                showOriginal
-                                    ? String(localized: "editor.show_edited", defaultValue: "Show Edited")
-                                    : String(localized: "editor.show_original", defaultValue: "Show Original"))
+                            .accessibilityLabel(compareTitle)
                             .accessibilityIdentifier("editor.compare")
                         }
                     }.padding(.horizontal, 12).padding(.top, 4)
@@ -294,8 +328,8 @@ struct EditorView: View {
     }
 
     @ViewBuilder private var toolPanel: some View {
-
-        if activeTool == .crop {
+        switch activeTool {
+        case .crop:
             CropControls(
                 crop: session.binding(\.crop, key: "crop"),
                 geometry: session.binding(\.geometry, key: "straighten"),
@@ -334,30 +368,32 @@ struct EditorView: View {
                 onStraightenEditingChanged: {
                     session.setInteraction(key: "straighten", active: $0)
                 })
-        } else if activeTool == .develop {
+        case .develop:
             if session.recipe.look.mode == .spektrafilm {
                 DevelopPanel(session: session).padding(.horizontal).padding(.vertical, 12)
                     .disabled(!session.recipe.look.enabled)
             } else {
                 LUTPanel(session: session, library: library)
             }
-
-        } else if let activeTool {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    switch activeTool {
-                    case .develop: EmptyView()
-                    case .adjust: AdjustPanel(session: session, section: adjustSection)
-                    case .effects:
-                        EffectsPanel(session: session, section: effectsSection)
-                            .disabled(!session.recipe.look.enabled)
-                    case .crop: EmptyView()
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading).padding()
+        case .adjust:
+            scrollingPanel(id: adjustSection.rawValue) {
+                AdjustPanel(session: session, section: adjustSection)
             }
-            .id(activeTool == .adjust ? adjustSection.rawValue : effectsSection.rawValue)
-            .accessibilityIdentifier("editor.controls")
+        case .effects:
+            scrollingPanel(id: effectsSection.rawValue) {
+                EffectsPanel(session: session, section: effectsSection)
+                    .disabled(!session.recipe.look.enabled)
+            }
+        case nil: EmptyView()
         }
+    }
+    /// A new section starts scrolled to the top: its identity changes with the section.
+    private func scrollingPanel(id: String, @ViewBuilder content: () -> some View) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16, content: content)
+                .frame(maxWidth: .infinity, alignment: .leading).padding()
+        }
+        .id(id).accessibilityIdentifier("editor.controls")
     }
 
     private func maximumPanelHeight(in height: CGFloat) -> CGFloat {
@@ -366,25 +402,24 @@ struct EditorView: View {
 
     // Collapsed content heights, in points. The category buttons sit above this area.
     private var collapsedPanelHeight: CGFloat {
-        if activeTool == .develop { return 250 }
-        if activeTool == .adjust {
-            switch adjustSection {
-            case .exposure: return 180
-            case .liftGain: return collapsedLiftGainHeight
-            case .color: return collapsedColorHeight
-            }
+        switch (activeTool, adjustSection) {
+        case (.develop, _): 250
+        case (.adjust, .liftGain): collapsedLiftGainHeight
+        case (.adjust, .color): collapsedColorHeight
+        default: 180
         }
-        return 180
     }
 
     private func setExpanded(_ expanded: Bool) {
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { panelExpanded = expanded }
     }
-    private func inspector(height: CGFloat) -> some View {
+    /// `height` is nil when the panel fills its column and has nothing to expand into.
+    private func inspector(height: CGFloat?) -> some View {
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
-                    if activeTool == .develop {
+                    switch activeTool {
+                    case .develop:
                         PanelTabs(
                             options: EditRecipe.LookMode.allCases.map { ($0, $0.title) },
                             selection: Binding(
@@ -396,22 +431,26 @@ struct EditorView: View {
                                     }
                                 }),
                             prefix: "develop.mode.", isSelectionActive: session.recipe.look.enabled)
-                    } else if activeTool == .adjust {
+                    case .adjust:
                         PanelTabs(
                             options: AdjustPanel.Section.allCases.map { ($0, $0.title) },
                             selection: $adjustSection, prefix: "adjust.section.")
-                    } else if activeTool == .effects {
+                    case .effects:
                         PanelTabs(
                             options: EffectsPanel.Section.allCases.map { ($0, $0.title) },
                             selection: $effectsSection, prefix: "effects.section.")
-                    } else {
-                        Spacer()
+                    case .crop, nil: Spacer()
                     }
-                    PanelExpansionButton(expanded: $panelExpanded, identifier: "editor.expand")
+                    if height != nil {
+                        PanelExpansionButton(expanded: $panelExpanded, identifier: "editor.expand")
+                    }
                 }
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                toolPanel.font(.footnote).frame(height: height).glassEffect(
-                    .regular, in: .rect(cornerRadius: 24))
+                // In a column the pills scroll inside the panel's width instead of running past it.
+                .clipShape(height == nil ? AnyShape(.rect) : AnyShape(.rect.inset(by: -40)))
+                toolPanel.font(.footnote)
+                    .frame(height: height).frame(maxHeight: height == nil ? .infinity : nil, alignment: .top)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 24))
             }
         }
     }

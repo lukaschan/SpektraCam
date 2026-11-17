@@ -1,0 +1,9 @@
+main/tone-checks.swift:129: Precondition failed
+Traceback (most recent call last):
+  File "/private/var/folders/nz/1_10rjrd2qb2zsf0yr56ptth0000gn/T/adaptive-tone-baseline-gjo0e25w/Scripts/core-checks.py", line 102, in <module>
+    subprocess.run((simulator or [])+[str(binary)]+[str(root/a) for a in arguments]+(args.input if name in ['raw-input','processed-export','stress-export','bypass','tone-response','library','lut','preview','sdr-pipeline','render-cache'] else []),env=env,check=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py", line 692, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['/private/tmp/spektrafilm-build/tone-checks']' died with <Signals.SIGTRAP: 5>.

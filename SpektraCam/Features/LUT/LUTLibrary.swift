@@ -62,7 +62,7 @@ actor LUTFiles {
         case used
         var errorDescription: String? {
             String(
-                localized: "lut.keep_luts_that_are_used_by_saved",
+                localized: "lut.error.in_use",
                 defaultValue:
                     "Keep LUTs that are used by saved edits or Undo. Remove those edits before you delete the LUTs."
             )
@@ -83,7 +83,7 @@ actor LUTFiles {
         else {
             throw CubeLUT.Failure.format(
                 String(
-                    localized: "lut.the_lut_library_index_is_not_supported",
+                    localized: "lut.error.index_unsupported",
                     defaultValue: "The LUT library index is not supported."))
         }
         return saved.items
@@ -133,7 +133,7 @@ actor LUTFiles {
         guard !name.isEmpty, name.count <= 200 else {
             throw CubeLUT.Failure.format(
                 String(
-                    localized: "lut.use_a_name_with_1_to_200",
+                    localized: "lut.error.name_length",
                     defaultValue: "Use a name with 1 to 200 characters."))
         }
         var items = try load()
@@ -148,7 +148,7 @@ actor LUTFiles {
         guard ids.count == items.count, Set(ids) == Set(items.map(\.id)) else {
             throw CubeLUT.Failure.format(
                 String(
-                    localized: "lut.the_lut_list_changed_try_again",
+                    localized: "lut.error.list_changed",
                     defaultValue: "The LUT list changed. Try again."))
         }
         let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })

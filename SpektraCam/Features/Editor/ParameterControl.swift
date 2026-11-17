@@ -140,32 +140,38 @@ struct NumericControl: View {
                 title: title, identifier: identifier, fillOrigin: fillOrigin,
                 onEditingChanged: onEditingChanged)
         }
-        .sheet(isPresented: $showEntry) {
-            NumericEntry(
-                title: title, value: $value, minimum: minimum, maximum: maximum,
-                integer: step == 1, unit: unit)
-        }
     }
-    private var displayValue: String {
+    /// One rounding rule for the label and the editor: what is shown is what is edited.
+    private var digits: Int {
         let key = identifier.lowercased()
-        let digits = key.contains("exposure") || key.hasSuffix(".pivot") ? 2
+        return key.contains("exposure") || key.hasSuffix(".pivot") ? 2
             : key.contains("mix") || key.hasSuffix(".temperature") || key.hasSuffix(".warmth")
                 || key.hasSuffix(".scatter_amount") ? 0 : 1
-        return value.formatted(.number.precision(.fractionLength(digits)))
+    }
+    private var displayValue: String {
+        value.formatted(.number.precision(.fractionLength(digits)))
             + (unit.isEmpty ? "" : " " + unit)
     }
     private var valueButton: some View {
         Button {
             showEntry = true
         } label: {
+            // A quiet capsule says the number is editable without competing with the slider.
             Text(displayValue)
             .monospacedDigit()
             .fixedSize()
             .foregroundStyle(Color.primary)
+            .padding(.horizontal, 8).padding(.vertical, 2)
+            .background(Capsule().fill(Color.secondary.opacity(0.12)))
         }
         .accessibilityLabel(String(localized: "control.enter", defaultValue: "Enter \(title)"))
         .accessibilityValue(displayValue)
         .accessibilityIdentifier(identifier + ".value")
+        .popover(isPresented: $showEntry, arrowEdge: .bottom) {
+            NumericEntry(title: title, value: $value, minimum: minimum, maximum: maximum,
+                         step: step, digits: digits, unit: unit, defaultValue: defaultValue)
+                .presentationCompactAdaptation(.popover)
+        }
     }
 }
 
@@ -326,108 +332,104 @@ struct DefaultSlider: UIViewRepresentable {
     }
 }
 
+/// A compact value editor anchored to the number it edits: the value as shown (same rounding and
+/// unit), typed directly or nudged by the slider's own step, with the range and a reset at hand.
 private struct NumericEntry: View {
     let title: String
     @Binding var value: Double
     var minimum: Double?
     var maximum: Double?
-    let integer: Bool
+    let step: Double
+    let digits: Int
     let unit: String
+    let defaultValue: Double
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @FocusState private var isFocused: Bool
 
+    private func format(_ number: Double) -> String {
+        number.formatted(.number.precision(.fractionLength(digits)).grouping(.never))
+    }
+    private func clamp(_ number: Double) -> Double {
+        min(max(number, minimum ?? -.infinity), maximum ?? .infinity)
+    }
     private var parsed: Double? {
         let separator = Locale.current.decimalSeparator ?? "."
-        guard let number = Double(text.replacingOccurrences(of: separator, with: ".")),
-            number.isFinite,
-            minimum.map({ number >= $0 }) ?? true,
-            maximum.map({ number <= $0 }) ?? true,
-            !integer || number.rounded() == number
+        let cleaned = text.replacingOccurrences(of: separator, with: ".").replacingOccurrences(of: "\u{2212}", with: "-")
+        guard let number = Double(cleaned), number.isFinite,
+              minimum.map({ number >= $0 - 1e-9 }) ?? true, maximum.map({ number <= $0 + 1e-9 }) ?? true
         else { return nil }
         return number
     }
-    private var validationMessage: String {
-        switch (integer, minimum, maximum) {
-        case (true, let low?, let high?):
-            String(
-                localized: "control.whole_number_range",
-                defaultValue: "Enter a whole number from \(low.formatted()) to \(high.formatted())."
-            )
-        case (false, let low?, let high?):
-            String(
-                localized: "control.number_range",
-                defaultValue: "Enter a number from \(low.formatted()) to \(high.formatted()).")
-        case (true, let low?, nil):
-            String(
-                localized: "control.whole_number_minimum",
-                defaultValue: "Enter a whole number of at least \(low.formatted()).")
-        case (false, let low?, nil):
-            String(
-                localized: "control.number_minimum",
-                defaultValue: "Enter a number of at least \(low.formatted()).")
-        case (true, nil, let high?):
-            String(
-                localized: "control.whole_number_maximum",
-                defaultValue: "Enter a whole number no greater than \(high.formatted()).")
-        case (false, nil, let high?):
-            String(
-                localized: "control.number_maximum",
-                defaultValue: "Enter a number no greater than \(high.formatted()).")
-        case (true, nil, nil):
-            String(localized: "control.whole_number", defaultValue: "Enter a whole number.")
-        case (false, nil, nil): String(localized: "control.number", defaultValue: "Enter a number.")
-        }
+    private func set(_ number: Double) {
+        let snapped = clamp((number / step).rounded() * step)
+        value = snapped
+        text = format(snapped)
+    }
+    private func commit() {
+        guard let parsed else { return }
+        value = clamp(parsed)
+        dismiss()
+    }
+    private var rangeText: String? {
+        guard let minimum, let maximum else { return nil }
+        return format(minimum) + " – " + format(maximum) + (unit.isEmpty ? "" : " " + unit)
     }
     var body: some View {
-        NavigationStack {
-            Form {
-                HStack {
-                    if (minimum ?? -1) < 0 {
-                        Button(
-                            String(localized: "control.change_sign", defaultValue: "Change Sign"),
-                            systemImage: "plusminus"
-                        ) {
-                            text = text.hasPrefix("-") ? String(text.dropFirst()) : "-" + text
-                        }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.glass).buttonBorderShape(.circle)
+        VStack(spacing: 12) {
+            // Actions on top, so the keyboard below never covers them.
+            HStack(spacing: 8) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 4)
+                Button(String(localized: "control.reset_to_default", defaultValue: "Reset to Default"),
+                       systemImage: "arrow.counterclockwise") { set(defaultValue) }
+                    .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
+                if (minimum ?? -1) < 0 {
+                    Button(String(localized: "control.change_sign", defaultValue: "Change Sign"), systemImage: "plusminus") {
+                        text = text.hasPrefix("-") ? String(text.dropFirst()) : "-" + text
                     }
+                    .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
+                }
+                Button(String(localized: "common.done", defaultValue: "Done"), action: commit)
+                    .buttonStyle(.glassProminent).disabled(parsed == nil)
+                    .accessibilityIdentifier("numeric.done")
+            }
+            HStack(spacing: 10) {
+                nudge(-1, systemImage: "minus")
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     TextField(title, text: $text)
-                        .keyboardType(integer ? .numberPad : .decimalPad)
-                        .focused($isFocused)
-                        .accessibilityLabel(title)
+                        .font(.system(size: 40, weight: .semibold, design: .rounded)).monospacedDigit()
+                        .multilineTextAlignment(.center).minimumScaleFactor(0.6)
+                        .keyboardType(digits == 0 && (minimum ?? 0) >= 0 ? .numberPad : .decimalPad)
+                        .focused($isFocused).onSubmit(commit)
                         .accessibilityIdentifier("numeric.input")
-                    Text(unit).foregroundStyle(.secondary)
+                    if !unit.isEmpty {
+                        Text(unit).font(.title3.weight(.medium)).foregroundStyle(.secondary)
+                    }
                 }
-                if parsed == nil {
-                    Text(
-                        validationMessage
-                    )
-                    .font(.footnote).foregroundStyle(.secondary)
-                }
+                .frame(minWidth: 120)
+                nudge(1, systemImage: "plus")
             }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Cancel")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "common.done", defaultValue: "Done")) {
-                        if let parsed {
-                            value = parsed
-                            dismiss()
-                        }
-                    }.disabled(parsed == nil)
-                }
-            }
-            .onAppear {
-                text = value.formatted(.number.grouping(.never))
-                isFocused = true
+            if let rangeText {
+                Text(verbatim: rangeText).font(.caption).monospacedDigit()
+                    .foregroundStyle(parsed == nil ? Color.red : Color.secondary)
             }
         }
-        .presentationDetents([.medium])
+        .padding(16)
+        .frame(width: 310)
+        .onAppear {
+            text = format(value)
+            isFocused = true
+        }
+    }
+    private func nudge(_ direction: Double, systemImage: String) -> some View {
+        Button(systemImage == "plus" ? String(localized: "control.increase", defaultValue: "Increase")
+                                     : String(localized: "control.decrease", defaultValue: "Decrease"),
+               systemImage: systemImage) {
+            set((parsed ?? value) + direction * step)
+        }
+        .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
+        .buttonRepeatBehavior(.enabled)
     }
 }
 
@@ -487,7 +489,7 @@ struct EffectDetails: View {
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 12).padding(
                 .trailing, 8)
         } label: {
-            Text(String(localized: "control.details", defaultValue: "Details"))
+            Text(String(localized: "common.details", defaultValue: "Details"))
                 .accessibilityIdentifier(prefix + ".details")
         }.disabled(!session.recipe.flag(prefix + ".active"))
     }

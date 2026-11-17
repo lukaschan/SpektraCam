@@ -22,11 +22,11 @@ nonisolated enum SourceImageRenderer {
             switch self {
             case .decode:
                 String(
-                    localized: "source_image.the_source_photo_could_not_be_decoded",
+                    localized: "render.error.source_decode",
                     defaultValue: "The source photo could not be decoded.")
             case .raw:
                 String(
-                    localized: "source_image.this_raw_file_is_not_supported_by",
+                    localized: "render.error.raw_unsupported",
                     defaultValue: "This RAW file is not supported by the system decoder.")
             }
         }

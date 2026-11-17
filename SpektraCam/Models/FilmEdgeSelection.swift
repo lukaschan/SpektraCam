@@ -3,15 +3,21 @@ import Foundation
 /// Edge appearance is a choice, independent of capture format and final monochrome output.
 nonisolated enum FilmEdgeType: String, Codable, CaseIterable, Sendable {
     case negativePrint
-    case negativeScan
+    /// A lab or camera scan of the negative, inverted to a positive: the same positive as a print,
+    /// framed by the scanner holder instead of an easel. The holder blocks the light, so it comes
+    /// out white; clear holes come out black.
+    case invertedScan
     case reversalScan
     case cinemaPrint
+    /// The negative itself, scanned and inverted: last, as the one route that is not a positive.
+    case negativeScan
     var title: String {
         switch self {
         case .negativePrint: String(localized: "darkroom.edge.negative_print", defaultValue: "Negative print")
-        case .negativeScan: String(localized: "darkroom.edge.negative_scan", defaultValue: "Negative scan")
+        case .invertedScan: String(localized: "darkroom.edge.inverted_scan", defaultValue: "Negative scan")
+        case .negativeScan: String(localized: "darkroom.edge.negative_scan", defaultValue: "Negative direct scan")
         case .reversalScan: String(localized: "darkroom.edge.slide_scan", defaultValue: "Slide scan")
-        case .cinemaPrint: String(localized: "darkroom.edge.cinema_print", defaultValue: "Cinema print film")
+        case .cinemaPrint: String(localized: "film_stock.cinema_print_film", defaultValue: "Cinema print film")
         }
     }
 }

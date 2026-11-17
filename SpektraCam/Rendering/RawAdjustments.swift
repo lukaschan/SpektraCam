@@ -6,7 +6,7 @@ nonisolated enum RawAdjustments {
         case parameters
         var errorDescription: String? {
             String(
-                localized: "raw_adjustments.the_raw_adjustment_values_are_not_supported",
+                localized: "render.error.raw_adjustments",
                 defaultValue: "The RAW adjustment values are not supported.")
         }
     }

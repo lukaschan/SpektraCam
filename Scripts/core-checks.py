@@ -35,6 +35,7 @@ checks={
  'metering':(['SpectralCore','MeteringCore'],['Reference/Fixtures/metering-stages.json']),
  'gamut':(['SpectralCore','AppearanceCore','GamutCore'],['Reference/Fixtures']),
 }
+checks['metal-dispatch'] = (['MetalDispatch'], [])
 checks['histogram'] = (['PhotoHistogram'], [])
 checks['geotag'] = (['CameraLocation','PhotoMetadata'], [])
 checks['raw-input'] = (checks['recipe'][0] + ['PhotoColorBridge','SourceImageRenderer','PhotoMetadata','ImportedPhoto'], [])
@@ -67,13 +68,14 @@ for key, (files, arguments) in checks.items():
  if 'LibraryImages' in files and 'ImageRequestPool' not in files:
   files.append('ImageRequestPool')
 checks['image-requests'] = (['ImageRequestPool'], [])
-checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','EditorDefaults','PhotoHistogram','LUTLibrary','PhotoCanvas','PhotoInfoPanel'])), ['.'])
+checks['editor-session-benchmark'] = (list(dict.fromkeys(checks['processed-export'][0] + ['EditorSession','Log','EditorDefaults','PhotoHistogram','LUTLibrary','PhotoCanvas','PhotoInfoPanel'])), ['.'])
 checks['editor-benchmark'] = (checks['processed-export'][0], ['.'])
 checks['lut-grain'] = (checks['processed-export'][0], ['.'])
 checks['film-edge'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer', 'BatchPhotoExporter'])), ['.'])
 checks['darkroom-orientation'] = (list(dict.fromkeys(checks['processed-export'][0] + ['PrintCompositor', 'FilmEdgeRenderer'])), ['.'])
 checks['darkroom'] = (list(dict.fromkeys(checks['export'][0] + checks['recipe'][0] + ['PrintCompositor'])), [])
 for files, arguments in checks.values():
+ if any(f.startswith('Metal') or f == 'ToneRenderer' for f in files) and 'MetalDispatch' not in files: files.append('MetalDispatch')
  if any(f in files for f in ['MetalFilmPipeline','SourceImageRenderer','ToneRenderer']) and 'PixelStore' not in files: files.append('PixelStore')
  if 'EditRecipe' in files:
   for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout']:
@@ -82,7 +84,7 @@ for files, arguments in checks.values():
  if 'PhotoRenderer' in files:
   for dependency in ['PrintCompositor', 'FilmEdgeRenderer']:
    if dependency not in files: files.append(dependency)
-parser=argparse.ArgumentParser();parser.add_argument('checks',nargs='*',choices=list(checks));parser.add_argument('--debug-benchmarks', action='store_true');parser.add_argument('--input', nargs='+', default=[]);parser.add_argument('--simulator', action='store_true');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('checks',nargs='*',choices=list(checks));parser.add_argument('--debug-benchmarks', action='store_true');parser.add_argument('--optimized', action='store_true', help='Compile every check with -O (preconditions stay active).');parser.add_argument('--input', nargs='+', default=[]);parser.add_argument('--simulator', action='store_true');args=parser.parse_args()
 sdkName = 'iphonesimulator' if args.simulator else 'macosx'
 sdk=subprocess.check_output(['/usr/bin/xcrun','--sdk',sdkName,'--show-sdk-path'],env=env,text=True).strip()
 compiler=[str(xcode/'Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc'),'-sdk',sdk,'-module-cache-path',str(out/('SymbolModuleCache-Simulator' if args.simulator else 'SymbolModuleCache'))]
@@ -94,9 +96,9 @@ if args.simulator:
  if env.get('SPEKTRACAM_SIMULATOR_ID'): booted=[d for d in booted if d==env['SPEKTRACAM_SIMULATOR_ID']]
  if not booted: raise SystemExit('Boot a Simulator before using --simulator.')
  simulator = [simctl,'spawn',booted[0]]
- compiler += ['-target',platform.machine()+'-apple-ios27.2-simulator']
+ compiler += ['-target',platform.machine()+'-apple-ios26.0-simulator']
 for name in args.checks or [key for key in checks if not key.startswith('metal-') and not key.endswith('-benchmark') and key not in ['raw-input','processed-export','stress-export','bypass','tone-response']]:
  files,arguments=checks[name];binary=out/(name+'-checks'+('-simulator' if args.simulator else ''))
- subprocess.run(compiler+(['-O'] if name.endswith('-benchmark') and not args.debug_benchmarks else [])+[str(sources[f]) for f in files]+[str(root/'Scripts'/(name+'-checks.swift')),'-o',str(binary)],env=env,check=True)
+ subprocess.run(compiler+(['-O','-assert-config','Debug'] if args.optimized else ['-O'] if name.endswith('-benchmark') and not args.debug_benchmarks else [])+[str(sources[f]) for f in files]+[str(root/'Scripts'/(name+'-checks.swift')),'-o',str(binary)],env=env,check=True)
  env['SPEKTRAFILM_BENCHMARK_CONFIGURATION']='debug' if args.debug_benchmarks else 'optimized'
  subprocess.run((simulator or [])+[str(binary)]+[str(root/a) for a in arguments]+(args.input if name in ['raw-input','processed-export','stress-export','bypass','tone-response','library','lut','preview','sdr-pipeline','render-cache'] else []),env=env,check=True)

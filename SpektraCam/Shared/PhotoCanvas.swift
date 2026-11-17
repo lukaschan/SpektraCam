@@ -16,7 +16,7 @@ struct ZoomablePhoto: UIViewRepresentable {
     var topInset: CGFloat = 0
     var zoomedTopInset: CGFloat = 0
     var fitCenterY: CGFloat? = nil
-    var label = String(localized: "photo_canvas.edited_photo", defaultValue: "Edited photo")
+    var label = String(localized: "photo.edited_photo", defaultValue: "Edited photo")
     var onTap: ((CGPoint) -> Void)?
     /// Sharp pixels for the part of the photo in view, at the resolution the zoom needs.
     var detail: PhotoScrollView.DetailProvider? = nil
@@ -33,14 +33,14 @@ struct ZoomablePhoto: UIViewRepresentable {
         view.photoView.accessibilityTraits = .image
         view.photoView.accessibilityCustomActions = [
             UIAccessibilityCustomAction(
-                name: String(localized: "photo_canvas.zoom_in", defaultValue: "Zoom in")
+                name: String(localized: "photo.zoom_in", defaultValue: "Zoom in")
             ) { [weak view] _ in
                 guard let view else { return false }
                 view.setZoomScale(min(view.zoomScale * 2, view.maximumZoomScale), animated: true)
                 return true
             },
             UIAccessibilityCustomAction(
-                name: String(localized: "photo_canvas.fit_photo", defaultValue: "Fit photo")
+                name: String(localized: "photo.fit", defaultValue: "Fit photo")
             ) { [weak view] _ in
                 guard let view else { return false }
                 view.setZoomScale(view.minimumZoomScale, animated: true)
@@ -129,7 +129,7 @@ final class PhotoScrollView: UIScrollView {
 
     // Zoomed detail: the base image stays in place and a sharper render of the visible
     // region is laid over it once the view settles.
-    typealias DetailProvider = @MainActor (_ visible: CGRect, _ longEdge: Int) async -> PhotoRenderer.Detail?
+    typealias DetailProvider = @MainActor @Sendable (_ visible: CGRect, _ longEdge: Int) async -> PhotoRenderer.Detail?
     let detailView = UIImageView()
     var detailProvider: DetailProvider? {
         didSet { if detailProvider == nil { clearDetail() } }
@@ -285,7 +285,7 @@ final class PhotoScrollView: UIScrollView {
         if contentInset != insets { contentInset = insets }
         photoView.accessibilityValue = String(
             format: String(
-                localized: "photo_canvas.percent_zoom", defaultValue: "%.0f percent zoom"),
+                localized: "photo.zoom_percent", defaultValue: "%.0f percent zoom"),
             zoomScale / max(minimumZoomScale, 1e-6) * 100)
     }
 }
@@ -308,8 +308,8 @@ struct PhotoViewport: View {
                     ? topInset + min(proxy.size.width * 4 / 3, max(1, proxy.size.height - topInset)) / 2
                     : nil,
                 label: edited
-                    ? String(localized: "photo_canvas.edited_photo", defaultValue: "Edited photo")
-                    : String(localized: "photo_canvas.photo", defaultValue: "Photo"), onTap: onTap,
+                    ? String(localized: "photo.edited_photo", defaultValue: "Edited photo")
+                    : String(localized: "photo.photo", defaultValue: "Photo"), onTap: onTap,
                 detail: detail
             )
             .frame(width: proxy.size.width, height: proxy.size.height)

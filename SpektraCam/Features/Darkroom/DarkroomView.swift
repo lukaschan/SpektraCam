@@ -4,6 +4,8 @@ import UIKit
 /// A feature-local workspace; the owning editor retains the session, history and export lifecycle.
 struct DarkroomView: View {
     let image: UIImage
+    /// Stacked puts the controls under the print; side by side puts them in a column beside it.
+    var workspace = WorkspaceLayout.stacked
     @Binding var layout: PrintLayout?
     @Binding var edge: FilmEdgeLayout?
     @Binding var edgeSelection: FilmEdgeSelection?
@@ -13,118 +15,205 @@ struct DarkroomView: View {
     var imageReady = true
     var onEditingChanged: (Bool) -> Void = { _ in }
     var onEdgeEditingChanged: (Bool) -> Void = { _ in }
+    /// Full-resolution pixels for the loupe, when the workspace has rendered them.
+    var loupeImage: UIImage? = nil
+    var loupeRefining = false
+    var loupeWidth: CGFloat? = nil
+    var loupePatch: PhotoRenderer.Detail? = nil
+    var onLoupeInspect: ((CGRect) -> Void)? = nil
+    @Binding var showLoupe: Bool
+    @State private var loupeCenter: CGPoint?
+    @AppStorage("darkroom.light.on") private var tableLit = true
     @State private var expanded = false
     @State private var fineTune = false
     private enum Style: String { case cleanPrint, filmEdge }
-    private var current: PrintLayout { layout ?? PrintLayout() }
+    /// A film-edge enlarger print starts on 5 × 7; anything else starts as the photo itself.
+    private var current: PrintLayout {
+        if let layout { return layout }
+        if case .enlarger = content { return .enlargerDefault }
+        return PrintLayout()
+    }
     private var sourceSize: CGSize { printSourceSize ?? image.size }
-    private var geometry: PrintGeometry? {
-        PrintGeometry(imageSize: sourceSize, layout: current, longEdge: 1000)
+    /// What is on the sheet: the picture, or a film-edge canvas with or without its own easel.
+    private var content: PrintGeometry.Content {
+        guard let edge else { return .picture }
+        return resolvedType == .negativePrint ? .enlarger(frame: edge.easelFrame(canvas: sourceSize)) : .scan
     }
 
     var body: some View {
-        GeometryReader { workspace in
-            VStack(spacing: 12) {
-                PrintPreview(image: imageReady ? image : nil, imageSize: sourceSize, layout: current)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                inspector(height: min(expanded ? 360 : 202, max(160, workspace.size.height * 0.55)))
+        GeometryReader { proxy in
+            Group {
+                if workspace == .sideBySide {
+                    HStack(spacing: 12) {
+                        preview
+                        inspector(height: nil).frame(width: WorkspaceLayout.panelWidth(in: proxy.size.width))
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        preview
+                        inspector(height: min(expanded ? 360 : 202, max(160, proxy.size.height * 0.55)))
+                    }
+                }
             }
             .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background { LightTableBackdrop() }
+            .background { LightTableBackdrop(lit: tableLit) }
         }
         .onDisappear { onEditingChanged(false) }
     }
 
-    private func inspector(height: CGFloat) -> some View {
+    private var preview: some View {
+        PrintPreview(image: imageReady ? image : nil, imageSize: sourceSize, layout: current, content: content,
+                     paperColor: edge != nil && resolvedType == .negativePrint ? PaperTone.color(of: image) : .white,
+                     loupeImage: loupeImage, loupeRefining: loupeRefining, loupeWidth: loupeWidth,
+                     loupePatch: loupePatch, onLoupeInspect: onLoupeInspect,
+                     showLoupe: showLoupe, tableLit: tableLit, loupeCenter: $loupeCenter)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .bottomLeading) { LightTableSwitch(lit: $tableLit) }
+            .overlay(alignment: .topLeading) {
+                Button(showLoupe ? String(localized: "darkroom.hide_loupe", defaultValue: "Hide loupe")
+                                 : String(localized: "darkroom.show_loupe", defaultValue: "Show loupe"),
+                       systemImage: showLoupe ? "magnifyingglass.circle.fill" : "magnifyingglass.circle") {
+                    showLoupe.toggle()
+                }
+                .glassIconButton().accessibilityIdentifier("darkroom.loupe.toggle")
+            }
+    }
+
+    /// `height` is nil when the controls fill their column and have nothing to expand into.
+    private func inspector(height: CGFloat?) -> some View {
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 8) {
                 HStack(spacing: 10) {
                     PanelTabs(
                         options: [
                             (Style.cleanPrint, String(localized: "darkroom.clean_print", defaultValue: "Clean print")),
-                            (.filmEdge, String(localized: "darkroom.film_edge_later", defaultValue: "Film edge")),
+                            (.filmEdge, String(localized: "darkroom.film_edge", defaultValue: "Film edge")),
                         ],
                         selection: Binding(get: { edge == nil ? .cleanPrint : .filmEdge },
                             set: { edge = $0 == .filmEdge ? (edge ?? FilmEdgeLayout.newDefault()) : nil }), prefix: "darkroom.")
-                    PanelExpansionButton(expanded: $expanded, identifier: "darkroom.expand")
+                    if height != nil { PanelExpansionButton(expanded: $expanded, identifier: "darkroom.expand") }
                 }
                 .dynamicTypeSize(...DynamicTypeSize.large)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         if edge != nil { edgeControls }
-                        paperControl
-                        scaleControl
-                        if expanded { details }
+                        paperControls
+                        if showsEasel { easelControls }
                     }
                     .font(.footnote).padding(16)
                 }
-                .frame(height: height)
+                .frame(height: height).frame(maxHeight: height == nil ? .infinity : nil)
                 .glassEffect(.regular, in: .rect(cornerRadius: 24))
             }
         }
     }
 
+    private enum FormatChoice: String { case film35, cine35, roll120 }
+    /// Auto, or one of the film-edge types (by raw value).
+    private struct EdgeChoice: RawRepresentable, Hashable {
+        let rawValue: String
+        static let auto = EdgeChoice(rawValue: "auto")
+    }
+    private var formatChoice: FormatChoice {
+        guard let edge else { return .film35 }
+        if edge.format == .roll120 { return .roll120 }
+        return edge.cinePerforations ? .cine35 : .film35
+    }
+    /// Change the film edge, starting from the default when there is none yet.
+    private func setEdge(_ change: (inout FilmEdgeLayout) -> Void) {
+        var next = edge ?? FilmEdgeLayout.newDefault()
+        change(&next)
+        edge = next
+    }
+    private func edgeBinding<Value>(_ path: WritableKeyPath<FilmEdgeLayout, Value>) -> Binding<Value> {
+        Binding(get: { (edge ?? FilmEdgeLayout.newDefault())[keyPath: path] }, set: { value in setEdge { $0[keyPath: path] = value } })
+    }
+    /// A zoom stored as a fraction and shown as a percentage, kept inside its range.
+    private func percentBinding(_ path: WritableKeyPath<FilmEdgeLayout, Double>, in range: ClosedRange<Double>) -> Binding<Double> {
+        Binding(get: { (edge ?? FilmEdgeLayout.newDefault())[keyPath: path] * 100 }, set: { value in
+            setEdge { $0[keyPath: path] = min(max(value / 100, range.lowerBound), range.upperBound) }
+        })
+    }
     private var edgeControls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(String(localized: "darkroom.edge.selection", defaultValue: "Edge selection"), selection: Binding(
-                get: { (edgeSelection ?? FilmEdgeSelection()).mode }, set: { mode in
+            // One row: Auto follows Develop; a type pins the edge. Auto keeps the last pinned type.
+            PanelTabs(
+                options: [(EdgeChoice.auto, String(localized: "common.auto", defaultValue: "Auto"))]
+                    + FilmEdgeType.allCases.map { (EdgeChoice(rawValue: $0.rawValue), $0.title) },
+                selection: Binding(get: {
+                    let current = edgeSelection ?? FilmEdgeSelection()
+                    return current.mode == .automatic ? .auto : EdgeChoice(rawValue: current.manualType.rawValue)
+                }, set: { choice in
                     var next = edgeSelection ?? FilmEdgeSelection()
-                    next.mode = mode
-                    edgeSelection = next
-                })) {
-                Text(String(localized: "common.auto", defaultValue: "Auto")).tag(FilmEdgeSelection.Mode.automatic)
-                Text(String(localized: "darkroom.edge.manual", defaultValue: "Manual")).tag(FilmEdgeSelection.Mode.manual)
-            }.pickerStyle(.segmented).accessibilityIdentifier("darkroom.edge.mode")
-            if (edgeSelection ?? FilmEdgeSelection()).mode == .manual {
-                Picker(String(localized: "darkroom.edge.type", defaultValue: "Edge type"), selection: Binding(
-                    get: { (edgeSelection ?? FilmEdgeSelection()).manualType }, set: { type in
-                        var next = edgeSelection ?? FilmEdgeSelection()
+                    if let type = FilmEdgeType(rawValue: choice.rawValue) {
+                        next.mode = .manual
                         next.manualType = type
-                        edgeSelection = next
-                    })) {
-                    ForEach(FilmEdgeType.allCases, id: \.self) { Text($0.title).tag($0) }
-                }.accessibilityIdentifier("darkroom.edge.type")
-            } else {
+                    } else {
+                        next.mode = .automatic
+                    }
+                    edgeSelection = next
+                }),
+                prefix: "darkroom.edge.type.")
+            if (edgeSelection ?? FilmEdgeSelection()).mode == .automatic {
                 LabeledContent(String(localized: "darkroom.edge.from_develop", defaultValue: "From Develop"), value: resolvedType.title)
-                    .accessibilityIdentifier("darkroom.edge.resolved")
+                    .font(.caption).accessibilityIdentifier("darkroom.edge.resolved")
             }
-            Picker(String(localized: "darkroom.edge.format", defaultValue: "Film format"), selection: Binding(
-                get: { edge?.format ?? .film35 }, set: { format in
-                    var next = edge ?? FilmEdgeLayout.newDefault()
-                    next.format = format
-                    edge = next
-                })) {
-                Text(verbatim: "35 mm").tag(FilmEdgeLayout.Format.film35)
-                Text(verbatim: "120").tag(FilmEdgeLayout.Format.roll120)
-            }.pickerStyle(.segmented).accessibilityIdentifier("darkroom.edge.format")
+            PanelTabs(
+                options: [(FormatChoice.film35, "35 mm"),
+                          (.cine35, String(localized: "darkroom.edge.cine35", defaultValue: "35 mm cine")),
+                          (.roll120, "120")],
+                selection: Binding(get: { formatChoice }, set: { choice in
+                    setEdge {
+                        $0.format = choice == .roll120 ? .roll120 : .film35
+                        $0.cinePerforations = choice == .cine35
+                    }
+                }),
+                prefix: "darkroom.edge.format.")
+            if edge?.format == .roll120 {
+                PanelTabs(
+                    options: FilmEdgeLayout.RollFrame.allCases.map { ($0, $0.title) },
+                    selection: edgeBinding(\.rollFrame),
+                    prefix: "darkroom.edge.frame.")
+                PanelTabs(
+                    options: FilmEdgeLayout.RollGate.allCases.map { ($0, $0.title) },
+                    selection: edgeBinding(\.rollGate),
+                    prefix: "darkroom.edge.body.")
+            }
             ViewThatFits(in: .horizontal) {
                 HStack { gateSize; Spacer(); cropButton }
                 VStack(alignment: .leading, spacing: 6) { gateSize; cropButton }
             }
-            Text(String(localized: "darkroom.edge.aperture_note", defaultValue: "35 mm uses a fixed 3:2 crop. 120 uses a square crop without perforations."))
-                .font(.caption).foregroundStyle(.secondary)
-            Picker(String(localized: "darkroom.gate", defaultValue: "Gate"), selection: Binding(
-                get: { edge?.gateShape ?? FilmEdgeLayout.preferredGateShape }, set: { shape in
-                    var next = edge ?? FilmEdgeLayout.newDefault()
-                    next.gateShape = shape
-                    FilmEdgeLayout.preferredGateShape = shape
-                    edge = next
-                })) {
-                ForEach(FilmEdgeLayout.GateShape.allCases, id: \.self) { Text($0.title).tag($0) }
-            }.accessibilityIdentifier("darkroom.edge.gateShape")
+            Divider().padding(.vertical, 4)
+            gateControls
+            if resolvedType == .negativePrint { zoomControl } else { scanZoomControl }
             Divider().padding(.vertical, 4)
             distressControls
+            Divider().padding(.vertical, 4)
         }
     }
 
-    // MARK: Distress — presets for a quick start, every physical parameter for fine control.
-    private var distress: FilmEdgeDistress { edge?.distress ?? FilmEdgeDistress() }
-    private func setDistress(_ change: (inout FilmEdgeDistress) -> Void) {
-        var next = edge ?? FilmEdgeLayout.newDefault()
-        change(&next.distress)
-        edge = next
+    // MARK: Gate — the camera and holder. Fixed per setup, remembered for the next edit.
+    private var gate: FilmEdgeGate { edge?.gate ?? FilmEdgeGate() }
+    private var gateControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(String(localized: "darkroom.gate", defaultValue: "Gate")).foregroundStyle(.secondary)
+                if gate.kind == nil {
+                    Text(String(localized: "darkroom.distress.custom", defaultValue: "Custom"))
+                        .font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+            PanelTabs(
+                options: FilmEdgeGate.Kind.allCases.map { ($0, $0.title) },
+                selection: Binding(get: { gate.kind ?? .natural }, set: { kind in setEdge { $0.gate = FilmEdgeGate(kind) } }),
+                prefix: "darkroom.gate.", isSelectionActive: gate.kind != nil)
+        }
     }
+
+    // MARK: Distress — how the film was handled. Presets for a quick start, every field for fine control.
+    private var distress: FilmEdgeDistress { edge?.distress ?? FilmEdgeLayout.newDefault().distress }
+    private func setDistress(_ change: (inout FilmEdgeDistress) -> Void) { setEdge { change(&$0.distress) } }
     private func distressBinding(_ path: WritableKeyPath<FilmEdgeDistress, Double>, scale: Double = 1) -> Binding<Double> {
         Binding(get: { distress[keyPath: path] * scale }, set: { value in
             let range = FilmEdgeDistress.ranges[path] ?? (0...1)
@@ -143,48 +232,27 @@ struct DarkroomView: View {
                 Button(String(localized: "darkroom.distress.new_seed", defaultValue: "New pattern"), systemImage: "dice") {
                     setDistress { $0.seed = UInt32.random(in: 1...UInt32.max) }
                 }
-                .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-                .frame(minWidth: 44, minHeight: 44).accessibilityIdentifier("darkroom.distress.seed")
+                .glassIconButton().accessibilityIdentifier("darkroom.distress.seed")
             }
             PanelTabs(
                 options: FilmEdgeDistress.Preset.allCases.map { ($0, $0.title) },
-                selection: Binding(get: { distress.preset ?? .clean }, set: { preset in setDistress { $0.apply(preset) } }),
+                selection: Binding(get: { distress.preset ?? .lab }, set: { preset in setDistress { $0.apply(preset) } }),
                 prefix: "darkroom.distress.", isSelectionActive: distress.preset != nil)
             distressSlider(String(localized: "darkroom.distress.amount", defaultValue: "Amount"), \.amount,
                            scale: 100, step: 1, unit: "%", identifier: "amount")
             DisclosureGroup(isExpanded: $fineTune) {
                 VStack(alignment: .leading, spacing: 10) {
-                    distressGroup(String(localized: "darkroom.distress.gate", defaultValue: "Camera gate")) {
-                        distressSlider(String(localized: "darkroom.distress.gate_softness", defaultValue: "Edge softness"), \.gateSoftness,
-                                       scale: 1000, step: 1, unit: "µm", identifier: "softness")
-                        distressSlider(String(localized: "darkroom.distress.gate_wear", defaultValue: "Gate wear"), \.gateWear,
-                                       scale: 1000, step: 1, unit: "µm", identifier: "wear")
-                        distressSlider(String(localized: "darkroom.distress.tilt", defaultValue: "Film tilt"), \.tilt,
-                                       step: 0.01, unit: "°", identifier: "tilt", fillOrigin: 0)
-                    }
-                    distressGroup(String(localized: "darkroom.distress.sprockets", defaultValue: "Sprocket holes")) {
+                    distressGroup(String(localized: "darkroom.distress.handling", defaultValue: "Handling")) {
+                        distressSlider(String(localized: "darkroom.distress.extra_tilt", defaultValue: "Crooked loading"), \.tilt,
+                                       step: 0.05, unit: "°", identifier: "tilt", fillOrigin: 0)
+                        distressSlider(String(localized: "darkroom.distress.curl", defaultValue: "Film curl"), \.bulge,
+                                       scale: 100, step: 1, unit: "%", identifier: "bulge", fillOrigin: 0)
                         distressSlider(String(localized: "darkroom.distress.hole_variation", defaultValue: "Hole variation"), \.holeVariation,
                                        scale: 100, step: 1, unit: "%", identifier: "holeVariation")
-                        distressSlider(String(localized: "darkroom.distress.perforation_leak", defaultValue: "Light through holes"), \.perforationLeak,
-                                       scale: 100, step: 1, unit: "%", identifier: "perforationLeak")
-                    }
-                    distressGroup(String(localized: "darkroom.distress.carrier", defaultValue: "Carrier and holder")) {
-                        distressSlider(String(localized: "darkroom.distress.carrier_blur", defaultValue: "Holder blur"), \.carrierBlur,
-                                       step: 0.01, unit: "mm", identifier: "carrierBlur")
-                        distressSlider(String(localized: "darkroom.distress.carrier_detail", defaultValue: "Holder edge detail"), \.carrierDetail,
-                                       scale: 100, step: 1, unit: "%", identifier: "carrierDetail")
-                        distressSlider(String(localized: "darkroom.distress.carrier_roughness", defaultValue: "Filed roughness"), \.carrierRoughness,
-                                       step: 0.01, unit: "mm", identifier: "carrier")
-                        distressSlider(String(localized: "darkroom.distress.carrier_scale", defaultValue: "Roughness scale"), \.carrierScale,
-                                       step: 0.05, unit: "mm", identifier: "carrierScale")
-                        distressSlider(String(localized: "darkroom.distress.carrier_reflection", defaultValue: "Edge reflection (print)"), \.carrierReflection,
-                                       scale: 100, step: 1, unit: "%", identifier: "carrierReflection")
                     }
                     distressGroup(String(localized: "darkroom.distress.light", defaultValue: "Fog and leaks")) {
                         distressSlider(String(localized: "darkroom.distress.edge_fog", defaultValue: "Edge fog"), \.edgeFog,
                                        scale: 100, step: 1, unit: "%", identifier: "fog")
-                        distressSlider(String(localized: "darkroom.distress.fog_depth", defaultValue: "Fog depth"), \.fogDepth,
-                                       step: 0.1, unit: "mm", identifier: "fogDepth")
                         Picker(String(localized: "darkroom.distress.leak_kind", defaultValue: "Leak path"), selection: Binding(
                             get: { distress.leakKind }, set: { kind in setDistress {
                                 if $0.leakKind != kind { $0.warmth = FilmEdgeDistress.defaultWarmth(kind) }
@@ -198,6 +266,7 @@ struct DarkroomView: View {
                             Text(String(localized: "darkroom.distress.shape_glow", defaultValue: "Glow")).tag(FilmEdgeDistress.LeakShape.glow)
                             Text(String(localized: "darkroom.distress.shape_streak", defaultValue: "Streak")).tag(FilmEdgeDistress.LeakShape.streak)
                             Text(String(localized: "darkroom.distress.shape_flare", defaultValue: "Flare")).tag(FilmEdgeDistress.LeakShape.flare)
+                            Text(String(localized: "darkroom.distress.shape_burn", defaultValue: "Burn")).tag(FilmEdgeDistress.LeakShape.burn)
                         }.pickerStyle(.segmented).accessibilityIdentifier("darkroom.distress.leakShape")
                         distressSlider(String(localized: "darkroom.distress.leak_strength", defaultValue: "Leak"), \.leak,
                                        scale: 100, step: 1, unit: "%", identifier: "leak")
@@ -205,8 +274,6 @@ struct DarkroomView: View {
                                        step: 0.5, unit: "mm", identifier: "leakSize")
                         distressSlider(String(localized: "darkroom.distress.leak_position", defaultValue: "Leak position"), \.leakPosition,
                                        scale: 100, step: 1, unit: "%", identifier: "leakPosition")
-                        distressSlider(String(localized: "darkroom.distress.warmth", defaultValue: "Leak colour: cool ↔ warm"), \.warmth,
-                                       scale: 100, step: 1, unit: "", identifier: "warmth", fillOrigin: 0)
                     }
                     distressGroup(String(localized: "darkroom.distress.damage", defaultValue: "Dust and scratches")) {
                         distressSlider(String(localized: "darkroom.distress.dust", defaultValue: "Dust"), \.dust,
@@ -216,11 +283,7 @@ struct DarkroomView: View {
                         Toggle(String(localized: "darkroom.distress.scratches_in_image", defaultValue: "Scratches cross the picture"),
                                isOn: Binding(get: { distress.scratchesInImage }, set: { on in setDistress { $0.scratchesInImage = on } }))
                             .accessibilityIdentifier("darkroom.distress.scratchesInImage")
-                        Text(String(localized: "darkroom.distress.scratches_note", defaultValue: "Off: rails and sprockets only touch the rebate. On: gate grit drags scratches through the picture too."))
-                            .font(.caption2).foregroundStyle(.secondary)
                     }
-                    Text(String(localized: "darkroom.distress.note", defaultValue: "Effects follow the chosen print or scan: dust prints white on paper and dark in a scan; leaks are exposure, so the film decides their colour."))
-                        .font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.top, 6)
             } label: {
@@ -243,8 +306,59 @@ struct DarkroomView: View {
             title: title, value: distressBinding(path, scale: scale), range: scaled, step: step,
             minimum: scaled.lowerBound, maximum: scaled.upperBound, unit: unit,
             identifier: "darkroom.distress." + identifier,
-            defaultValue: FilmEdgeDistress()[keyPath: path] * scale,
+            defaultValue: FilmEdgeLayout.newDefault().distress[keyPath: path] * scale,
             fillOrigin: fillOrigin ?? scaled.lowerBound, onEditingChanged: onEdgeEditingChanged)
+    }
+    // MARK: Enlarger — the head's height sets how much of the frame the easel opening shows.
+    private var zoomControl: some View {
+        let border = (edge ?? FilmEdgeLayout.newDefault()).easelBorder
+        func mm(_ v: Double) -> String { abs(v).formatted(.number.precision(.fractionLength(2))) }
+        let readout = abs(border.ends) < 0.005
+            ? String(localized: "darkroom.easel.on_edge", defaultValue: "On the frame edge")
+            : border.ends > 0
+                ? String(localized: "darkroom.easel.rebate", defaultValue: "Rebate \(mm(border.ends)) × \(mm(border.sides)) mm")
+                : String(localized: "darkroom.easel.cropped", defaultValue: "Crop \(mm(border.ends)) × \(mm(border.sides)) mm")
+        return VStack(alignment: .leading, spacing: 3) {
+            NumericControl(
+                title: String(localized: "darkroom.easel.zoom", defaultValue: "Enlarger zoom"),
+                value: percentBinding(\.printZoom, in: FilmEdgeLayout.printZoomRange),
+                range: 90...110, step: 0.5, minimum: 90, maximum: 110, unit: "%",
+                identifier: "darkroom.easel.zoom", defaultValue: 97, fillOrigin: 100,
+                onEditingChanged: onEdgeEditingChanged)
+            Text(readout).font(.caption2).foregroundStyle(.secondary).accessibilityIdentifier("darkroom.easel.readout")
+        }
+    }
+    /// The scan's counterpart to the enlarger zoom: how far past the frame the scanner's crop reaches.
+    private var scanZoomControl: some View {
+        NumericControl(
+            title: String(localized: "darkroom.edge.scan_zoom", defaultValue: "Scan framing"),
+            value: percentBinding(\.scanZoom, in: FilmEdgeLayout.scanZoomRange),
+            range: 75...105, step: 0.5, minimum: 75, maximum: 105, unit: "%",
+            identifier: "darkroom.edge.scanZoom", defaultValue: 90, fillOrigin: 100,
+            onEditingChanged: onEdgeEditingChanged)
+    }
+    // MARK: Easel — blades on the paper: their edge and how they were set.
+    /// Blades show wherever there is a border (or a film-edge enlarger print, which has its own).
+    private var showsEasel: Bool {
+        if case .enlarger = content { return true }
+        return content == .picture && current.resolvedMargin(content) > 0
+    }
+    private var easelControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(String(localized: "darkroom.easel", defaultValue: "Easel")).foregroundStyle(.secondary)
+                Spacer()
+                Toggle(String(localized: "darkroom.easel.hand_set", defaultValue: "Hand-set"), isOn: binding(\.handSet))
+                    .fixedSize().accessibilityIdentifier("darkroom.easel.handSet")
+                Button(String(localized: "darkroom.easel.new_placement", defaultValue: "New placement"), systemImage: "dice") {
+                    var next = current
+                    next.easelSeed = UInt32.random(in: 2...UInt32.max)
+                    layout = next
+                }
+                .glassIconButton().accessibilityIdentifier("darkroom.easel.seed")
+            }
+            PanelTabs(options: Easel.Kind.allCases.map { ($0, $0.title) }, selection: binding(\.blade), prefix: "darkroom.easel.blade.")
+        }
     }
     private var gateSize: some View {
         Text((edge ?? FilmEdgeLayout()).gateTitle(portrait: sourceSize.height > sourceSize.width))
@@ -255,68 +369,55 @@ struct DarkroomView: View {
             .accessibilityIdentifier("darkroom.edge.adjustCrop")
     }
 
-    private var paperControl: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(String(localized: "darkroom.paper", defaultValue: "Paper"))
-                .foregroundStyle(.secondary)
-            Picker(String(localized: "darkroom.paper", defaultValue: "Paper"), selection: binding(\.paper)) {
-                ForEach(PrintLayout.Paper.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented).accessibilityIdentifier("darkroom.paper")
+    // MARK: Paper — the sheet and the easel's white border.
+    private var paperControls: some View {
+        // Percent of the sheet's long side; below zero the picture runs past the sheet's edge.
+        let fill = PrintGeometry.fillMargin(imageSize: sourceSize, layout: current, content: content)
+        let margin = current.fill ? fill : current.resolvedMargin(content)
+        let filled = abs(margin - fill) < 0.0005
+        func setMargin(_ value: Double) {
+            var next = current
+            next.fill = false
+            next.margin = min(max(value, PrintLayout.marginRange.lowerBound), PrintLayout.marginRange.upperBound)
+            layout = next
         }
-    }
-
-    private var scaleControl: some View {
-        VStack(spacing: 3) {
-            NumericControl(
-                title: String(localized: "darkroom.image_scale", defaultValue: "Image scale"),
-                value: Binding(get: { current.scale * 100 }, set: { value in
-                    var next = current
-                    next.scale = min(max(value / 100, PrintLayout.scaleRange.lowerBound), PrintLayout.scaleRange.upperBound)
-                    layout = next.isIdentity ? nil : next
-                }),
-                range: 25...max(100, min(400, (geometry?.fillScale ?? 1) * 100)), step: 1,
-                minimum: 25, maximum: 400, unit: "%", identifier: "darkroom.scale",
-                defaultValue: 100, fillOrigin: 0, onEditingChanged: onEditingChanged)
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Button(String(localized: "darkroom.fit", defaultValue: "Fit")) { setScale(1) }
-                    .accessibilityIdentifier("darkroom.fit")
-                Button(String(localized: "darkroom.fill", defaultValue: "Fill")) { setScale(geometry?.fillScale ?? 1) }
-                    .disabled((geometry?.fillScale ?? 1) > PrintLayout.scaleRange.upperBound)
-                    .accessibilityIdentifier("darkroom.fill")
-                Spacer()
-                Text(
-                    geometry?.cropsImage == true
-                        ? String(localized: "darkroom.cropped_to_paper", defaultValue: "Cropped to paper")
-                        : String(localized: "darkroom.whole_image", defaultValue: "Whole image")
-                ).font(.caption2).foregroundStyle(.secondary)
-            }
-            .buttonStyle(.borderless)
-        }
-    }
-
-    private var details: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if current.paper != .asImage {
-                HStack {
-                    Text(String(localized: "darkroom.orientation", defaultValue: "Orientation"))
-                    Spacer()
-                    Button(
-                        String(localized: "darkroom.rotate_paper", defaultValue: "Rotate paper"),
-                        systemImage: "rotate.right"
-                    ) {
+                Picker(String(localized: "darkroom.paper", defaultValue: "Paper"), selection: binding(\.paper)) {
+                    ForEach(PrintLayout.Paper.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented).accessibilityIdentifier("darkroom.paper")
+                if current.paper != .asImage {
+                    Button(String(localized: "darkroom.rotate_paper", defaultValue: "Rotate paper"), systemImage: "rotate.right") {
                         var next = current
                         let landscape = current.paperAspect(imageAspect: sourceSize.width / sourceSize.height) > 1
                         next.orientation = landscape ? .portrait : .landscape
                         layout = next
                     }
-                    .accessibilityIdentifier("darkroom.rotatePaper")
+                    .glassIconButton().accessibilityIdentifier("darkroom.rotatePaper")
                 }
-                Text(String(localized: "darkroom.paper_inches", defaultValue: "Paper sizes are in inches. Export size controls pixels."))
-                    .font(.caption).foregroundStyle(.secondary)
             }
-            Button(String(localized: "darkroom.reset_layout", defaultValue: "Reset print layout")) { layout = nil }
-                .disabled(layout == nil).accessibilityIdentifier("darkroom.reset")
+            // Presets for the usual widths; the slider below takes anything in between.
+            PanelTabs(
+                options: PrintLayout.Border.allCases.map { ($0, $0.title) },
+                selection: Binding(
+                    get: { PrintLayout.Border(margin: margin) ?? .none },
+                    set: { setMargin($0.margin) }),
+                prefix: "darkroom.border.", isSelectionActive: !filled && PrintLayout.Border(margin: margin) != nil)
+            HStack(alignment: .bottom, spacing: 10) {
+                NumericControl(
+                    title: String(localized: "darkroom.border", defaultValue: "Border"),
+                    value: Binding(get: { margin * 100 }, set: { setMargin($0 / 100) }),
+                    range: (PrintLayout.marginRange.lowerBound * 100)...(PrintLayout.marginRange.upperBound * 100), step: 0.5,
+                    minimum: PrintLayout.marginRange.lowerBound * 100, maximum: PrintLayout.marginRange.upperBound * 100, unit: "%",
+                    identifier: "darkroom.border",
+                    defaultValue: { var d = current; d.margin = nil; d.fill = false; return d.resolvedMargin(content) * 100 }(),
+                    fillOrigin: 0, onEditingChanged: onEditingChanged)
+                Button(String(localized: "darkroom.fill", defaultValue: "Fill")) { setMargin(fill) }
+                    .buttonStyle(.glass).tint(filled ? .accentColor : nil)
+                    .accessibilityValue(filled ? String(localized: "common.on", defaultValue: "On") : String(localized: "common.off", defaultValue: "Off"))
+                    .accessibilityIdentifier("darkroom.fill")
+            }
         }
     }
 
@@ -324,13 +425,8 @@ struct DarkroomView: View {
         Binding(get: { current[keyPath: keyPath] }, set: { value in
             var next = current
             next[keyPath: keyPath] = value
-            layout = next.isIdentity ? nil : next
+            layout = next.isDefault ? nil : next
         })
-    }
-    private func setScale(_ value: Double) {
-        var next = current
-        next.scale = min(max(value, PrintLayout.scaleRange.lowerBound), PrintLayout.scaleRange.upperBound)
-        layout = next.isIdentity ? nil : next
     }
 }
 
@@ -338,20 +434,29 @@ private struct PrintPreview: View {
     let image: UIImage?
     let imageSize: CGSize
     let layout: PrintLayout
+    var content = PrintGeometry.Content.picture
+    /// The sheet continues the print's own unexposed margin.
+    var paperColor = Color.white
+    var loupeImage: UIImage? = nil
+    var loupeRefining = false
+    /// Pixel width the loupe's full-resolution frame will have, known before it is rendered.
+    var loupeWidth: CGFloat? = nil
+    var loupePatch: PhotoRenderer.Detail? = nil
+    var onLoupeInspect: ((CGRect) -> Void)? = nil
+    var showLoupe = false
+    var tableLit = true
+    @Binding var loupeCenter: CGPoint?
     var body: some View {
         GeometryReader { viewport in
-            if let geometry = PrintGeometry(imageSize: imageSize, layout: layout, longEdge: 1000) {
+            if let geometry = PrintGeometry(imageSize: imageSize, layout: layout, longEdge: 1000, content: content) {
+                let blades = bladeMask(geometry)
                 let fit = min(max(1, viewport.size.width - 44) / geometry.paperSize.width,
                               max(1, viewport.size.height - 36) / geometry.paperSize.height)
                 let paper = CGSize(width: geometry.paperSize.width * fit, height: geometry.paperSize.height * fit)
-                ZStack(alignment: .topLeading) {
-                    Color.white
-                    if let image { Image(uiImage: image).resizable()
-                        .frame(width: geometry.imageRect.width * fit, height: geometry.imageRect.height * fit)
-                        .position(x: geometry.imageRect.midX * fit, y: geometry.imageRect.midY * fit)
-                    }
-                }
-                .frame(width: paper.width, height: paper.height).clipped()
+                PrintSheet(image: image, size: paper,
+                           imageRect: CGRect(x: geometry.imageRect.minX * fit, y: geometry.imageRect.minY * fit,
+                                             width: geometry.imageRect.width * fit, height: geometry.imageRect.height * fit),
+                           paper: paperColor, blades: blades)
                 .shadow(color: .black.opacity(0.18), radius: 7, x: 0, y: 4)
                 .position(x: viewport.size.width / 2, y: viewport.size.height / 2)
                 .accessibilityElement(children: .ignore)
@@ -360,8 +465,32 @@ private struct PrintPreview: View {
                     ? String(localized: "crop.landscape", defaultValue: "Landscape")
                     : String(localized: "crop.portrait", defaultValue: "Portrait")))
                 .accessibilityIdentifier("darkroom.preview")
+                if showLoupe, let source = loupeImage ?? image {
+                    let paperFrame = CGRect(x: (viewport.size.width - paper.width) / 2, y: (viewport.size.height - paper.height) / 2,
+                                            width: paper.width, height: paper.height)
+                    DarkroomLoupe(image: source,
+                                  imageFrame: CGRect(x: paperFrame.minX + geometry.imageRect.minX * fit,
+                                                     y: paperFrame.minY + geometry.imageRect.minY * fit,
+                                                     width: geometry.imageRect.width * fit, height: geometry.imageRect.height * fit),
+                                  paperFrame: paperFrame, bounds: viewport.size,
+                                  refining: loupeRefining || (loupeImage == nil && loupePatch == nil),
+                                  surround: LightTableBackdrop.surround(lit: tableLit), paper: paperColor,
+                                  fullWidth: loupeWidth, patch: loupePatch,
+                                  blades: blades,
+                                  onInspect: onLoupeInspect,
+                                  center: $loupeCenter)
+                }
             }
         }
+    }
+    /// The clean print's blade mask, at the loupe's resolution so its edge holds up at 100 %.
+    private func bladeMask(_ geometry: PrintGeometry) -> CGImage? {
+        guard geometry.magnification > 0 else { return nil }
+        let long = min(4096, max(loupeWidth.map { $0 * max(1, imageSize.height / imageSize.width) } ?? 0,
+                                 max(imageSize.width, imageSize.height), 1000))
+        let k = long / max(imageSize.width, imageSize.height)
+        return Easel.mask(width: Int((imageSize.width * k).rounded()), height: Int((imageSize.height * k).rounded()),
+                          magnification: geometry.magnification, kind: layout.blade, seed: layout.easelSeed)
     }
 }
 
@@ -379,7 +508,7 @@ private enum DarkroomFixture {
 
 #Preview("Clean print") {
     @Previewable @State var layout: PrintLayout? = nil
-    DarkroomView(image: DarkroomFixture.image, layout: $layout, edge: .constant(nil), edgeSelection: .constant(nil))
+    DarkroomView(image: DarkroomFixture.image, layout: $layout, edge: .constant(nil), edgeSelection: .constant(nil), showLoupe: .constant(true))
 }
 
 #Preview("Portrait paper · Larger text") {
@@ -387,10 +516,10 @@ private enum DarkroomFixture {
         var value = PrintLayout()
         value.paper = .eightByTen
         value.orientation = .portrait
-        value.scale = 0.8
+        value.margin = 0.08
         return value
     }()
-    DarkroomView(image: DarkroomFixture.image, layout: $layout, edge: .constant(nil), edgeSelection: .constant(nil))
+    DarkroomView(image: DarkroomFixture.image, layout: $layout, edge: .constant(nil), edgeSelection: .constant(nil), showLoupe: .constant(true))
         .environment(\.dynamicTypeSize, .accessibility1)
 }
 #endif

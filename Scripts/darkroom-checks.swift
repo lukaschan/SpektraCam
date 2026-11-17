@@ -9,24 +9,76 @@ import Foundation
                 var layout = PrintLayout()
                 layout.paper = paper
                 layout.orientation = orientation
+                layout.handSet = false  // a machine print is exactly centred
+                layout.margin = 0
                 let fit = PrintGeometry(imageSize: sourceSize, layout: layout, longEdge: 1200)!
                 precondition(!fit.cropsImage)
                 precondition(abs(fit.imageRect.midX - fit.paperSize.width / 2) < 1e-9)
                 precondition(abs(fit.imageRect.width / fit.imageRect.height - 1.5) < 1e-9)
-                layout.scale = fit.fillScale
+                layout.fill = true
                 let fill = PrintGeometry(imageSize: sourceSize, layout: layout, longEdge: 1200)!
                 precondition(fill.imageRect.width >= fill.paperSize.width - 0.01)
                 precondition(fill.imageRect.height >= fill.paperSize.height - 0.01)
+                precondition(fill.magnification == 0, "A borderless print showed blades")
                 let restored = try JSONDecoder().decode(PrintLayout.self, from: JSONEncoder().encode(layout))
                 precondition(restored == layout)
+                // The border is the narrowest margin, a fraction of the sheet's long side.
+                layout.fill = false; layout.margin = 0.05
+                let bordered = PrintGeometry(imageSize: sourceSize, layout: layout, longEdge: 1200)!
+                let long = max(bordered.paperSize.width, bordered.paperSize.height)
+                precondition(bordered.paperSize == fit.paperSize, "The border moved or resized the sheet")
+                let narrowest = min(bordered.imageRect.minX, bordered.imageRect.minY)
+                precondition(abs(narrowest - 0.05 * long) < 1, "Border \(narrowest) px, expected \(0.05 * long)")
+                // Hand-set easel: slightly off centre, never cropping, with a physical blade penumbra.
+                layout.handSet = true
+                for seed in [UInt32(1), 2, 3, 99] {
+                    layout.easelSeed = seed
+                    let centred = { var l = layout; l.handSet = false; return PrintGeometry(imageSize: sourceSize, layout: l, longEdge: 1200)! }()
+                    let set = PrintGeometry(imageSize: sourceSize, layout: layout, longEdge: 1200)!
+                    let dx = set.imageRect.minX - centred.imageRect.minX, dy = set.imageRect.minY - centred.imageRect.minY
+                    precondition(!set.cropsImage && set.imageRect.size == centred.imageRect.size, "Hand-set easel cropped or resized")
+                    precondition(abs(dx) <= 0.008 * long + 1e-9 && abs(dy) <= 0.008 * long + 1e-9, "Hand-set offset too large")
+                    precondition(abs(dx) <= 0.45 * centred.imageRect.minX + 1e-9 && abs(dy) <= 0.45 * centred.imageRect.minY + 1e-9,
+                                 "Hand-set offset ran into the margin")
+                    // 0.05 mm paper spread plus h / (N(1 + M)): between 0.05 and 0.25 mm on paper.
+                    let blurMillimetres = Double(set.bladeBlur) / (Double(long) / (paper.longMillimetres ?? 152.4))
+                    precondition(set.magnification > 1 && blurMillimetres > 0.05 && blurMillimetres < 0.25, "Blade penumbra \(blurMillimetres) mm")
+                }
             }
         }
+        try checkBladeEdge()
+        // Fill is the (negative) border at which the picture just covers the sheet.
+        do {
+            var sheet = PrintLayout(); sheet.paper = .fiveBySeven; sheet.handSet = false
+            let fill = PrintGeometry.fillMargin(imageSize: sourceSize, layout: sheet)
+            precondition(fill < 0 && PrintLayout.marginRange.contains(fill), "A 3:2 picture on 5 × 7 needs a negative fill border: \(fill)")
+            sheet.margin = fill
+            let covered = PrintGeometry(imageSize: sourceSize, layout: sheet, longEdge: 1400)!
+            precondition(covered.imageRect.minX <= 0.5 && covered.imageRect.minY <= 0.5
+                && covered.imageRect.maxX >= covered.paperSize.width - 0.5 && covered.imageRect.maxY >= covered.paperSize.height - 0.5,
+                "The fill border did not cover the sheet: \(covered.imageRect) on \(covered.paperSize)")
+            var square = PrintLayout(); square.paper = .fourBySix
+            precondition(abs(PrintGeometry.fillMargin(imageSize: CGSize(width: 600, height: 400), layout: square)) < 1e-12,
+                         "Matching proportions needed a fill border")
+        }
+        precondition(abs(Easel.penumbra(magnification: 4) - (4.5 / 40 + 0.05)) < 1e-12, "Easel penumbra formula")
+        let legacyLayout = try JSONDecoder().decode(PrintLayout.self, from: Data("{\"paper\":\"fourBySix\",\"scale\":0.8}".utf8))
+        precondition(!legacyLayout.handSet && legacyLayout.easelSeed == 1 && legacyLayout.blade == .natural,
+                     "Saved layouts did not default to a machine-set natural easel")
+        precondition(!PrintLayout().handSet, "The easel is hand-set by default")
+        precondition(abs((legacyLayout.margin ?? 0) - 0.1) < 1e-9 && !legacyLayout.fill, "Image scale 80 % did not become a border")
+        let legacyFill = try JSONDecoder().decode(PrintLayout.self, from: Data("{\"scale\":1.5}".utf8))
+        precondition(legacyFill.fill, "An image scale past Fit did not become borderless")
+        precondition(PrintLayout().resolvedMargin(.picture) == 0 && PrintLayout().isIdentity, "The default clean print gained a border")
+        precondition(PrintLayout().resolvedMargin(.enlarger(frame: CGRect(x: 0, y: 0, width: 1, height: 1))) == PrintLayout.automaticMargin,
+                     "A film-edge enlarger print lost its border")
         let legacy = try JSONDecoder().decode(EditRecipe.self, from: Data("{\"version\":4,\"filmID\":\"kodak_portra_400\",\"printID\":\"kodak_portra_endura\"}".utf8))
         precondition(legacy.printLayout == nil && legacy.filmID == "kodak_portra_400")
         var recipe = legacy
         var layout = PrintLayout()
         layout.paper = .eightByTen
-        layout.scale = 0.5
+        layout.margin = 0.2
+        layout.handSet = false
         recipe.printLayout = layout
         precondition(recipe.processingRecipe == legacy.processingRecipe,
             "Paper layout invalidated the film processing cache")
@@ -34,7 +86,7 @@ import Foundation
         precondition(roundTrip == recipe)
         try checkEdgeSelection()
         checkFixedGateCrops()
-        for invalid in ["{\"scale\":0}", "{\"scale\":5}", "{\"paper\":\"future\"}"] {
+        for invalid in ["{\"scale\":0}", "{\"margin\":0.5}", "{\"margin\":-1}", "{\"paper\":\"future\"}"] {
             do {
                 _ = try JSONDecoder().decode(PrintLayout.self, from: Data(invalid.utf8))
                 preconditionFailure("Invalid layout was accepted")
@@ -65,10 +117,51 @@ import Foundation
             "Composition inverted or changed the upper image")
         precondition(rgb(bytes, 300, 150, 140) == rgb(originalBytes, 600, 300, 300),
             "Composition inverted or changed the lower image")
-        precondition(expected.imageRect.width == 150 && expected.imageRect.height == 100)
+        precondition(expected.imageRect.width == 180 && expected.imageRect.height == 120)
+        // Placement is top-left in PrintGeometry and bottom-left in CoreGraphics: an off-centre
+        // hand-set picture must land where the geometry says, and the blade softens only its edge.
+        var handSet = layout; handSet.handSet = true; handSet.easelSeed = 3
+        let placedGeometry = PrintGeometry(imageSize: sourceSize, layout: handSet, longEdge: 300)!
+        let placed = pixels(try PrintCompositor.render(source, layout: handSet, maximum: 300))
+        let r = placedGeometry.imageRect
+        precondition(r.minY != expected.imageRect.minY, "Seed 3 did not move the picture vertically")
+        let inside = rgb(placed, 300, Int(r.midX), Int(r.minY + r.height * 0.25))
+        let outside = rgb(placed, 300, Int(r.midX), Int(r.minY) - 2)
+        precondition(inside == rgb(originalBytes, 600, 300, 100) && outside.allSatisfy { $0 == 255 },
+            "Hand-set placement drawn upside down or misplaced: \(inside), \(outside)")
         let full = try PrintCompositor.render(source, layout: layout)
-        precondition(full.width == 600 && full.height == 480, "Full output silently grew its long edge")
-        print("PASS: paper orientation, Fit/Fill, centered scale, legacy recipes, processing-cache independence, SDR composition, white margins, image orientation and bounded export size")
+        // Native: the 600 px picture at 0.3 × keeps its pixels, so the sheet is 1000 × 800.
+        precondition(full.width == 1000 && full.height == 800, "Full output resampled the picture: \(full.width)×\(full.height)")
+        var cropping = layout; cropping.fill = true
+        let tight = try PrintCompositor.render(source, layout: cropping)
+        precondition(max(tight.width, tight.height) == 500, "A sheet cropping the picture was enlarged: \(tight.width)×\(tight.height)")
+        print("PASS: paper orientation, border/Fill, hand-set easel bounds/penumbra/placement, worn blade edges, legacy recipes, processing-cache independence, SDR composition, white margins, image orientation and native-resolution sheets")
+    }
+    /// The blade's edge carries the gate's wear profile: crisp but not ruled, rougher by kind,
+    /// and the same mask for the same seed.
+    static func checkBladeEdge() throws {
+        func spread(_ kind: Easel.Kind) -> Double {
+            let mask = Easel.mask(width: 3000, height: 2000, magnification: 4, kind: kind, seed: 7)!
+            let data = mask.dataProvider!.data! as Data
+            var crossings = [Double]()
+            for y in stride(from: 300, to: 1700, by: 7) {
+                let row = Array(data[(y * mask.bytesPerRow)..<(y * mask.bytesPerRow + 60)])
+                guard let i = row.firstIndex(where: { $0 >= 128 }), i > 0 else { continue }
+                let a = Double(row[i - 1]), b = Double(row[i])
+                crossings.append(Double(i - 1) + (127.5 - a) / max(b - a, 1))
+            }
+            let mean = crossings.reduce(0, +) / Double(crossings.count)
+            precondition(data[1000 * mask.bytesPerRow + 1500] == 255 && data[1000 * mask.bytesPerRow] < 40, "Blade mask interior or edge wrong")
+            return (crossings.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(crossings.count)).squareRoot()
+        }
+        let precise = spread(.precise), natural = spread(.natural), worn = spread(.worn)
+        // 3000 px per 36 mm: natural wear of 0.009 mm is under a pixel of wander along the blade.
+        precondition(precise < natural && natural < worn && natural > 0.1 && natural < 3,
+                     "Blade wear \(precise) / \(natural) / \(worn) px")
+        let a = Easel.mask(width: 900, height: 600, magnification: 4, kind: .natural, seed: 3)!
+        let b = Easel.mask(width: 900, height: 600, magnification: 4, kind: .natural, seed: 3)!
+        precondition(a.dataProvider!.data! as Data == b.dataProvider!.data! as Data, "Blade mask not deterministic")
+        print("Blade wander (px sd at 3000 px): precise \(precise), natural \(natural), worn \(worn)")
     }
     static func pixels(_ image: CGImage) -> [UInt8] {
         let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,

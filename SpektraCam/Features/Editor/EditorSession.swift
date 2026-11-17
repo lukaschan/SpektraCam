@@ -1,7 +1,7 @@
 import CoreGraphics
-import OSLog
 import Observation
 import SwiftUI
+import OSLog
 
 /// One source, one recipe, and bounded recipe history; never copies source bytes for undo.
 @MainActor @Observable final class EditorSession: Identifiable, Hashable {
@@ -21,13 +21,13 @@ import SwiftUI
     var isRefiningPreview = false
     var filmRenderFailed = false
     @ObservationIgnored private var failureTask: Task<Void, Never>?
-    @ObservationIgnored private static let logger = Logger(
-        subsystem: "io.github.runzeni.andreavolpato-spektrafilm", category: "Rendering")
     var hasFilmPreview = false
     var isBusy: Bool { (isRendering || isProcessingFilm) && !isRefiningPreview }
     @ObservationIgnored private let filmRenderer: PhotoRenderer
     @ObservationIgnored private var edgeTask: Task<CGImage, Error>?
     @ObservationIgnored private var edgeEpoch = UUID()
+    @ObservationIgnored private var loupeTask: Task<CGImage, Error>?
+    @ObservationIgnored private var patchTask: Task<PhotoRenderer.Detail?, Never>?
     @ObservationIgnored private var filmSource: CGImage
     @ObservationIgnored private var renderedSource: CGImage
     @ObservationIgnored private var filmTask: Task<Void, Never>?
@@ -201,6 +201,11 @@ import SwiftUI
             recipe.flags = recipe.flags.filter { !$0.key.hasPrefix("film_render.grain.") }
         }
     }
+    /// The exported file's pixel size for `size`, before rendering.
+    func exportDimensions(size: PhotoExporter.Size) async -> (width: Int, height: Int) {
+        let snapshot = recipe
+        return await filmRenderer.exportDimensions(snapshot, size: size)
+    }
     func export(
         size: PhotoExporter.Size, format: PhotoExporter.Format, quality: Double,
         allowOvercommit: Bool = false
@@ -209,7 +214,9 @@ import SwiftUI
     ) {
         let snapshot = recipe
         edgeTask?.cancel()
+        loupeTask?.cancel()
         _ = await edgeTask?.result
+        _ = await loupeTask?.result
         settleTask?.cancel()
         settleTask = nil
         waitingToRefine = false
@@ -236,6 +243,31 @@ import SwiftUI
         let job = Task { try await renderer.renderFilmEdge(snapshot, maximum: maximum) }
         edgeTask = job
         defer { if edgeEpoch == epoch { edgeTask = nil } }
+        return try await withTaskCancellationHandler { try await job.value } onCancel: { job.cancel() }
+    }
+    /// Native-resolution pixels for the part of the photograph under the Darkroom loupe. Nil when
+    /// the edit's route can only be rendered as a whole frame.
+    func loupePatch(_ snapshot: EditRecipe, visible: CGRect) async -> PhotoRenderer.Detail? {
+        patchTask?.cancel()
+        var recipe = snapshot
+        recipe.printLayout = recipe.printLayout?.easelOnly
+        let renderer = filmRenderer
+        let job = Task { () -> PhotoRenderer.Detail? in
+            if recipe.filmEdgeLayout != nil { return try? await renderer.renderEdgeDetail(recipe, visible: visible) }
+            return try? await renderer.renderDetail(recipe, visible: visible, longEdge: 1_000_000)
+        }
+        patchTask = job
+        return await withTaskCancellationHandler { await job.value } onCancel: { job.cancel() }
+    }
+    /// Full-resolution photograph (with its film edge, without paper) for the Darkroom loupe.
+    /// Separate from the preview task so the two never cancel each other.
+    func darkroomLoupe(_ snapshot: EditRecipe, maximum: Int) async throws -> CGImage {
+        loupeTask?.cancel()
+        var recipe = snapshot
+        recipe.printLayout = recipe.printLayout?.easelOnly
+        let renderer = filmRenderer
+        let job = Task { try await renderer.renderPresentation(recipe, maximum: maximum) }
+        loupeTask = job
         return try await withTaskCancellationHandler { try await job.value } onCancel: { job.cancel() }
     }
     func discardExport() { Task { await filmRenderer.discardExport() } }
@@ -446,7 +478,7 @@ import SwiftUI
                     guard !Task.isCancelled, filmEpoch == epoch else { return }
                     frameTask = nil
                     if revision != filmRevision { continue }
-                    Self.logger.error(
+                    Log.rendering.error(
                         "Preview failed: \(String(describing: error), privacy: .public), film \(requested.filmID, privacy: .public)"
                     )
                     if interactionKey == nil {
@@ -474,6 +506,8 @@ import SwiftUI
         edgeEpoch = UUID()
         edgeTask?.cancel()
         edgeTask = nil
+        loupeTask?.cancel()
+        loupeTask = nil
         settleTask?.cancel()
         settleTask = nil
         waitingToRefine = false

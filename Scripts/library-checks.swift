@@ -187,7 +187,7 @@ import UniformTypeIdentifiers
         edgeRecipe.filmEdgeLayout = FilmEdgeLayout()
         var edgeChoice = FilmEdgeSelection(); edgeChoice.mode = .manual; edgeChoice.manualType = .reversalScan
         edgeRecipe.filmEdgeSelection = edgeChoice
-        var paper = PrintLayout(); paper.paper = .eightByTen; paper.scale = 0.75
+        var paper = PrintLayout(); paper.paper = .eightByTen; paper.margin = 0.125
         edgeRecipe.printLayout = paper
         edgeRecipe.tone.monochrome = true
         try await library!.finishEditing(photo.id, recipe: edgeRecipe)
@@ -196,7 +196,9 @@ import UniformTypeIdentifiers
         try FileManager.default.createDirectory(at: oldEdgeCache.deletingLastPathComponent(), withIntermediateDirectories: true)
         try originalBytes.write(to: oldEdgeCache)
         let framed = try await library!.images.image(library!.photo(photo.id)!, thumbnail: false)
-        precondition(framed.width == 26 && framed.height == 32, "Saved library preview lost Darkroom paper finishing")
+        // 8 × 10 portrait; the picture keeps its own pixels, so the sheet is larger than it.
+        precondition(abs(Double(framed.width) / Double(framed.height) - 0.8) < 0.04 && framed.height > 32,
+                     "Saved library preview lost Darkroom paper finishing: \(framed.width)×\(framed.height)")
         library = nil
         try FileManager.default.removeItem(at: cache)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
@@ -205,8 +207,8 @@ import UniformTypeIdentifiers
         precondition(savedEdge == edgeRecipe, "Restart lost enabled edge, manual family, paper or B&W")
         let recoveredEdge = try await library!.images.image(library!.photo(photo.id)!, thumbnail: false)
         let recoveredThumb = try await library!.images.image(library!.photo(photo.id)!, thumbnail: true)
-        precondition(recoveredEdge.width == 26 && recoveredEdge.height == 32)
-        precondition(recoveredThumb.width == 26 && recoveredThumb.height == 32)
+        precondition(recoveredEdge.width == framed.width && recoveredEdge.height == framed.height)
+        precondition(abs(Double(recoveredThumb.width) / Double(recoveredThumb.height) - 0.8) < 0.04)
         let preservedSource = try Data(contentsOf: library!.files.sourceURL(photo))
         precondition(preservedSource == originalBytes)
         try await library!.finishEditing(photo.id, recipe: recipe)

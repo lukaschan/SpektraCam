@@ -15,13 +15,13 @@ nonisolated enum RenderMemoryBudget {
             if let estimated, let available {
                 return
                     String(
-                        localized: "render_memory_budget.estimated_usage_warning",
+                        localized: "render.error.memory_estimate",
                         defaultValue:
                             "This render is estimated to need \(estimated / 1_048_576) MB; the current safe allowance is \(available / 1_048_576) MB. Choose a smaller size or disable diffusion and try again."
                     )
             }
             return String(
-                localized: "render_memory_budget.this_size_exceeds_the_rendering_limits_choose",
+                localized: "render.error.size_limit",
                 defaultValue:
                     "This size exceeds the rendering limits. Choose a smaller size and try again.")
         }

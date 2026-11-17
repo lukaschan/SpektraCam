@@ -51,12 +51,19 @@ struct PanelExpansionButton: View {
         ) {
             withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { expanded.toggle() }
         }
-        .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-        .frame(minWidth: 44, minHeight: 44)
+        .glassIconButton()
         .accessibilityIdentifier(identifier)
         .accessibilityValue(
             expanded
-                ? String(localized: "editor.expanded", defaultValue: "Expanded")
-                : String(localized: "editor.collapsed", defaultValue: "Collapsed"))
+                ? String(localized: "common.expanded", defaultValue: "Expanded")
+                : String(localized: "common.collapsed", defaultValue: "Collapsed"))
+    }
+}
+
+extension View {
+    /// A round glass button showing only its icon, with the minimum touch target.
+    func glassIconButton() -> some View {
+        labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
+            .frame(minWidth: 44, minHeight: 44)
     }
 }

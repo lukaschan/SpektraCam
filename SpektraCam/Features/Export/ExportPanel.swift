@@ -13,10 +13,19 @@ struct ExportPanel: View {
     }
     @Environment(\.dismiss) private var dismiss
     @State private var format = PhotoExporter.Format.jpeg
-    @State private var size = PhotoExporter.Size.full
+    /// The last size chosen is kept for the next export.
+    @AppStorage("export.size") private var storedSize = PhotoExporter.Size.original.rawValue
+    private var size: PhotoExporter.Size {
+        let chosen = PhotoExporter.Size(rawValue: storedSize) ?? .original
+        if case .print = chosen, !hasPaper { return .original }
+        return chosen
+    }
+    private var hasPaper: Bool {
+        session?.recipe.printedLayout.map { $0.paper != .asImage } ?? false
+    }
+    @State private var expected = ""
     @State private var quality = 1.0
     @State private var detent = PresentationDetent.fraction(0.68)
-    @State private var sourceDimensions = ""
     @State private var retry = 0
     @State private var url: URL?
     @State private var dimensions = ""
@@ -33,26 +42,10 @@ struct ExportPanel: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker(String(localized: "export.size", defaultValue: "Size"), selection: $size)
-                    {
-                        ForEach(PhotoExporter.Size.allCases) { Text($0.title).tag($0) }
-                    }.pickerStyle(.segmented)
-                    Text(
-                        size.maximum.map {
-                            String(
-                                localized: "export.maximum_long_edge_0_px",
-                                defaultValue: "Maximum long edge · \($0) px")
-                        }
-                            ?? (sourceDimensions.isEmpty
-                                ? String(
-                                    localized: "export.original_resolution_with_crop_applied",
-                                    defaultValue: "Original resolution, with crop applied")
-                                : String(
-                                    localized: "export.original_dimensions_with_crop",
-                                    defaultValue:
-                                        "Original: \(sourceDimensions) px, with crop applied"))
-                    )
-                    .font(.caption).foregroundStyle(.secondary)
+                    ExportSizePicker(size: Binding(get: { size }, set: { storedSize = $0.rawValue }), allowsPrint: hasPaper)
+                    LabeledContent(String(localized: "export.output", defaultValue: "Output"),
+                                   value: url != nil ? dimensions : expected)
+                        .accessibilityIdentifier("export.output")
                     Picker(
                         String(localized: "export.format", defaultValue: "Format"),
                         selection: $format
@@ -76,11 +69,6 @@ struct ExportPanel: View {
                         value: String(
                             localized: "export.sdr_srgb_8_bit", defaultValue: "SDR · sRGB · 8-bit"))
                     if url != nil {
-                        LabeledContent(
-                            String(localized: "export.dimensions", defaultValue: "Dimensions"),
-                            value: dimensions
-                        ).accessibilityIdentifier(
-                            "export.dimensions")
                         if let saveFailure {
                             Text(saveFailure).font(.footnote).foregroundStyle(.secondary)
                         }
@@ -126,11 +114,16 @@ struct ExportPanel: View {
             ) {
                 await prepareExport()
             }
-            .task {
+            .task(id: size.rawValue) {
+                // The file's size is known before it renders.
                 if let session {
-                    sourceDimensions = "\(session.photo.width) × \(session.photo.height)"
-                } else if let original, let dimensions = try? await original.dimensions() {
-                    sourceDimensions = "\(Int(dimensions.width)) × \(Int(dimensions.height))"
+                    let d = await session.exportDimensions(size: size)
+                    expected = ExportSizePicker.describe(width: d.width, height: d.height)
+                } else if let original, let d = try? await original.dimensions() {
+                    let long = max(d.width, d.height)
+                    let factor = Double(size.longEdge(native: Int(long)) ?? Int(long)) / max(long, 1)
+                    expected = ExportSizePicker.describe(width: Int((d.width * factor).rounded()),
+                                                         height: Int((d.height * factor).rounded()))
                 }
             }
             .onDisappear {
@@ -219,7 +212,7 @@ struct ExportPanel: View {
                 return
             }
             url = result.0
-            dimensions = "\(result.1) × \(result.2)"
+            dimensions = ExportSizePicker.describe(width: result.1, height: result.2)
         } catch {
             guard !Task.isCancelled else { return }
             failure = error.localizedDescription

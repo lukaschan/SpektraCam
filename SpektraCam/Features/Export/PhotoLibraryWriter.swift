@@ -8,7 +8,7 @@ nonisolated enum PhotoLibraryWriter {
         case permission
         var errorDescription: String? {
             String(
-                localized: "photo_library_writer.allow_adding_photos_in_settings_to_save",
+                localized: "export.error.photos_permission",
                 defaultValue: "Allow adding photos in Settings to save this image.")
         }
     }

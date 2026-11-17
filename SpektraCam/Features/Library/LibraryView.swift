@@ -22,15 +22,28 @@ struct LibraryView: View {
     @State private var handledCameraRequest = 0
     @State private var scrollRevision = 0
     @State private var batchRequest: BatchRequest?
+    @State private var systemVerticalBar = false
+    @Environment(\.openCamera) private var openCamera
     private struct BatchRequest: Identifiable {
         let id = UUID()
         let items: [BatchExportItem]
     }
     private enum ImportSource { case photos, files }
     private var visible: [LibraryPhoto] { library.photos.filter { filter.includes($0) } }
+    /// Newest day first, newest photo first. The library keeps its photos in date order, so
+    /// one pass from the end groups them without hashing or sorting.
     private var sections: [(day: Date, photos: [LibraryPhoto])] {
-        Dictionary(grouping: visible, by: { Calendar.current.startOfDay(for: $0.date) })
-            .map { (day: $0.key, photos: $0.value) }.sorted { $0.day > $1.day }
+        let calendar = Calendar.current
+        var result: [(day: Date, photos: [LibraryPhoto])] = []
+        for photo in visible.reversed() {
+            let day = calendar.startOfDay(for: photo.date)
+            if result.last?.day == day {
+                result[result.count - 1].photos.append(photo)
+            } else {
+                result.append((day, [photo]))
+            }
+        }
+        return result
     }
     private func presented(_ source: ImportSource) -> Binding<Bool> {
         Binding(
@@ -47,9 +60,13 @@ struct LibraryView: View {
         NavigationStack(path: $path) {
             gallery
                 .overlay(alignment: .bottomTrailing) {
-                    CameraButton(prominent: true)
-                        .padding(.trailing, 26).padding(.bottom, 12)
+                    // Where the system keeps a bar on the side, the camera joins it.
+                    if !systemVerticalBar {
+                        CameraButton(prominent: true)
+                            .padding(.trailing, 26).padding(.bottom, 12)
+                    }
                 }
+                .onSystemVerticalBar { systemVerticalBar = $0 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     Text(
                         selecting
@@ -111,8 +128,13 @@ struct LibraryView: View {
                             selecting.toggle()
                             selection.removeAll()
                         } label: {
+                            // A side bar shows symbols; a top bar has room for the word.
                             if selecting {
                                 Image(systemName: "xmark")
+                            } else if systemVerticalBar {
+                                Label(
+                                    String(localized: "common.select", defaultValue: "Select"),
+                                    systemImage: "checkmark.circle")
                             } else {
                                 Text(String(localized: "common.select", defaultValue: "Select"))
                             }
@@ -166,7 +188,7 @@ struct LibraryView: View {
                             )
                             .confirmationDialog(
                                 String(
-                                    localized: "library.revert_selected_photos",
+                                    localized: "library.revert_confirm",
                                     defaultValue: "Revert selected photos?"),
                                 isPresented: $confirmRevert,
                                 titleVisibility: .visible
@@ -189,7 +211,7 @@ struct LibraryView: View {
                                 Text(
                                     String(
                                         localized:
-                                            "library.this_removes_all_edits_from_the_selected",
+                                            "library.revert_message",
                                         defaultValue:
                                             "This removes all edits from the selected app copies."))
                             }
@@ -205,14 +227,31 @@ struct LibraryView: View {
                             .accessibilityHint(String(localized: "library.from_photos", defaultValue: "From Photos"))
                         }
                     }
-                    ToolbarItem(placement: .bottomBar) { Spacer() }
+                    ToolbarSpacer(.flexible, placement: .bottomBar)
                     ToolbarItem(placement: .bottomBar) {
-                        Button(
-                            String(localized: "library.lut_manager", defaultValue: "LUT Manager")
-                        ) { showLUTs = true }
+                        Button {
+                            showLUTs = true
+                        } label: {
+                            if systemVerticalBar {
+                                Label(
+                                    String(localized: "lut.manager", defaultValue: "LUT Manager"),
+                                    systemImage: "cube")
+                            } else {
+                                Text(String(localized: "lut.manager", defaultValue: "LUT Manager"))
+                            }
+                        }
                         .accessibilityIdentifier("library.luts").disabled(working)
                     }
-                    ToolbarItem(placement: .bottomBar) { Spacer() }
+                    if systemVerticalBar {
+                        ToolbarItem(placement: .bottomBar) {
+                            Button(
+                                String(localized: "camera.camera", defaultValue: "Camera"),
+                                systemImage: "camera"
+                            ) { openCamera?() }
+                            .tint(Color.accentColor).accessibilityIdentifier("camera.open")
+                        }
+                    }
+                    ToolbarSpacer(.flexible, placement: .bottomBar)
                     ToolbarItem(placement: .bottomBar) {
                         Button(
                             String(localized: "common.delete", defaultValue: "Delete"),
@@ -222,7 +261,7 @@ struct LibraryView: View {
                         .disabled(!selecting || selection.isEmpty || working)
                         .confirmationDialog(
                             String(
-                                localized: "library.delete_photos",
+                                localized: "library.delete_confirm",
                                 defaultValue: "Delete \(selection.count) photos?"),
                             isPresented: $confirmDelete,
                             titleVisibility: .visible
@@ -246,7 +285,7 @@ struct LibraryView: View {
                         } message: {
                             Text(
                                 String(
-                                    localized: "library.this_removes_the_app_copies_and_their",
+                                    localized: "library.delete_message",
                                     defaultValue:
                                         "This removes the app copies and their edits. Your source photos stay unchanged."
                                 )
@@ -282,14 +321,7 @@ struct LibraryView: View {
                     scrollRevision += 1
                 }
 
-                .alert(
-                    String(localized: "library.library", defaultValue: "Library"),
-                    isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })
-                ) {
-                    Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) {}
-                } message: {
-                    Text(failure ?? "")
-                }
+                .failureAlert(String(localized: "library.library", defaultValue: "Library"), message: $failure)
         }
     }
     private var gallery: some View {
@@ -304,19 +336,19 @@ struct LibraryView: View {
                     systemImage: "photo.on.rectangle",
                     description: Text(
                         String(
-                            localized: "library.import_photos_from_photos_or_files",
+                            localized: "library.empty_hint",
                             defaultValue: "Import photos from Photos or Files.")))
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
                         Color.clear.frame(height: 0).id("library.latest")
                         LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3),
+                            columns: [GridItem(.adaptive(minimum: 118), spacing: 2)],
                             spacing: 2
                         ) {
                             ForEach(sections, id: \.day) { section in
                                 Section {
-                                    ForEach(section.photos.sorted { $0.date > $1.date }) { photo in
+                                    ForEach(section.photos) { photo in
                                         Button {
                                             if selecting {
                                                 if selection.contains(photo.id) {
@@ -344,10 +376,10 @@ struct LibraryView: View {
                                         .accessibilityValue(
                                             photo.hasEdits
                                                 ? String(
-                                                    localized: "library.edited",
+                                                    localized: "photo.edited",
                                                     defaultValue: "Edited")
                                                 : String(
-                                                    localized: "library.original",
+                                                    localized: "photo.original",
                                                     defaultValue: "Original")
                                         )
                                         .accessibilityAddTraits(
@@ -355,6 +387,23 @@ struct LibraryView: View {
                                         )
                                         .accessibilityIdentifier("library.photo.\(photo.id)")
                                         .id(photo.id)
+                                        .contextMenu {
+                                            Button(
+                                                String(localized: "common.select", defaultValue: "Select"),
+                                                systemImage: "checkmark.circle"
+                                            ) {
+                                                selecting = true
+                                                selection = [photo.id]
+                                            }
+                                            Button(
+                                                String(localized: "common.delete", defaultValue: "Delete"),
+                                                systemImage: "trash", role: .destructive
+                                            ) {
+                                                selecting = true
+                                                selection = [photo.id]
+                                                confirmDelete = true
+                                            }
+                                        }
                                     }
                                 } header: {
                                     Text(dayTitle(section.day)).font(.headline).frame(
@@ -436,7 +485,7 @@ struct LibraryView: View {
         scrollRevision += 1
         if errors > 0 {
             failure = String(
-                localized: "library.couldn_t_import_errors_photos_check_the",
+                localized: "library.import_failed",
                 defaultValue: "Couldn’t import \(errors) photos. Check the files and try again.")
         }
     }

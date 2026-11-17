@@ -79,11 +79,12 @@ nonisolated struct FilmPipeline: Sendable {
             // Front (through-the-lens) light is gated with the scene; back leaks and base fog are not.
             let neutral = color.exposure.raw(RGB(repeating: 0.184))
             let light = edge.leakLight(neutral: neutral), fog = edge.fogLight(neutral: neutral)
+            let core = edge.coreLight(neutral: neutral)
             for i in raw.pixels.indices {
                 let x = i % width, y = i / width
                 let e = edge.hasExposureNoise ? edge.exposureFields(x: x, y: y) : FilmEdgeGeometry.Exposure()
                 raw.pixels[i] = (raw.pixels[i] + light * e.front) * edge.gateCoverage(x: x, y: y)
-                    + light * e.back + fog * e.fog
+                    + light * e.back + fog * e.fog + core * e.core
             }
         }
         raw = try HalationCore.apply(raw, parameters: halation, pixelSizeMicrometers: pitch)
@@ -128,7 +129,9 @@ nonisolated struct FilmPipeline: Sendable {
                 let clear = enlarger.clearExposure * reference.printingScale
                 // Contact printing onto cinema print film has no carrier; the scanner holder masks later.
                 let cinema = FilmStock.prints.first { $0.id == recipe.printID }?.support == "film"
-                let mode: FilmEdgeGeometry.Transmission = cinema ? [.damage] : [.damage, .carrier, .reflection]
+                // An inverted scan's holder acts on the scan, after inversion (see below).
+                let scanned = cinema || edge.distress.invertedScan
+                let mode: FilmEdgeGeometry.Transmission = scanned ? [.damage] : [.damage, .carrier, .reflection]
                 for i in printRaw.pixels.indices {
                     printRaw.pixels[i] = edge.transmit(printRaw.pixels[i], clear: clear, x: i % width, y: i / width, mode: mode)
                 }
@@ -172,6 +175,11 @@ nonisolated struct FilmPipeline: Sendable {
                 let mode: FilmEdgeGeometry.Transmission = destinationFilm ? [.carrier, .destination] : [.damage, .carrier]
                 for i in xyz.pixels.indices {
                     xyz.pixels[i] = edge.transmit(xyz.pixels[i], clear: clear, x: i % width, y: i / width, mode: mode)
+                }                // Scanner veiling glare: clear holes and bright picture areas glow into what is
+                // next to them. A wide exponential spread of a few percent of the scanned light.
+                let flare = xyz.exponential(RGB(repeating: FilmEdgeGeometry.scanFlareMicrometers / pitch))
+                for i in xyz.pixels.indices {
+                    xyz.pixels[i] = xyz.pixels[i] * (1 - FilmEdgeGeometry.scanFlare) + flare.pixels[i] * FilmEdgeGeometry.scanFlare
                 }
             }
         }
@@ -194,8 +202,11 @@ nonisolated struct FilmPipeline: Sendable {
         let paperOutput = !recipe.bypassesPrint
             && FilmStock.prints.first { $0.id == recipe.printID }?.support != "film"
         if let edge, paperOutput {
+            let inverted = edge.distress.invertedScan
             for i in output.pixels.indices {
-                output.pixels[i] = edge.transmit(output.pixels[i], clear: .zero, x: i % width, y: i / width, mode: [.endpoint, .carrier])
+                let p = edge.transmit(output.pixels[i], clear: .zero, x: i % width, y: i / width,
+                                      mode: inverted ? [.endpoint] : [.endpoint, .carrier])
+                output.pixels[i] = inverted ? edge.transmit(p, clear: .zero, x: i % width, y: i / width, mode: [.invertedHolder]) : p
             }
         }
         return output.pixels.map {

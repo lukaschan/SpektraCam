@@ -47,8 +47,8 @@ struct PhotoInfoPanel: View {
                 )
                 .accessibilityValue(
                     expanded
-                        ? String(localized: "photo_info.expanded", defaultValue: "Expanded")
-                        : String(localized: "photo_info.collapsed", defaultValue: "Collapsed"))
+                        ? String(localized: "common.expanded", defaultValue: "Expanded")
+                        : String(localized: "common.collapsed", defaultValue: "Collapsed"))
                 Button {
                     channels.toggle()
                     onInteraction?()
@@ -76,7 +76,7 @@ struct PhotoInfoPanel: View {
                 )
                 .accessibilityHint(
                     String(
-                        localized: "photo_info.switch_brightness_and_rgb_channels",
+                        localized: "photo_info.histogram_hint",
                         defaultValue: "Switch brightness and RGB channels")
                 )
                 .accessibilityIdentifier(identifier + ".histogram")

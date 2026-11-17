@@ -6,7 +6,13 @@ struct BatchExportPanel: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var model: BatchExportModel
-    @State private var size = PhotoExporter.Size.full
+    @AppStorage("export.size") private var storedSize = PhotoExporter.Size.original.rawValue
+    /// Photos differ in paper, so a batch offers native, long edge and percent sizes.
+    private var size: PhotoExporter.Size {
+        let chosen = PhotoExporter.Size(rawValue: storedSize) ?? .original
+        if case .print = chosen { return .original }
+        return chosen
+    }
     @State private var format = PhotoExporter.Format.jpeg
     @State private var quality = 0.95
     @State private var sharing = false
@@ -21,10 +27,7 @@ struct BatchExportPanel: View {
                     if let reason = model.stopReason, !model.running {
                         Text(reason).font(.footnote).foregroundStyle(.secondary)
                     }
-                    Picker(String(localized: "export.size", defaultValue: "Size"), selection: $size)
-                    {
-                        ForEach(PhotoExporter.Size.allCases) { Text($0.title).tag($0) }
-                    }.pickerStyle(.segmented)
+                    ExportSizePicker(size: Binding(get: { size }, set: { storedSize = $0.rawValue }))
                     Picker(
                         String(localized: "export.format", defaultValue: "Format"),
                         selection: $format

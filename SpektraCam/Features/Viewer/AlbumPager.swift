@@ -6,6 +6,7 @@ struct AlbumPager: UIViewControllerRepresentable {
     let photos: [LibraryPhoto]
     let images: LibraryImages
     @Binding var selection: UUID
+    var onTap: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIViewController(context: Context) -> UIPageViewController {
@@ -31,10 +32,10 @@ struct AlbumPager: UIViewControllerRepresentable {
     final class Page: UIHostingController<AlbumPhotoPage> {
         let photoID: UUID
         var renderKey: String
-        init(photo: LibraryPhoto, images: LibraryImages) {
+        init(photo: LibraryPhoto, images: LibraryImages, onTap: @escaping () -> Void) {
             photoID = photo.id
             renderKey = photo.renderKey
-            super.init(rootView: AlbumPhotoPage(photo: photo, images: images))
+            super.init(rootView: AlbumPhotoPage(photo: photo, images: images, onTap: onTap))
             view.backgroundColor = .clear
         }
         @MainActor required dynamic init?(coder: NSCoder) {
@@ -49,15 +50,17 @@ struct AlbumPager: UIViewControllerRepresentable {
         private var requestedDuringTransition: UUID?
         private var transitionSelection: UUID?
         init(_ parent: AlbumPager) { self.parent = parent }
+        /// Pages outlive updates, so they call through to the current parent.
+        private var tap: () -> Void { { [weak self] in self?.parent.onTap() } }
         private func page(_ photo: LibraryPhoto) -> Page {
             if let page = pages[photo.id] {
                 if page.renderKey != photo.renderKey {
                     page.renderKey = photo.renderKey
-                    page.rootView = AlbumPhotoPage(photo: photo, images: parent.images)
+                    page.rootView = AlbumPhotoPage(photo: photo, images: parent.images, onTap: tap)
                 }
                 return page
             }
-            let page = Page(photo: photo, images: parent.images)
+            let page = Page(photo: photo, images: parent.images, onTap: tap)
             pages[photo.id] = page
             return page
         }

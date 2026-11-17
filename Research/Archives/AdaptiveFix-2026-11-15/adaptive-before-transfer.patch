@@ -1,0 +1,1667 @@
+diff --git a/Research/AppStorePreflight.md b/Research/AppStorePreflight.md
+index d4d6b73..a91f565 100644
+--- a/Research/AppStorePreflight.md
++++ b/Research/AppStorePreflight.md
+@@ -194,6 +194,42 @@ precision, and tiling already bounds peak memory by the tile, not the image. Hal
+ only pay off for the file-backed scene-linear stores of a full-size export (16 to 8 bytes per
+ pixel on disk); that is a measured follow-up, not a pre-release change.
+ 
++### Camera (third pass)
++
++- **LVF hold.** A round `LVF` button right of the shutter stops the session (sensor and preview)
++  and shows one "Camera on Hold" screen in the viewfinder. Tap the viewfinder, the button or the
++  shutter to resume. Returning from the background does not undo a hold. System interruptions
++  (another app, multitasking, thermal) use the same screen with their reason; only a user hold
++  is tappable.
++- **Capture.** Volume buttons and Camera Control fire the shutter (`onCameraCaptureEvent`); a
++  Camera Control light-press adjusts exposure (`AVCaptureSystemExposureBiasSlider`), and the
++  on-screen slider follows it. Zero shutter lag, responsive capture and fast-capture
++  prioritisation are enabled where the output supports them. The shutter is free again as soon
++  as the DNG is written; importing into the library now runs behind the next shot.
++- **Flash.** Two states, off by default, shown only as available when the active lens and RAW
++  format support it.
++- **Layout.** Framed 3:4 viewfinder (4:3 in landscape) with nothing drawn over it; below it the
++  exposure slider, then flash / lens capsule / flip, then library / shutter / LVF. The session's
++  shot count is a badge on the library button. Rows keep their place while the camera starts or
++  is on hold, so the shutter never moves.
++
++Tested with `--ui-test-camera-demo`, a simulator-only stand-in camera (compiled out of Release):
++`testCameraHoldFlashAndShutterInPortrait` / `InLandscape` plus four existing camera tests pass.
++**Not tested on hardware:** the live feed, volume and Camera Control capture, flash, zero
++shutter lag, and how much power a hold saves. These need a run on the phone.
++
++### Camera (fourth pass)
++
++- On an iPhone the camera interface is held in portrait (`AppDelegate.lockPortrait`) and only
++  the symbols and labels turn with the device; the top row does not. Displays that ignore
++  orientation locks (iPad multitasking, the Duo's inner display) keep the adaptive layout.
++- The EV slider has equal side columns, so its track and zero sit on the screen's centre line.
++- On hold the viewfinder is a flat gray panel and every control stays in place, inactive.
++- The format chip now states what will be captured (`PRO 48`, `PRO 12`, `RAW 12`). Resolution is
++  offered only for ProRAW: Bayer RAW is the sensor's binned 12 MP readout on these phones.
++  Whether ProRAW at Max really writes 48 MP is **not confirmed**; it needs one capture on the
++  phone with the console open (the app logs the resolved RAW dimensions under the Camera category).
++
+ ## Order of work from here
+ 
+ 1. Get Andrea Volpato's written permission for App Store distribution; add the notice.
+diff --git a/SpektraCam/App/SpektraCamApp.swift b/SpektraCam/App/SpektraCamApp.swift
+index bd9c363..bc0e37c 100644
+--- a/SpektraCam/App/SpektraCamApp.swift
++++ b/SpektraCam/App/SpektraCamApp.swift
+@@ -1,17 +1,41 @@
+-//
+-//  SpektraCamApp.swift
+-//  SpektraCam
+-//
+-//  Created by Runze Ni on 10/30/26.
+-//
+-
+ import SwiftUI
++import UIKit
+ 
+ @main
+ struct SpektraCamApp: App {
++    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+     var body: some Scene {
+         WindowGroup {
+             ContentView()
+         }
+     }
+ }
++
++/// The camera keeps its controls where the hands learned them: while it is open on an iPhone
++/// the interface stays upright and only the glyphs turn, as in the system camera.
++final class AppDelegate: NSObject, UIApplicationDelegate {
++    static var orientationLock: UIInterfaceOrientationMask?
++
++    func application(
++        _ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?
++    ) -> UIInterfaceOrientationMask {
++        Self.orientationLock ?? (UIDevice.current.userInterfaceIdiom == .pad ? .all : .allButUpsideDown)
++    }
++
++    /// Ask the system to hold the interface in portrait, or release it. The system may refuse:
++    /// iPad multitasking and iPhone Duo's inner display do not take orientation requests.
++    /// `refused` is then called, and the caller keeps its adaptive layout. Never infer the
++    /// outcome from the device model or its orientation; this callback is the only answer.
++    static func lockPortrait(_ locked: Bool, refused: @escaping @MainActor () -> Void = {}) {
++        orientationLock = locked ? .portrait : nil
++        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
++            scene.requestGeometryUpdate(.iOS(interfaceOrientations: locked ? .portrait : .all)) { _ in
++                Task { @MainActor in
++                    if locked { orientationLock = nil }
++                    refused()
++                }
++            }
++            scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
++        }
++    }
++}
+diff --git a/SpektraCam/Features/Camera/CameraExposureControl.swift b/SpektraCam/Features/Camera/CameraExposureControl.swift
+index b7ce41c..a71d8a7 100644
+--- a/SpektraCam/Features/Camera/CameraExposureControl.swift
++++ b/SpektraCam/Features/Camera/CameraExposureControl.swift
+@@ -4,16 +4,21 @@ import SwiftUI
+ struct CameraExposureControl: View {
+     @Binding var value: Double
+     let range: ClosedRange<Double>
++    /// Degrees that keep the symbols upright when the interface does not rotate.
++    var glyphTurn = 0.0
+     var body: some View {
+         HStack(spacing: 12) {
+-            Image(systemName: "sun.max").accessibilityHidden(true)
++            Image(systemName: "sun.max").rotationEffect(.degrees(glyphTurn))
++                .frame(width: 76, height: 44, alignment: .leading).accessibilityHidden(true)
+             DefaultSlider(value: $value, range: range, defaultValue: 0,
+                 title: String(localized: "camera.exposure", defaultValue: "Camera exposure"),
+                 identifier: "camera.exposure", fillOrigin: 0)
+                 .accessibilityValue(String(format: "%+.2f EV", value))
+             Button { value = 0 } label: {
+-                Text(String(format: "%+.2f EV", value))
+-                    .monospacedDigit().frame(width: 76, height: 44, alignment: .trailing).contentShape(.rect)
++                Text(String(format: "%+.2f EV", value)).monospacedDigit()
++                    .fixedSize().rotationEffect(.degrees(glyphTurn))
++                    .frame(width: 76, height: 44, alignment: glyphTurn == 0 ? .trailing : .center)
++                    .contentShape(.rect)
+             }
+             .buttonStyle(.plain)
+             .accessibilityLabel(String(localized: "control.reset_to_default", defaultValue: "Reset to Default"))
+diff --git a/SpektraCam/Features/Camera/CameraMeter.swift b/SpektraCam/Features/Camera/CameraMeter.swift
+index 2541236..e91c27b 100644
+--- a/SpektraCam/Features/Camera/CameraMeter.swift
++++ b/SpektraCam/Features/Camera/CameraMeter.swift
+@@ -7,6 +7,8 @@ nonisolated struct CameraReadings: Sendable {
+     var seconds = Double(0)
+     var aperture = Float(0)
+     var iso = Float(0)
++    /// The device's own exposure bias, so the slider follows Camera Control.
++    var bias = Float(0)
+ }
+ 
+ nonisolated struct CameraLens: Identifiable, Equatable, Sendable {
+@@ -64,6 +66,7 @@ nonisolated final class CameraMeter: NSObject, AVCaptureVideoDataOutputSampleBuf
+         publish(
+             CameraReadings(
+                 histogram: bins.map { $0 / peak }, seconds: device.exposureDuration.seconds,
+-                aperture: device.lensAperture, iso: device.iso))
++                aperture: device.lensAperture, iso: device.iso,
++                bias: device.exposureTargetBias))
+     }
+ }
+diff --git a/SpektraCam/Features/Camera/CameraModel.swift b/SpektraCam/Features/Camera/CameraModel.swift
+index 3e2609a..00b2745 100644
+--- a/SpektraCam/Features/Camera/CameraModel.swift
++++ b/SpektraCam/Features/Camera/CameraModel.swift
+@@ -27,6 +27,12 @@ import UIKit
+     private(set) var pauseReason: String?
+     private(set) var exposureBias = 0.0
+     private(set) var exposureRange: ClosedRange<Double> = -3...3
++    /// LVF hold: the user switched the camera off to save power. Only the user ends it.
++    private(set) var held = false
++    private(set) var flashAvailable = false
++    var flashOn = false
++    @ObservationIgnored private var importTask: Task<Void, Never>?
++    @ObservationIgnored private var biasSetAt = Date.distantPast
+     private let location = CameraLocation()
+     private var beforeMacro: String?
+     private var backLens: String?
+@@ -35,10 +41,38 @@ import UIKit
+     private var closed = false
+     @ObservationIgnored private var backgroundTask = UIBackgroundTaskIdentifier.invalid
+     init(library: PhotoLibrary) { self.library = library }
+-    var canCapture: Bool { state == .ready && outputReady && !busy && pendingCount == 0 }
++    /// A capture is possible again as soon as its file is written; importing does not block it.
++    /// Only a failed import with captures still waiting holds the shutter.
++    var canCapture: Bool {
++        state == .ready && outputReady && !busy && (saveFailure == nil || pendingCount == 0)
++    }
++    func toggleHold() async {
++        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
++        if held {
++            held = false
++            await setActive(true)
++        } else {
++            held = true
++            pauseReason = nil
++            location.setActive(false)
++            state = .paused
++            await service.stop()
++        }
++    }
+     func setActive(_ active: Bool) async {
+         guard !closed else { return }
+         wantsActive = active
++        // Returning to the app does not undo a hold; the user asked for the camera to stay off.
++        if active && held {
++            state = .paused
++            return
++        }
++        #if DEBUG && targetEnvironment(simulator)
++            if active && Self.demo {
++                applyDemo()
++                return
++            }
++        #endif
+         if !active {
+             location.setActive(false)
+             state = .paused
+@@ -75,34 +109,68 @@ import UIKit
+         for await event in service.events {
+             guard !Task.isCancelled else { return }
+             switch event {
+-            case .readings(let value): readings = value
++            case .readings(let value):
++                readings = value
++                // Camera Control changes the device directly; follow it once our own change settles.
++                if Date().timeIntervalSince(biasSetAt) > 0.6,
++                    abs(Double(value.bias) - exposureBias) > 0.02
++                {
++                    exposureBias = min(
++                        max(Double(value.bias), exposureRange.lowerBound), exposureRange.upperBound)
++                }
+             case .ready(let ready): outputReady = ready
+             case .interrupted(let reason):
+                 pauseReason = reason
+                 if wantsActive { state = .paused }
+-            case .resumed: if wantsActive { await setActive(true) }
++            case .resumed: if wantsActive && !held { await setActive(true) }
+             case .failed(let message): if wantsActive { state = .failed(message) }
+             }
+         }
+     }
+     func takePhoto() async {
++        // The shutter wakes a held camera instead of failing silently.
++        if held {
++            await toggleHold()
++            return
++        }
+         guard canCapture else { return }
+         busy = true
+         UIImpactFeedbackGenerator(style: .light).impactOccurred()
++        #if DEBUG && targetEnvironment(simulator)
++            if Self.demo {
++                try? await Task.sleep(for: .milliseconds(120))
++                savedCount += 1
++                busy = false
++                return
++            }
++        #endif
+         beginCaptureTask()
+-        defer {
+-            busy = false
+-            endCaptureTask()
+-        }
+         do {
+             _ = try await service.takePhoto(
+                 format: format, rotation: source?.captureRotation ?? 90,
+-                inbox: CameraInbox(root: library.files.root), location: location.captureLocation)
++                inbox: CameraInbox(root: library.files.root), location: location.captureLocation,
++                flash: flashOn && flashAvailable)
+             UINotificationFeedbackGenerator().notificationOccurred(.success)
+-            savedCount += try await library.recoverCaptures()
+-            saveFailure = nil
+-        } catch { saveFailure = error.localizedDescription }
+-        pendingCount = (try? await library.files.pendingCaptures().count) ?? 0
++            busy = false
++            scheduleImport()
++        } catch {
++            saveFailure = error.localizedDescription
++            busy = false
++            endCaptureTask()
++        }
++    }
++    /// The capture is already safe in the inbox. Import it behind the next shot, one at a time.
++    private func scheduleImport() {
++        let previous = importTask
++        importTask = Task {
++            await previous?.value
++            do {
++                savedCount += try await library.recoverCaptures()
++                saveFailure = nil
++            } catch { saveFailure = error.localizedDescription }
++            pendingCount = (try? await library.files.pendingCaptures().count) ?? 0
++            endCaptureTask()
++        }
+     }
+     func retryImport() async {
+         guard !busy else { return }
+@@ -124,10 +192,19 @@ import UIKit
+         maximumMegapixels = configuration.maximumMegapixels
+         exposureBias = configuration.exposureBias
+         exposureRange = configuration.exposureRange
++        flashAvailable = configuration.flashAvailable
+         if !formats.contains(format), let first = formats.first { format = first }
+     }
+     func selectLens(_ lens: CameraLens, macro: Bool = false) async {
+         guard !busy, state == .ready else { return }
++        #if DEBUG && targetEnvironment(simulator)
++            if Self.demo {
++                selectedLens = lens
++                self.macro = macro
++                flashAvailable = !lens.front
++                return
++            }
++        #endif
+         busy = true
+         defer { busy = false }
+         do {
+@@ -153,7 +230,11 @@ import UIKit
+     }
+     func setExposureBias(_ value: Double) {
+         guard state == .ready, !busy else { return }
++        biasSetAt = Date()
+         exposureBias = min(max(value, exposureRange.lowerBound), exposureRange.upperBound)
++        #if DEBUG && targetEnvironment(simulator)
++            if Self.demo { return }
++        #endif
+         let target = exposureBias
+         Task {
+             do { try await service.setExposureBias(target) } catch {
+@@ -191,6 +272,27 @@ import UIKit
+         UIApplication.shared.endBackgroundTask(backgroundTask)
+         backgroundTask = .invalid
+     }
++    #if DEBUG && targetEnvironment(simulator)
++        /// A stand-in camera for layout checks: every control is live, the viewfinder is empty.
++        static let demo = ProcessInfo.processInfo.arguments.contains("--ui-test-camera-demo")
++        private func applyDemo() {
++            lenses = [
++                CameraLens(id: "13", millimeters: 13, front: false, macro: true, primary: false),
++                CameraLens(id: "24", millimeters: 24, front: false, macro: false, primary: true),
++                CameraLens(id: "120", millimeters: 120, front: false, macro: false, primary: false),
++                CameraLens(id: "front", millimeters: 23, front: true, macro: false, primary: false),
++            ]
++            if selectedLens == nil { selectedLens = lenses[1] }
++            formats = CameraFormat.allCases
++            maximumMegapixels = 48
++            flashAvailable = selectedLens?.front != true
++            outputReady = true
++            readings = CameraReadings(
++                histogram: (0..<64).map { exp(-pow(Double($0) - 26, 2) / 180) }, seconds: 1.0 / 250,
++                aperture: 1.8, iso: 64, bias: Float(exposureBias))
++            state = .ready
++        }
++    #endif
+     func close() async {
+         closed = true
+         wantsActive = false
+diff --git a/SpektraCam/Features/Camera/CameraPreview.swift b/SpektraCam/Features/Camera/CameraPreview.swift
+index 2a6ce44..2e57d58 100644
+--- a/SpektraCam/Features/Camera/CameraPreview.swift
++++ b/SpektraCam/Features/Camera/CameraPreview.swift
+@@ -85,10 +85,12 @@ struct CameraPreview: UIViewRepresentable {
+ }
+ 
+ /// The preview remains borderless. Grid marks do not intercept touch or accessibility.
+-struct CameraViewfinder: SwiftUI.View {
++struct CameraViewfinder<Status: SwiftUI.View>: SwiftUI.View {
+     let model: CameraModel
+     /// The sensor's long side follows the long side of the space.
+     var landscape = false
++    /// Shown inside the frame while there is no live view: starting, on hold, unavailable.
++    @ViewBuilder var status: Status
+     @State private var focusPoint: CGPoint?
+     @State private var focusRevision = UUID()
+     var body: some SwiftUI.View {
+@@ -105,7 +107,6 @@ struct CameraViewfinder: SwiftUI.View {
+             }
+         }
+         .aspectRatio(landscape ? 4.0 / 3 : 3.0 / 4, contentMode: .fit)
+-        .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
+         .overlay {
+             if model.source != nil {
+                 GeometryReader { proxy in
+@@ -134,6 +135,13 @@ struct CameraViewfinder: SwiftUI.View {
+                 }
+             }
+         }
++        .overlay { status }
++        .clipShape(.rect(cornerRadius: 20))
++        .overlay {
++            RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.12), lineWidth: 1)
++                .allowsHitTesting(false)
++        }
++        .frame(maxWidth: .infinity, maxHeight: landscape ? .infinity : nil)
+         .onChange(of: model.selectedLens?.id) { _, _ in focusPoint = nil }
+         .task(id: focusRevision) {
+             try? await Task.sleep(for: .seconds(4))
+diff --git a/SpektraCam/Features/Camera/CameraService.swift b/SpektraCam/Features/Camera/CameraService.swift
+index 130c01e..b5e036d 100644
+--- a/SpektraCam/Features/Camera/CameraService.swift
++++ b/SpektraCam/Features/Camera/CameraService.swift
+@@ -74,6 +74,7 @@ actor CameraService {
+     private var closed = false
+     private var observations: [NSObjectProtocol] = []
+     private var readiness: NSKeyValueObservation?
++    private let controls = CameraControlsDelegate()
+ 
+     init() {
+         let channel = AsyncStream<Event>.makeStream(bufferingPolicy: .bufferingNewest(8))
+@@ -90,6 +91,7 @@ actor CameraService {
+         let maximumMegapixels: Int
+         let exposureBias: Double
+         let exposureRange: ClosedRange<Double>
++        let flashAvailable: Bool
+     }
+     func start() async throws -> Configuration {
+         guard !closed else { throw CancellationError() }
+@@ -124,7 +126,8 @@ actor CameraService {
+             ), exposureBias: Double(device.exposureTargetBias),
+             exposureRange: max(
+                 -3, Double(device.minExposureTargetBias))...min(
+-                    3, Double(device.maxExposureTargetBias)))
++                    3, Double(device.maxExposureTargetBias)),
++            flashAvailable: device.hasFlash && output.supportedFlashModes.contains(.on))
+     }
+     private func configure() throws {
+         let discovered = AVCaptureDevice.DiscoverySession(
+@@ -189,6 +192,13 @@ actor CameraService {
+             output.isAppleProRAWEnabled = supportsProRAW
+         }
+         output.maxPhotoQualityPrioritization = .quality
++        // Shorten the time from press to capture and between captures where the format allows.
++        if output.isZeroShutterLagSupported { output.isZeroShutterLagEnabled = true }
++        if output.isResponsiveCaptureSupported { output.isResponsiveCaptureEnabled = true }
++        if output.isFastCapturePrioritizationSupported {
++            output.isFastCapturePrioritizationEnabled = true
++        }
++        configureControls(device: device)
+         let dimensions = device.activeFormat.supportedMaxPhotoDimensions.sorted(by: {
+             Int64($0.width) * Int64($0.height) < Int64($1.width) * Int64($1.height)
+         })
+@@ -229,18 +239,27 @@ actor CameraService {
+         Log.camera.debug(
+             "Photo size: \(self.output.maxPhotoDimensions.width)×\(self.output.maxPhotoDimensions.height)")
+     }
++    /// Camera Control: a light press and slide adjusts exposure for the active lens.
++    private func configureControls(device: AVCaptureDevice) {
++        guard session.supportsControls else { return }
++        for control in session.controls { session.removeControl(control) }
++        let exposure = AVCaptureSystemExposureBiasSlider(device: device)
++        if session.canAddControl(exposure) { session.addControl(exposure) }
++        session.setControlsDelegate(controls, queue: meterQueue)
++    }
+     private func maximumDimensions() -> CMVideoDimensions {
+         (session.inputs.first as? AVCaptureDeviceInput)?.device.activeFormat
+             .supportedMaxPhotoDimensions.max {
+                 Int64($0.width) * Int64($0.height) < Int64($1.width) * Int64($1.height)
+             } ?? output.maxPhotoDimensions
+     }
+-    private func photoSettings(format: CameraFormat) throws -> AVCapturePhotoSettings {
++    private func photoSettings(format: CameraFormat, flash: Bool = false) throws -> AVCapturePhotoSettings {
+         guard let pixelFormat = formats[format] else { throw CameraFailure.rawUnavailable }
+         let settings = AVCapturePhotoSettings(rawPixelFormatType: pixelFormat)
+         settings.maxPhotoDimensions = output.maxPhotoDimensions
+         settings.photoQualityPrioritization =
+             format == .bayerRAW ? .speed : (highResolution ? .quality : .balanced)
++        if flash, output.supportedFlashModes.contains(.on) { settings.flashMode = .on }
+         if let codec = settings.availableRawEmbeddedThumbnailPhotoCodecTypes.first {
+             let size = output.maxPhotoDimensions
+             let scale = min(1, 1080.0 / Double(max(size.width, size.height)))
+@@ -409,14 +428,15 @@ actor CameraService {
+         sink.finish()
+     }
+     func takePhoto(
+-        format: CameraFormat, rotation: CGFloat, inbox: CameraInbox, location: CaptureLocation?
++        format: CameraFormat, rotation: CGFloat, inbox: CameraInbox, location: CaptureLocation?,
++        flash: Bool = false
+     )
+         async throws -> URL
+     {
+         guard capture == nil, session.isRunning, !session.isInterrupted,
+             output.captureReadiness == .ready
+         else { throw CameraFailure.notReady }
+-        let settings = try photoSettings(format: format)
++        let settings = try photoSettings(format: format, flash: flash)
+         guard let connection = output.connection(with: .video) else { throw CameraFailure.notReady }
+         let angle =
+             connection.isVideoRotationAngleSupported(rotation)
+@@ -438,6 +458,14 @@ actor CameraService {
+     }
+ }
+ 
++/// The system needs a delegate before it shows Camera Control overlays; nothing to do here.
++nonisolated private final class CameraControlsDelegate: NSObject, AVCaptureSessionControlsDelegate {
++    func sessionControlsDidBecomeActive(_ session: AVCaptureSession) {}
++    func sessionControlsWillEnterFullscreenAppearance(_ session: AVCaptureSession) {}
++    func sessionControlsWillExitFullscreenAppearance(_ session: AVCaptureSession) {}
++    func sessionControlsDidBecomeInactive(_ session: AVCaptureSession) {}
++}
++
+ /// AVFoundation serializes the callbacks for this single capture request.
+ nonisolated private final class RAWPhotoCapture: NSObject, AVCapturePhotoCaptureDelegate,
+     AVCapturePhotoFileDataRepresentationCustomizer
+diff --git a/SpektraCam/Features/Camera/CameraView.swift b/SpektraCam/Features/Camera/CameraView.swift
+index 221ac79..9995073 100644
+--- a/SpektraCam/Features/Camera/CameraView.swift
++++ b/SpektraCam/Features/Camera/CameraView.swift
+@@ -1,30 +1,36 @@
++import AVKit
+ import SwiftUI
+ 
++/// RAW camera. The viewfinder stays clear; every control sits around it, with the shutter and
++/// the LVF hold under the right thumb.
+ struct CameraView: View {
+     @State private var model: CameraModel
+     let onLibrary: () -> Void
+     @Environment(\.dismiss) private var dismiss
+     @Environment(\.scenePhase) private var scenePhase
+     @Environment(\.openURL) private var openURL
+-    private let cameraButtonSize: CGFloat = 44
+-    private let bubbleDiameter: CGFloat = 38
++    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+     @State private var layout = WorkspaceLayout.stacked
++    @State private var glyphs = CameraGlyphRotation()
++    /// False once the system has refused to hold the interface in portrait.
++    @State private var portraitHeld = true
++    /// Degrees that turn a symbol or label upright in the hand; the control itself never moves.
++    /// Only when the interface is really held in portrait: a refused hold, or a space wider
++    /// than tall, means the interface has followed the device and glyphs are already upright.
++    private var glyphDegrees: Double { portraitHeld && layout == .stacked ? glyphs.degrees : 0 }
++    private var turn: Angle { .degrees(glyphDegrees) }
++
+     init(library: PhotoLibrary, onLibrary: @escaping () -> Void) {
+         _model = State(initialValue: CameraModel(library: library))
+         self.onLibrary = onLibrary
+     }
++    private var ready: Bool { model.state == .ready }
++
+     var body: some View {
+         NavigationStack {
+             ZStack {
+                 Color.black.ignoresSafeArea()
+-                CameraViewfinder(model: model, landscape: layout == .sideBySide)
+-                if model.state == .ready {
+-                    VStack {
+-                        Spacer()
+-                        lensControls.padding(.horizontal).padding(.bottom, 48)
+-                    }
+-                }
+-                if model.state != .ready { status }
++                viewfinder
+             }
+             .navigationBarTitleDisplayMode(.inline)
+             .toolbar {
+@@ -43,6 +49,7 @@ struct CameraView: View {
+                 }.sharedBackgroundVisibility(.visible)
+                 ToolbarItem(placement: .principal) {
+                     CameraHistogram(model: model).frame(width: 100, height: 32)
++                        .opacity(ready ? 1 : 0)
+                 }
+                 ToolbarItem(placement: .topBarTrailing) {
+                     CameraExposureReadout(model: model).frame(width: 84, height: 32)
+@@ -50,53 +57,56 @@ struct CameraView: View {
+                 }.sharedBackgroundVisibility(.visible)
+             }
+             .safeAreaInset(edge: .bottom) {
+-                VStack(spacing: 12) {
+-                    if model.state == .ready {
+-                        CameraExposureControl(value: Binding(get: { model.exposureBias }, set: model.setExposureBias),
+-                            range: model.exposureRange).disabled(model.busy).padding(.horizontal, 24)
+-                    }
+-                    if let failure = model.saveFailure {
+-                        VStack(spacing: 8) {
+-                            Text(failure).font(.footnote)
+-                            if model.pendingCount > 0 {
+-                                Text(
+-                                    String(
+-                                        localized: "camera.capture_kept",
+-                                        defaultValue: "The capture is kept on this device.")
+-                                ).font(.footnote)
+-                                Button(
+-                                    String(
+-                                        localized: "camera.retry_import",
+-                                        defaultValue: "Retry Import")
+-                                ) { Task { await model.retryImport() } }
+-                                .buttonStyle(.glass).disabled(model.busy)
+-                                .accessibilityIdentifier("camera.retryImport")
+-                            }
+-                        }.padding().glassEffect(in: .rect(cornerRadius: 20))
+-                    }
++                VStack(spacing: 14) {
++                    importFailure
+                     if layout == .stacked {
++                        // The rows keep their place while the camera starts or is on hold, so
++                        // the shutter never moves under the thumb.
++                        Group {
++                            exposureControl
++                            HStack {
++                                flashButton
++                                Spacer(minLength: 8)
++                                lensPicker
++                                Spacer(minLength: 8)
++                                flipButton
++                            }
++                        }
++                        .disabled(!ready)
+                         ZStack {
+                             HStack {
+                                 libraryButton
+                                 Spacer()
+-                                flipButton
++                                holdButton
+                             }
+                             shutterButton
+                         }
++                    } else {
++                        HStack(spacing: 16) {
++                            lensPicker
++                            exposureControl
++                        }
++                        .disabled(!ready)
+                     }
+-                    savedCaption
+-                }.padding(.horizontal).padding(.bottom, 12)
++                }
++                .padding(.horizontal, 20).padding(.bottom, 12)
+             }
+             .safeAreaInset(edge: .trailing) {
+-                // Wider than tall: the shutter moves under the thumb on the trailing edge.
++                // Wider than tall: the shutter column moves under the thumb on the trailing edge.
+                 if layout == .sideBySide {
+-                    VStack {
+-                        flipButton
+-                        Spacer()
++                    VStack(spacing: 14) {
++                        Group {
++                            flipButton
++                            flashButton
++                        }
++                        .disabled(!ready)
++                        Spacer(minLength: 0)
+                         shutterButton
+-                        Spacer()
++                        Spacer(minLength: 0)
++                        holdButton
+                         libraryButton
+-                    }.padding(.vertical).padding(.trailing, 12)
++                    }
++                    .padding(.vertical).padding(.trailing, 12)
+                 }
+             }
+         }
+@@ -113,78 +123,273 @@ struct CameraView: View {
+             // transitions stop capture; AVFoundation reports hardware interruptions separately.
+             if phase != .inactive { Task { await model.setActive(phase == .active) } }
+         }
+-        .onDisappear { Task { await model.close() } }
++        .onAppear {
++            AppDelegate.lockPortrait(true) { portraitHeld = false }
++            glyphs.start()
++        }
++        .task(id: layout) {
++            // The window is the evidence. If it is still wider than tall once a rotation would
++            // have finished, the display did not take the hold: let go of it, so the app never
++            // claims portrait-only while it is shown in landscape.
++            guard layout == .sideBySide, portraitHeld else { return }
++            try? await Task.sleep(for: .milliseconds(700))
++            guard !Task.isCancelled, layout == .sideBySide else { return }
++            portraitHeld = false
++            AppDelegate.lockPortrait(false)
++        }
++        .onDisappear {
++            glyphs.stop()
++            AppDelegate.lockPortrait(false)
++            Task { await model.close() }
++        }
++        .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: glyphDegrees)
+     }
+-    private var libraryButton: some View {
++
++    // MARK: Viewfinder
++
++    private var viewfinder: some View {
++        CameraViewfinder(model: model, landscape: layout == .sideBySide) {
++            if !ready { status }
++        }
++            .padding(.horizontal, layout == .stacked ? 6 : 12)
++            // Volume buttons and Camera Control take the photo, as in the system camera. The
++            // interaction belongs to the viewfinder and only while there is a camera to fire:
++            // on the whole screen it swallowed toolbar taps on iPhone Duo.
++            .onCameraCaptureEvent(isEnabled: ready || model.held) { event in
++                if event.phase == .ended { Task { await model.takePhoto() } }
++            }
++    }
++
++    @ViewBuilder private var status: some View {
++        switch model.state {
++        case .ready: EmptyView()
++        case .starting:
++            ProgressView().controlSize(.large)
++                .accessibilityLabel(
++                    String(localized: "camera.starting_camera", defaultValue: "Starting camera…"))
++        case .paused:
++            CameraHoldScreen(held: model.held, reason: model.pauseReason, turn: turn) {
++                Task { await model.toggleHold() }
++            }
++        case .unavailable:
++            ContentUnavailableView(
++                String(localized: "camera.camera_unavailable", defaultValue: "Camera Unavailable"),
++                systemImage: "camera",
++                description: Text(
++                    String(
++                        localized: "camera.raw_needs_device",
++                        defaultValue: "RAW capture needs a physical device."))
++            )
++            .accessibilityIdentifier("camera.unavailable")
++        case .denied:
++            ContentUnavailableView {
++                Label(
++                    String(localized: "camera.camera_access", defaultValue: "Camera Access"),
++                    systemImage: "camera")
++            } description: {
++                Text(
++                    String(
++                        localized: "camera.access_denied",
++                        defaultValue: "Allow camera access in Settings to take photos."))
++            } actions: {
++                Button(String(localized: "camera.open_settings", defaultValue: "Open Settings")) {
++                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
++                }.buttonStyle(.glass)
++            }
++        case .failed(let message):
++            ContentUnavailableView {
++                Label(
++                    String(localized: "camera.camera_stopped", defaultValue: "Camera Stopped"),
++                    systemImage: "camera")
++            } description: {
++                Text(message)
++            } actions: {
++                Button(String(localized: "common.retry", defaultValue: "Retry")) {
++                    Task { await model.setActive(true) }
++                }.buttonStyle(.glass)
++            }
++        }
++    }
++
++    // MARK: Controls
++
++    private var exposureControl: some View {
++        CameraExposureControl(
++            value: Binding(get: { model.exposureBias }, set: model.setExposureBias),
++            range: model.exposureRange, glyphTurn: glyphDegrees
++        ).disabled(model.busy)
++    }
++
++    @ViewBuilder private var importFailure: some View {
++        if let failure = model.saveFailure {
++            VStack(spacing: 8) {
++                Text(failure).font(.footnote)
++                if model.pendingCount > 0 {
++                    Text(
++                        String(
++                            localized: "camera.capture_kept",
++                            defaultValue: "The capture is kept on this device.")
++                    ).font(.footnote)
++                    Button(String(localized: "camera.retry_import", defaultValue: "Retry Import")) {
++                        Task { await model.retryImport() }
++                    }
++                    .buttonStyle(.glass).disabled(model.busy)
++                    .accessibilityIdentifier("camera.retryImport")
++                }
++            }.padding().glassEffect(in: .rect(cornerRadius: 20))
++        }
++    }
++
++    /// One capsule for the rear lenses, with macro beside them when the device has it.
++    private var lensPicker: some View {
++        HStack(spacing: 2) {
++            if model.selectedLens?.front != true && model.lenses.contains(where: \.macro) {
++                Button {
++                    Task { await model.toggleMacro() }
++                } label: {
++                    Image(systemName: "camera.macro").font(.system(size: 15, weight: .medium))
++                        .rotationEffect(turn).modifier(LensSegment(selected: model.macro))
++                }
++                .accessibilityLabel(String(localized: "camera.macro", defaultValue: "Macro"))
++                .accessibilityAddTraits(model.macro ? .isSelected : [])
++                .accessibilityIdentifier("camera.macro")
++            }
++            ForEach(model.lenses.filter { !$0.front && model.selectedLens?.front != true }) { lens in
++                let selected = lens.id == model.selectedLens?.id
++                Button {
++                    Task { await model.selectLens(lens) }
++                } label: {
++                    Text(lens.title).font(.system(size: 13, weight: .semibold)).monospacedDigit()
++                        .fixedSize().rotationEffect(turn).modifier(LensSegment(selected: selected))
++                }
++                .accessibilityAddTraits(selected ? .isSelected : [])
++                .accessibilityIdentifier("camera.lens.\(lens.millimeters)")
++                .accessibilityLabel(
++                    String(
++                        localized: "camera.millimeter_lens",
++                        defaultValue: "\(lens.millimeters) millimeter lens"))
++            }
++            if model.selectedLens?.front == true {
++                Text(String(localized: "camera.front", defaultValue: "Front"))
++                    .font(.system(size: 13, weight: .semibold)).fixedSize().rotationEffect(turn)
++                    .modifier(LensSegment(selected: true))
++                    .accessibilityLabel(
++                        String(localized: "camera.front_camera", defaultValue: "Front camera"))
++            }
++        }
++        .buttonStyle(.plain).padding(4)
++        .glassEffect(.regular, in: .capsule)
++        .disabled(model.busy).dynamicTypeSize(...DynamicTypeSize.xxxLarge)
++    }
++
++    private var flashButton: some View {
+         Button {
+-            onLibrary()
++            model.flashOn.toggle()
+         } label: {
+-            if let photo = model.library.photos.last {
+-                PhotoThumbnail(
+-                    photo: photo, images: model.library.images,
+-                    showsBadges: false
+-                )
+-                .frame(width: cameraButtonSize, height: cameraButtonSize)
+-                .clipShape(
+-                    .circle)
+-            } else {
+-                Image(systemName: "photo.on.rectangle").frame(
+-                    width: cameraButtonSize, height: cameraButtonSize)
+-            }
++            Image(systemName: model.flashOn ? "bolt.fill" : "bolt.slash.fill")
++                .font(.system(size: 16, weight: .medium))
++                .foregroundStyle(model.flashOn ? Color.yellow : Color.primary)
++                .rotationEffect(turn).modifier(CameraRoundControl())
+         }
+-        .buttonStyle(.glass).buttonBorderShape(.circle).disabled(model.busy)
+-        .accessibilityLabel(
+-            String(
+-                localized: "camera.open_library", defaultValue: "Open Library")
+-        ).accessibilityIdentifier(
+-            "camera.library")
++        .buttonStyle(.plain)
++        .disabled(!model.flashAvailable || model.busy)
++        .opacity(model.flashAvailable ? 1 : 0.35)
++        .accessibilityLabel(String(localized: "camera.flash", defaultValue: "Flash"))
++        .accessibilityValue(
++            model.flashOn
++                ? String(localized: "common.on", defaultValue: "On")
++                : String(localized: "common.off", defaultValue: "Off")
++        )
++        .accessibilityIdentifier("camera.flash")
+     }
++
+     private var flipButton: some View {
+         Button {
+             Task { await model.flip() }
+         } label: {
+-            cameraBubble(
+-                Image(systemName: "arrow.triangle.2.circlepath.camera").font(
+-                    .system(size: 16)))
++            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 16, weight: .medium))
++                .rotationEffect(turn).modifier(CameraRoundControl())
+         }
+-        .labelStyle(.iconOnly).buttonStyle(.plain)
+-        .accessibilityLabel(
+-            String(localized: "camera.flip_camera", defaultValue: "Flip Camera")
+-        )
++        .buttonStyle(.plain)
++        .accessibilityLabel(String(localized: "camera.flip_camera", defaultValue: "Flip Camera"))
+         .disabled(model.busy || !model.lenses.contains(where: \.front))
+         .accessibilityIdentifier("camera.flip")
+     }
+-    private var shutterButton: some View {
++
++    /// LVF, as on a camera body: switches the live view off and on. Off stops the sensor and
++    /// the preview, which is what drains the battery between shots.
++    private var holdButton: some View {
+         Button {
+-            Task { await model.takePhoto() }
++            Task { await model.toggleHold() }
+         } label: {
+-            Image(systemName: "circle.inset.filled")
+-                .font(.system(size: 58, weight: .regular)).frame(
+-                    width: 76, height: 76)
++            Text(verbatim: "LVF").font(.system(size: 13, weight: .bold, design: .monospaced))
++                .foregroundStyle(model.held ? Color.black : Color.primary)
++                .fixedSize().rotationEffect(turn).frame(width: 52, height: 52)
++                .background { if model.held { Circle().fill(Color.accentColor) } }
++                .glassEffect(.regular.interactive(), in: .circle)
++                .contentShape(.circle)
+         }
+-        .buttonStyle(.glass).buttonBorderShape(.circle).tint(.white)
+-        .disabled(!model.canCapture)
++        .buttonStyle(.plain)
++        .disabled(model.busy || !(ready || model.held))
+         .accessibilityLabel(
+-            String(
+-                localized: "camera.take_raw_photo", defaultValue: "Take RAW Photo")
+-        ).accessibilityIdentifier(
+-            "camera.shutter"
++            model.held
++                ? String(localized: "camera.resume", defaultValue: "Resume Camera")
++                : String(localized: "camera.hold", defaultValue: "Hold Camera")
+         )
+-        .overlay { if model.busy { ProgressView().allowsHitTesting(false) } }
++        .accessibilityAddTraits(model.held ? .isSelected : [])
++        .accessibilityIdentifier("camera.hold")
+     }
+-    private var savedCaption: some View {
+-        Text(
+-            model.savedCount > 0
+-                ? String(
+-                    localized: "camera.saved_to_library",
+-                    defaultValue: "Saved to Library: \(model.savedCount)")
+-                : String(
+-                    localized: "camera.saves_to_library_note",
+-                    defaultValue: "RAW photos save to the app library.")
+-        )
+-        .font(.footnote).foregroundStyle(.secondary)
+-        .accessibilityIdentifier("camera.saved")
++
++    private var libraryButton: some View {
++        Button(action: onLibrary) {
++            Group {
++                if let photo = model.library.photos.last {
++                    PhotoThumbnail(photo: photo, images: model.library.images, showsBadges: false)
++                } else {
++                    Image(systemName: "photo.on.rectangle")
++                }
++            }
++            .rotationEffect(turn).frame(width: 52, height: 52).clipShape(.rect(cornerRadius: 12))
++            .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.3), lineWidth: 1) }
++            // How many captures this session has added to the library.
++            .overlay(alignment: .topTrailing) {
++                if model.savedCount > 0 {
++                    Text(verbatim: "\(model.savedCount)")
++                        .font(.caption2.weight(.bold)).monospacedDigit().foregroundStyle(.black)
++                        .padding(.horizontal, 6).frame(minWidth: 20, minHeight: 20)
++                        .background(Color.accentColor, in: .capsule).offset(x: 7, y: -7)
++                        .accessibilityLabel(
++                            String(
++                                localized: "camera.saved_to_library",
++                                defaultValue: "Saved to Library: \(model.savedCount)")
++                        )
++                        .accessibilityIdentifier("camera.saved")
++                }
++            }
++        }
++        .buttonStyle(.plain).disabled(model.busy)
++        .accessibilityLabel(String(localized: "camera.open_library", defaultValue: "Open Library"))
++        .accessibilityIdentifier("camera.library")
++    }
++
++    private var shutterButton: some View {
++        Button {
++            Task { await model.takePhoto() }
++        } label: {
++            Color.clear.frame(width: 78, height: 78)
++        }
++        .buttonStyle(ShutterStyle(busy: model.busy, animates: !reduceMotion))
++        // On hold, the shutter wakes the camera.
++        .disabled(!(model.canCapture || model.held))
++        .accessibilityLabel(String(localized: "camera.take_raw_photo", defaultValue: "Take RAW Photo"))
++        .accessibilityIdentifier("camera.shutter")
+     }
++
++    /// Bayer RAW is the sensor's binned 12 MP readout; only ProRAW offers the full resolution.
++    private var megapixels: Int {
++        model.format == .proRAW && model.highResolution ? model.maximumMegapixels : 12
++    }
++    private var formatSummary: String { (model.format == .proRAW ? "PRO" : "RAW") + " \(megapixels)" }
+     @ViewBuilder private var formatControl: some View {
+         if !model.formats.isEmpty {
+             Menu {
+@@ -196,7 +401,7 @@ struct CameraView: View {
+                         ForEach(model.formats) { Text($0.title).tag($0) }
+                     }
+                 }
+-                if model.maximumMegapixels > 12 {
++                if model.maximumMegapixels > 12 && model.format == .proRAW {
+                     Picker(
+                         String(localized: "camera.resolution", defaultValue: "Resolution"),
+                         selection: Binding(
+@@ -213,119 +418,105 @@ struct CameraView: View {
+                     }
+                 }
+             } label: {
+-                Text("DNG").font(.caption.weight(.semibold))
++                Text(verbatim: formatSummary).font(.caption.weight(.semibold)).monospacedDigit()
+             }
+             .disabled(model.busy).accessibilityIdentifier("camera.format")
+-            .accessibilityLabel("DNG, " + model.format.title)
++            .accessibilityLabel(model.format.title + ", \(megapixels) MP")
+         } else {
+             Text("DNG").font(.caption.weight(.semibold)).accessibilityLabel(
+                 String(localized: "camera.dng_raw", defaultValue: "DNG RAW"))
+         }
+     }
+-    private var lensControls: some View {
+-        GlassEffectContainer(spacing: 8) {
+-            ZStack(alignment: .leading) {
+-                if model.selectedLens?.front != true && model.lenses.contains(where: \.macro) {
+-                    Button {
+-                        Task { await model.toggleMacro() }
+-                    } label: {
+-                        cameraBubble(Image(systemName: "camera.macro").font(.system(size: 16)))
+-                    }
+-                    .labelStyle(.iconOnly).buttonStyle(.plain)
+-                    .accessibilityLabel(String(localized: "camera.macro", defaultValue: "Macro"))
+-                    .foregroundStyle(model.macro ? Color.accentColor : .primary)
+-                    .accessibilityAddTraits(model.macro ? .isSelected : [])
+-                    .accessibilityIdentifier("camera.macro")
+-                }
+-                HStack(spacing: 6) {
+-                    ForEach(model.lenses.filter { !$0.front && model.selectedLens?.front != true })
+-                    { lens in
+-                        Button {
+-                            Task { await model.selectLens(lens) }
+-                        } label: {
+-                            cameraBubble(
+-                                Text(lens.title).font(.system(size: 13, weight: .semibold))
+-                                    .monospacedDigit())
++}
++
++/// What the viewfinder shows while the camera is off: one screen for a user hold and for every
++/// system interruption. Only a hold can be ended by tapping.
++private struct CameraHoldScreen: View {
++    let held: Bool
++    let reason: String?
++    var turn = Angle.zero
++    let resume: () -> Void
++    var body: some View {
++        Button(action: resume) {
++            ZStack {
++                // A flat, dim surface: no live pixels, and little for the display to light.
++                Color(white: 0.13)
++                VStack(spacing: 14) {
++                    Image(systemName: "viewfinder").font(.system(size: 44, weight: .ultraLight))
++                        .overlay {
++                            Rectangle().fill(.secondary).frame(width: 60, height: 1.5)
++                                .rotationEffect(.degrees(-45))
+                         }
+-                        .buttonStyle(.plain)
+-                        .foregroundStyle(
+-                            lens.id == model.selectedLens?.id ? Color.accentColor : .primary
+-                        )
+-                        .accessibilityAddTraits(
+-                            lens.id == model.selectedLens?.id ? .isSelected : []
+-                        )
+-                        .accessibilityIdentifier("camera.lens.\(lens.millimeters)")
+-                        .accessibilityLabel(
+-                            lens.front
++                        .foregroundStyle(.secondary).accessibilityHidden(true)
++                    VStack(spacing: 5) {
++                        Text(String(localized: "camera.on_hold", defaultValue: "Camera on Hold"))
++                            .font(.headline)
++                        Text(
++                            held
+                                 ? String(
+-                                    localized: "camera.front_camera", defaultValue: "Front camera")
+-                                : String(
+-                                    localized: "camera.millimeter_lens",
+-                                    defaultValue: "\(lens.millimeters) millimeter lens"))
++                                    localized: "camera.hold_power_note",
++                                    defaultValue: "The sensor and preview are off to save power.")
++                                : reason
++                                    ?? String(
++                                        localized: "camera.interrupted.generic",
++                                        defaultValue: "The camera will resume when it is available.")
++                        )
++                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
++                    }
++                    if held {
++                        Text(String(localized: "camera.hold_hint", defaultValue: "Tap to resume"))
++                            .font(.footnote.weight(.semibold))
++                            .padding(.horizontal, 14).padding(.vertical, 7)
++                            .background(.white.opacity(0.1), in: .capsule)
+                     }
+-                }.frame(maxWidth: .infinity)
+-            }.frame(height: cameraButtonSize).disabled(model.busy).dynamicTypeSize(
+-                ...DynamicTypeSize.xxxLarge)
++                }
++                .frame(maxWidth: 260).rotationEffect(turn)
++            }
++            .contentShape(.rect)
+         }
++        .buttonStyle(.plain).disabled(!held)
++        .accessibilityElement(children: .combine)
++        .accessibilityIdentifier("camera.hold.screen")
+     }
+-    private func cameraBubble<Content: View>(_ content: Content) -> some View {
+-        content.frame(width: bubbleDiameter, height: bubbleDiameter)
+-            .glassEffect(.regular.interactive(), in: .circle)
+-            .frame(width: cameraButtonSize, height: cameraButtonSize).contentShape(.circle)
++}
++
++/// A round glass control around the viewfinder.
++private struct CameraRoundControl: ViewModifier {
++    func body(content: Content) -> some View {
++        content.frame(width: 44, height: 44)
++            .glassEffect(.regular.interactive(), in: .circle).contentShape(.circle)
+     }
+-    @ViewBuilder private var status: some View {
+-        switch model.state {
+-        case .ready: EmptyView()
+-        case .starting:
+-            ProgressView(
+-                String(localized: "camera.starting_camera", defaultValue: "Starting camera…"))
+-        case .unavailable:
+-            ContentUnavailableView(
+-                String(localized: "camera.camera_unavailable", defaultValue: "Camera Unavailable"),
+-                systemImage: "camera",
+-                description: Text(
+-                    String(
+-                        localized: "camera.raw_needs_device",
+-                        defaultValue: "RAW capture needs a physical device."))
+-            )
+-            .accessibilityIdentifier("camera.unavailable")
+-        case .denied:
+-            ContentUnavailableView {
+-                Label(
+-                    String(localized: "camera.camera_access", defaultValue: "Camera Access"),
+-                    systemImage: "camera")
+-            } description: {
+-                Text(
+-                    String(
+-                        localized: "camera.access_denied",
+-                        defaultValue: "Allow camera access in Settings to take photos."))
+-            } actions: {
+-                Button(String(localized: "camera.open_settings", defaultValue: "Open Settings")) {
+-                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+-                }.buttonStyle(.glass)
+-            }
+-        case .paused:
+-            ContentUnavailableView(
+-                String(localized: "camera.camera_paused", defaultValue: "Camera Paused"),
+-                systemImage: "camera",
+-                description: Text(
+-                    model.pauseReason
+-                        ?? String(
+-                            localized: "camera.interrupted.generic",
+-                            defaultValue: "The camera will resume when it is available.")))
+-        case .failed(let message):
+-            ContentUnavailableView {
+-                Label(
+-                    String(localized: "camera.camera_stopped", defaultValue: "Camera Stopped"),
+-                    systemImage: "camera")
+-            } description: {
+-                Text(message)
+-            } actions: {
+-                Button(String(localized: "common.retry", defaultValue: "Retry")) {
+-                    Task { await model.setActive(true) }
+-                }.buttonStyle(.glass)
++}
++
++private struct LensSegment: ViewModifier {
++    let selected: Bool
++    func body(content: Content) -> some View {
++        content
++            .foregroundStyle(selected ? Color.accentColor : Color.primary)
++            .frame(minWidth: 40, minHeight: 36).padding(.horizontal, 2)
++            .background { if selected { Capsule().fill(.white.opacity(0.16)) } }
++            .contentShape(.capsule)
++    }
++}
++
++/// A ring with a disc that gives under the finger and dims while a capture is in flight.
++private struct ShutterStyle: ButtonStyle {
++    let busy: Bool
++    let animates: Bool
++    @Environment(\.isEnabled) private var enabled
++    func makeBody(configuration: Configuration) -> some View {
++        configuration.label
++            .overlay {
++                ZStack {
++                    Circle().strokeBorder(.white, lineWidth: 4)
++                    Circle().fill(.white).padding(7)
++                        .scaleEffect(configuration.isPressed ? 0.86 : 1)
++                        .opacity(busy ? 0.45 : 1)
++                }
+             }
+-        }
++            .opacity(enabled ? 1 : 0.35)
++            .animation(animates ? .snappy(duration: 0.15) : nil, value: configuration.isPressed)
++            .contentShape(.circle)
+     }
+ }
+ 
+diff --git a/SpektraCam/Features/Darkroom/DarkroomView.swift b/SpektraCam/Features/Darkroom/DarkroomView.swift
+index dd01779..4b03a9a 100644
+--- a/SpektraCam/Features/Darkroom/DarkroomView.swift
++++ b/SpektraCam/Features/Darkroom/DarkroomView.swift
+@@ -397,6 +397,13 @@ struct DarkroomView: View {
+                     .glassIconButton().accessibilityIdentifier("darkroom.rotatePaper")
+                 }
+             }
++            // Presets for the usual widths; the slider below takes anything in between.
++            PanelTabs(
++                options: PrintLayout.Border.allCases.map { ($0, $0.title) },
++                selection: Binding(
++                    get: { PrintLayout.Border(margin: margin) ?? .none },
++                    set: { setMargin($0.margin) }),
++                prefix: "darkroom.border.", isSelectionActive: !filled && PrintLayout.Border(margin: margin) != nil)
+             HStack(alignment: .bottom, spacing: 10) {
+                 NumericControl(
+                     title: String(localized: "darkroom.border", defaultValue: "Border"),
+diff --git a/SpektraCam/Features/Editor/Panels/EffectsPanel.swift b/SpektraCam/Features/Editor/Panels/EffectsPanel.swift
+index ff692d6..4fa5d03 100644
+--- a/SpektraCam/Features/Editor/Panels/EffectsPanel.swift
++++ b/SpektraCam/Features/Editor/Panels/EffectsPanel.swift
+@@ -67,13 +67,6 @@ struct EffectsPanel: View {
+                 }
+                 .disabled(session.recipe.look.mode == .lut)
+             case .diffusion:
+-                Text(
+-                    String(
+-                        localized: "effects.diffusion_memory_note",
+-                        defaultValue:
+-                            "Diffusion can require substantial memory during full-size export.")
+-                ).font(.caption)
+-                    .foregroundStyle(.secondary)
+                 EffectSection(
+                     title: String(
+                         localized: "effects.camera_diffusion", defaultValue: "Camera diffusion"),
+diff --git a/SpektraCam/Models/FilmEdgeLayout.swift b/SpektraCam/Models/FilmEdgeLayout.swift
+index a4942f3..8ba5d14 100644
+--- a/SpektraCam/Models/FilmEdgeLayout.swift
++++ b/SpektraCam/Models/FilmEdgeLayout.swift
+@@ -489,11 +489,11 @@ nonisolated struct FilmEdgeGeometry: Sendable {
+         // centre in the easel opening: the black rebate band tapers and differs side to side.
+         let handSet = resolved.enlargerPrint && easel?.handSet == true
+         let easelSeed = easel?.easelSeed ?? 1
+-        if handSet { resolved.tilt = min(max(resolved.tilt + 0.3 * Easel.jitter(easelSeed, 3), -3.3), 3.3) }
++        if handSet { resolved.tilt = min(max(resolved.tilt + 0.2 * Easel.jitter(easelSeed, 3), -3.3), 3.3) }
+         // The blades' worn edge: the gate's wear profile at the easel's amplitude.
+         if resolved.enlargerPrint { resolved.carrierRoughness = (easel?.blade ?? .natural).wear }
+         distress = resolved
+-        easelOffset = handSet ? (0.18 * Easel.jitter(easelSeed, 4), 0.18 * Easel.jitter(easelSeed, 5)) : (0, 0)
++        easelOffset = handSet ? (0.12 * Easel.jitter(easelSeed, 4), 0.12 * Easel.jitter(easelSeed, 5)) : (0, 0)
+         registration = Self.maxRegistration * (FilmEdgeNoise.unit(Self.streamSeed(resolved.seed, 61)) * 2 - 1)
+         // `portrait` means the film runs vertically on the canvas. 6 × 4.5 frames lie across the
+         // film, so a landscape 645 picture sits on a vertical strip.
+diff --git a/SpektraCam/Models/PrintLayout.swift b/SpektraCam/Models/PrintLayout.swift
+index 5a1c251..890ca42 100644
+--- a/SpektraCam/Models/PrintLayout.swift
++++ b/SpektraCam/Models/PrintLayout.swift
+@@ -42,6 +42,31 @@ nonisolated struct PrintLayout: Codable, Equatable, Sendable {
+     /// Nil is automatic (see `resolvedMargin`).
+     var margin: Double?
+     static let marginRange = -0.2...0.2
++    /// Common border widths, as a share of the sheet's long side.
++    enum Border: String, CaseIterable {
++        case none, narrow, medium, wide
++        var margin: Double {
++            switch self {
++            case .none: 0
++            case .narrow: 0.03
++            case .medium: 0.05
++            case .wide: 0.13
++            }
++        }
++        var title: String {
++            switch self {
++            case .none: String(localized: "darkroom.border.none", defaultValue: "No border")
++            case .narrow: String(localized: "darkroom.border.narrow", defaultValue: "Narrow")
++            case .medium: String(localized: "darkroom.border.medium", defaultValue: "Medium")
++            case .wide: String(localized: "darkroom.border.wide", defaultValue: "Wide")
++            }
++        }
++        /// The preset this border matches, if any.
++        init?(margin: Double) {
++            guard let match = Self.allCases.first(where: { abs($0.margin - margin) < 0.0005 }) else { return nil }
++            self = match
++        }
++    }
+     /// A film-edge enlarger print starts on a 5 × 7 sheet; a photo shown as itself stays as image.
+     static var enlargerDefault: Self { var layout = Self(); layout.paper = .fiveBySeven; return layout }
+     /// The automatic border: none for a photo shown as itself, a modest one on a sized sheet
+@@ -142,7 +167,7 @@ nonisolated enum Easel {
+         }
+     }
+     /// A hand-set easel lands a little off: up to this fraction of the sheet's long side.
+-    static let placement = 0.008
++    static let placement = 0.0055
+     /// Seeded unit values in [-1, 1] for a hand-set placement.
+     static func jitter(_ seed: UInt32, _ k: Int32) -> Double {
+         FilmEdgeNoise.unit(FilmEdgeNoise.hash(k, 77, seed)) * 2 - 1
+diff --git a/SpektraCam/Resources/Localizable.xcstrings b/SpektraCam/Resources/Localizable.xcstrings
+index c4f42e7..4ed3555 100644
+--- a/SpektraCam/Resources/Localizable.xcstrings
++++ b/SpektraCam/Resources/Localizable.xcstrings
+@@ -1129,24 +1129,6 @@
+         }
+       }
+     },
+-    "camera.camera_paused" : {
+-      "comment" : "Camera interface text.",
+-      "extractionState" : "manual",
+-      "localizations" : {
+-        "en" : {
+-          "stringUnit" : {
+-            "state" : "translated",
+-            "value" : "Camera Paused"
+-          }
+-        },
+-        "zh-Hans" : {
+-          "stringUnit" : {
+-            "state" : "translated",
+-            "value" : "相机已暂停"
+-          }
+-        }
+-      }
+-    },
+     "camera.camera_stopped" : {
+       "comment" : "Camera interface text.",
+       "extractionState" : "manual",
+@@ -1381,6 +1363,24 @@
+         }
+       }
+     },
++    "camera.flash" : {
++      "comment" : "Camera interface text.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Flash"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "闪光灯"
++          }
++        }
++      }
++    },
+     "camera.flip_camera" : {
+       "comment" : "Camera interface text.",
+       "extractionState" : "manual",
+@@ -1489,6 +1489,60 @@
+         }
+       }
+     },
++    "camera.hold" : {
++      "comment" : "Camera interface text.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Hold Camera"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "暂停相机"
++          }
++        }
++      }
++    },
++    "camera.hold_hint" : {
++      "comment" : "Camera interface text.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Tap to resume"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "轻点以恢复"
++          }
++        }
++      }
++    },
++    "camera.hold_power_note" : {
++      "comment" : "Camera interface text.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "The sensor and preview are off to save power."
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "传感器和预览已关闭，以节省电量。"
++          }
++        }
++      }
++    },
+     "camera.import_failed" : {
+       "comment" : "App interface text.",
+       "extractionState" : "manual",
+@@ -1669,6 +1723,24 @@
+         }
+       }
+     },
++    "camera.on_hold" : {
++      "comment" : "Camera interface text.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Camera on Hold"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "相机已暂停"
++          }
++        }
++      }
++    },
+     "camera.open_library" : {
+       "comment" : "Camera interface text.",
+       "extractionState" : "manual",
+@@ -1777,56 +1849,56 @@
+         }
+       }
+     },
+-    "camera.retry_import" : {
++    "camera.resume" : {
+       "comment" : "Camera interface text.",
+       "extractionState" : "manual",
+       "localizations" : {
+         "en" : {
+           "stringUnit" : {
+             "state" : "translated",
+-            "value" : "Retry Import"
++            "value" : "Resume Camera"
+           }
+         },
+         "zh-Hans" : {
+           "stringUnit" : {
+             "state" : "translated",
+-            "value" : "重新导入"
++            "value" : "恢复相机"
+           }
+         }
+       }
+     },
+-    "camera.saved_to_library" : {
++    "camera.retry_import" : {
+       "comment" : "Camera interface text.",
+       "extractionState" : "manual",
+       "localizations" : {
+         "en" : {
+           "stringUnit" : {
+             "state" : "translated",
+-            "value" : "Saved to Library: %lld"
++            "value" : "Retry Import"
+           }
+         },
+         "zh-Hans" : {
+           "stringUnit" : {
+             "state" : "translated",
+-            "value" : "已存入图库：%lld 张"
++            "value" : "重新导入"
+           }
+         }
+       }
+     },
+-    "camera.saves_to_library_note" : {
++    "camera.saved_to_library" : {
+       "comment" : "Camera interface text.",
+       "extractionState" : "manual",
+       "localizations" : {
+         "en" : {
+           "stringUnit" : {
+             "state" : "translated",
+-            "value" : "RAW photos save to the app library."
++            "value" : "Saved to Library: %lld"
+           }
+         },
+         "zh-Hans" : {
+           "stringUnit" : {
+             "state" : "translated",
+-            "value" : "RAW 照片存储在 App 图库中。"
++            "value" : "已存入图库：%lld 张"
+           }
+         }
+       }
+@@ -3143,6 +3215,78 @@
+         }
+       }
+     },
++    "darkroom.border.medium" : {
++      "comment" : "Darkroom border preset.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Medium"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "中"
++          }
++        }
++      }
++    },
++    "darkroom.border.narrow" : {
++      "comment" : "Darkroom border preset.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Narrow"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "窄"
++          }
++        }
++      }
++    },
++    "darkroom.border.none" : {
++      "comment" : "Darkroom border preset.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "No border"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "无白边"
++          }
++        }
++      }
++    },
++    "darkroom.border.wide" : {
++      "comment" : "Darkroom border preset.",
++      "extractionState" : "manual",
++      "localizations" : {
++        "en" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "Wide"
++          }
++        },
++        "zh-Hans" : {
++          "stringUnit" : {
++            "state" : "translated",
++            "value" : "宽"
++          }
++        }
++      }
++    },
+     "darkroom.clean_print" : {
+       "comment" : "Darkroom print layout interface. New copy; human editorial review pending.",
+       "extractionState" : "manual",
+@@ -4902,24 +5046,6 @@
+         }
+       }
+     },
+-    "effects.diffusion_memory_note" : {
+-      "comment" : "Effects interface text. Diffusion is an optical filter/light-spread effect.",
+-      "extractionState" : "manual",
+-      "localizations" : {
+-        "en" : {
+-          "stringUnit" : {
+-            "state" : "translated",
+-            "value" : "Diffusion can require substantial memory during full-size export."
+-          }
+-        },
+-        "zh-Hans" : {
+-          "stringUnit" : {
+-            "state" : "translated",
+-            "value" : "以完整尺寸导出时，柔光效果可能占用大量内存。"
+-          }
+-        }
+-      }
+-    },
+     "effects.enlarger_diffusion" : {
+       "comment" : "Effects interface text. Diffusion is an optical filter/light-spread effect.",
+       "extractionState" : "manual",
+diff --git a/SpektraCamUITests/AdaptiveLayoutTests.swift b/SpektraCamUITests/AdaptiveLayoutTests.swift
+index 81a07b8..8eca615 100644
+--- a/SpektraCamUITests/AdaptiveLayoutTests.swift
++++ b/SpektraCamUITests/AdaptiveLayoutTests.swift
+@@ -34,6 +34,9 @@ final class AdaptiveLayoutTests: XCTestCase {
+         XCTAssertTrue(app.buttons["camera.shutter"].waitForExistence(timeout: 10))
+         capture(app, orientation.isLandscape ? "wide-camera" : "tall-camera")
+         app.buttons["camera.close"].tap()
++        // Leaving the camera releases its portrait hold; the library must come back usable.
++        XCTAssertTrue(app.buttons["library.import"].waitForExistence(timeout: 10))
++        capture(app, orientation.isLandscape ? "wide-after-camera" : "tall-after-camera")
+         cell.tap()
+         XCTAssertTrue(app.buttons["photo.develop"].waitForExistence(timeout: 10))
+         capture(app, orientation.isLandscape ? "wide-viewer" : "tall-viewer")
+@@ -65,6 +68,60 @@ final class AdaptiveLayoutTests: XCTestCase {
+         capture(app, prefix + "darkroom-edge")
+     }
+ 
++    /// The simulator has no camera; `--ui-test-camera-demo` stands one in so every control is live.
++    @MainActor private func cameraDemo(_ orientation: UIDeviceOrientation, prefix: String) {
++        continueAfterFailure = false
++        XCUIDevice.shared.orientation = orientation
++        let app = XCUIApplication(bundleIdentifier: "io.github.runzeni.spektracam")
++        app.launchArguments = ["--ui-test-library", "--reset-test-library", "--ui-test-camera-demo"]
++        app.launch()
++        XCTAssertTrue(app.buttons["camera.open"].waitForExistence(timeout: 15))
++        app.buttons["camera.open"].tap()
++        let shutter = app.buttons["camera.shutter"]
++        let hold = app.buttons["camera.hold"]
++        XCTAssertTrue(app.buttons["camera.lens.24"].waitForExistence(timeout: 10))
++        XCTAssertTrue(shutter.isEnabled)
++        // The hold sits on the shutter's right, under the right thumb.
++        XCTAssertGreaterThanOrEqual(hold.frame.midX, shutter.frame.midX)
++        capture(app, prefix + "camera-ready")
++        // Flash has two states and starts off.
++        let flash = app.buttons["camera.flash"]
++        XCTAssertEqual(flash.value as? String, "Off")
++        flash.tap()
++        XCTAssertEqual(flash.value as? String, "On")
++        shutter.tap()
++        XCTAssertTrue(app.staticTexts["camera.saved"].waitForExistence(timeout: 5))
++        // LVF switches the camera off; the shutter stays where it was and wakes it.
++        let shutterFrame = shutter.frame
++        hold.tap()
++        let screen = app.descendants(matching: .any)["camera.hold.screen"]
++        XCTAssertTrue(screen.waitForExistence(timeout: 5))
++        // The controls stay in place on hold; they are only inactive.
++        XCTAssertTrue(app.buttons["camera.lens.24"].exists)
++        XCTAssertFalse(app.buttons["camera.lens.24"].isEnabled)
++        XCTAssertEqual(shutter.frame.midX, shutterFrame.midX, accuracy: 1)
++        XCTAssertEqual(shutter.frame.midY, shutterFrame.midY, accuracy: 1)
++        capture(app, prefix + "camera-hold")
++        shutter.tap()
++        XCTAssertTrue(screen.waitForNonExistence(timeout: 5))
++        XCTAssertTrue(app.buttons["camera.lens.24"].isEnabled)
++        hold.tap()
++        XCTAssertTrue(screen.waitForExistence(timeout: 5))
++        screen.tap()
++        XCTAssertTrue(screen.waitForNonExistence(timeout: 5))
++        // Taller than wide, the EV slider sits on the screen's centre line.
++        let window = app.windows.firstMatch.frame
++        if window.height > window.width {
++            XCTAssertEqual(app.sliders["camera.exposure"].frame.midX, window.midX, accuracy: 2)
++        }
++        // A live camera must still let go: Close returns to a working library.
++        app.buttons["camera.close"].tap()
++        XCTAssertTrue(app.buttons["library.import"].waitForExistence(timeout: 10))
++        XCTAssertTrue(app.buttons["camera.open"].isHittable)
++    }
++    @MainActor func testCameraHoldFlashAndShutterInPortrait() { cameraDemo(.portrait, prefix: "tall-") }
++    @MainActor func testCameraHoldFlashAndShutterInLandscape() { cameraDemo(.landscapeLeft, prefix: "wide-") }
++
+     @MainActor func testSideBySideWorkspaceInLandscape() throws {
+         let app = try openEditor(.landscapeLeft)
+         let window = app.windows.firstMatch.frame

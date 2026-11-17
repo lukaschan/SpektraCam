@@ -334,7 +334,8 @@ actor PhotoRenderer {
 
     private func frame(
         _ input: SourceImageRenderer.Input, recipe: EditRecipe,
-        library: ModelLibrary, gpu: MetalFilmPipeline, preview: Bool, state: PreviewState? = nil
+        library: ModelLibrary, gpu: MetalFilmPipeline, preview: Bool, state: PreviewState? = nil,
+        framing: (recipe: EditRecipe, size: CGSize, maximum: Int)? = nil
     ) async throws -> CGImage {
         let cache = state ?? PreviewState(maximum: previewMaximum)
         var recipe = recipe
@@ -383,7 +384,12 @@ actor PhotoRenderer {
             {
                 neutral = cached
             } else {
-                let developed = try SourceImageRenderer.prepare(
+                let developed = try framing.map {
+                    // A film-edge centre keeps its framed decode across handling changes.
+                    try edgeSource(
+                        recipe, framing: $0.recipe, maximum: $0.maximum, intent: .developedPhoto,
+                        size: $0.size)
+                } ?? SourceImageRenderer.prepare(
                     data: data, fallback: source, recipe: recipe,
                     maximum: max(input.width, input.height), sourceType: sourceType,
                     intent: .developedPhoto, description: sourceDescription,
@@ -402,6 +408,10 @@ actor PhotoRenderer {
         return try ToneRenderer.render(mixed, tone: recipe.tone.outputStage)
     }
 
+    /// An enlarger print's margin is unexposed paper; the sheet around it is the same paper.
+    private static func paper(_ recipe: EditRecipe, _ image: CGImage) -> CGColor? {
+        recipe.renderedFilmEdgeLayout?.distress.enlargerPrint == true ? PrintCompositor.paperTone(of: image) : nil
+    }
     /// Sharp pixels for the visible part of a zoomed preview.
     struct Detail: @unchecked Sendable {
         let image: CGImage
@@ -514,7 +524,10 @@ actor PhotoRenderer {
     func renderPresentation(_ recipe: EditRecipe, maximum: Int) async throws -> CGImage {
         let photograph: CGImage
         if recipe.filmEdgeLayout != nil {
-            photograph = try await renderFilmEdge(recipe, maximum: maximum)
+            // `maximum` bounds the finished sheet; the picture renders at exactly the size it will
+            // occupy on it, as an export does, so the two never differ.
+            let caps = exportLongEdges(recipe, size: .longEdge(maximum))
+            photograph = try await renderFilmEdge(recipe, maximum: caps.picture ?? maximum)
         } else {
             let developed = try await render(recipe, maximum: maximum)
             guard let transformed = GeometryRenderer.render(developed, geometry: recipe.geometry),
@@ -522,17 +535,125 @@ actor PhotoRenderer {
             else { throw PhotoExporter.Failure.render }
             photograph = cropped
         }
-        if let layout = recipe.printLayout, !layout.isIdentity {
-            return try PrintCompositor.render(photograph, layout: layout, maximum: maximum)
+        if let layout = recipe.printedLayout {
+            return try PrintCompositor.render(photograph, layout: layout, maximum: maximum, paper: Self.paper(recipe, photograph),
+                                              content: recipe.printContent(canvas: CGSize(width: photograph.width, height: photograph.height)))
         }
         return photograph
+    }
+
+    /// The framed source of a film-edge render. Handling and gate sliders re-render the support
+    /// many times without touching the photograph, so its decode is kept between frames.
+    private struct EdgeSourceKey: Equatable {
+        let source: EditRecipe.Source, temperature: Double?, crop: CropSelection
+        let geometry: ImageGeometry, maximum: Int, size: CGSize
+        let intent: SourceImageRenderer.Intent
+    }
+    private var edgeSources: [(key: EdgeSourceKey, input: SourceImageRenderer.Input)] = []
+    private var edgeCentres: [(key: EditRecipe, size: CGSize, image: CGImage)] = []
+    private func edgeSource(
+        _ recipe: EditRecipe, framing: EditRecipe, maximum: Int,
+        intent: SourceImageRenderer.Intent, size: CGSize
+    ) throws -> SourceImageRenderer.Input {
+        let key = EdgeSourceKey(
+            source: recipe.source, temperature: recipe.temperature, crop: framing.crop,
+            geometry: framing.geometry, maximum: maximum, size: size, intent: intent)
+        if let index = edgeSources.firstIndex(where: { $0.key == key }) {
+            let hit = edgeSources.remove(at: index)
+            edgeSources.append(hit)
+            return hit.input
+        }
+        let input = try SourceImageRenderer.prepare(
+            data: data, fallback: source, recipe: recipe, maximum: maximum, sourceType: sourceType,
+            intent: intent, description: sourceDescription, framing: framing, targetSize: size,
+            allowsStore: true)
+        // The quick frame, the settled frame and the loupe each keep one size.
+        edgeSources.append((key, input))
+        if edgeSources.count > 4 { edgeSources.removeFirst() }
+        return input
+    }
+    /// The patch of a film-edge presentation under the loupe, at the photo's native resolution.
+    /// `visible` is in unit coordinates of the strip canvas. Wide effects come from one
+    /// low-resolution pass over the whole canvas, kept per edit, so moving the loupe only
+    /// renders the patch. Nil when the route needs the whole-frame render (a separately
+    /// developed centre) or the preview already has every pixel.
+    func renderEdgeDetail(_ original: EditRecipe, visible: CGRect) async throws -> Detail? {
+        try Task.checkCancellation()
+        guard data != nil, let layout = original.renderedFilmEdgeLayout else { return nil }
+        let dimensions = sourceDescription.map { CGSize(width: $0.width, height: $0.height) }
+            ?? CGSize(width: source.width, height: source.height)
+        var recipe = original
+        recipe.constrainFilmEdgeCrop(imageSize: dimensions)
+        let oriented = original.geometry.quarterTurns % 2 == 0 ? dimensions
+            : CGSize(width: dimensions.height, height: dimensions.width)
+        let crop = recipe.crop.pixelRect(in: oriented)
+        let long = max(1, Int(max(crop.width, crop.height)))
+        guard long > previewMaximum * 5 / 4 else { return nil }
+        recipe.tone.monochrome = false
+        let material = FilmEdgeRenderer.materialRecipe(recipe)
+        guard material.processingRecipe == recipe.processingRecipe,
+            let geometry = FilmEdgeGeometry(
+                imageSize: crop.size, layout: layout, longEdge: long,
+                perforation: layout.cinePerforations ? .bh1866 : .source(filmID: material.filmID),
+                easel: recipe.printLayout ?? PrintLayout())
+        else { return nil }
+        let tiling = self.tiling
+        let factor = tiling.resolvedFactor(width: geometry.width, height: geometry.height)
+        let (library, gpu) = try await renderResources.load()
+        let autoEV = try exposure(material, library: library, state: edgeMetering)
+        let pipeline = try await renderResources.pipeline(material)
+        let originalLong = max(dimensions.width, dimensions.height)
+        func framed(_ geometry: FilmEdgeGeometry) throws -> SourceImageRenderer.Input {
+            let size = CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded()))
+            // The same decode size as `renderFilmEdge`, so both share one framed source.
+            let maximum = min(Int(originalLong), max(1, Int(ceil(originalLong * max(geometry.gate.width, geometry.gate.height) / Double(long)))))
+            return try edgeSource(material, framing: recipe, maximum: maximum, intent: .sceneLinear, size: size)
+        }
+        var prepared = try await gpu.prepareRegion(
+            width: geometry.width, height: geometry.height, factor: factor, pipeline: pipeline,
+            autoExposureEV: autoEV, tiling: tiling, edge: geometry, layout: layout, proxy: nil)
+        if prepared == nil {
+            let coarse = geometry.coarser(by: factor)
+            let canvas = try FilmEdgeRenderer.padded(framed(coarse), geometry: coarse)
+            try Task.checkCancellation()
+            prepared = try await gpu.prepareRegion(
+                width: geometry.width, height: geometry.height, factor: factor, pipeline: pipeline,
+                autoExposureEV: autoEV, tiling: tiling, edge: geometry, layout: layout,
+                proxy: canvas.pixels)
+        }
+        guard let halo = prepared else { throw PhotoExporter.Failure.render }
+        let shown = visible.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard !shown.isEmpty else { return nil }
+        let width = geometry.width, height = geometry.height
+        let x0 = min(max(Int(floor(shown.minX * Double(width))), 0), width - 1)
+        let y0 = min(max(Int(floor(shown.minY * Double(height))), 0), height - 1)
+        let x1 = min(max(Int(ceil(shown.maxX * Double(width))), x0 + 1), width)
+        let y1 = min(max(Int(ceil(shown.maxY * Double(height))), y0 + 1), height)
+        let sx0 = max(0, x0 - halo), sy0 = max(0, y0 - halo)
+        let sx1 = min(width, x1 + halo), sy1 = min(height, y1 + halo)
+        let part = try FilmEdgeRenderer.padded(
+            framed(geometry), geometry: geometry, region: (sx0, sy0, sx1 - sx0, sy1 - sy0))
+        guard let store = part.store else { throw PhotoExporter.Failure.render }
+        try Task.checkCancellation()
+        let key = MetalFilmPipeline.RegionKey(
+            recipe: pipeline.recipe, width: width, height: height, factor: factor,
+            autoExposureEV: autoEV, seed: 0, edge: layout)
+        let result = try await gpu.processRegion(
+            store, origin: (sx0, sy0), region: (x0, y0, x1 - x0, y1 - y0), key: key, pipeline: pipeline)
+        try Task.checkCancellation()
+        let film = try result.image(colorSpace: CGColorSpace(name: CGColorSpace.extendedSRGB)!)
+        return Detail(
+            image: try ToneRenderer.render(film, tone: original.tone.outputStage),
+            rect: CGRect(
+                x: Double(x0) / Double(width), y: Double(y0) / Double(height),
+                width: Double(x1 - x0) / Double(width), height: Double(y1 - y0) / Double(height)))
     }
 
     /// Complete capture-support presentation, before paper placement and final file encoding.
     /// The final long edge includes the rebate; native export never grows the canvas silently.
     func renderFilmEdge(_ original: EditRecipe, maximum: Int?, allowOvercommit: Bool = false) async throws -> CGImage {
         try Task.checkCancellation()
-        guard let layout = original.filmEdgeLayout else { throw PhotoExporter.Failure.render }
+        guard let layout = original.renderedFilmEdgeLayout else { throw PhotoExporter.Failure.render }
         let dimensions = sourceDescription.map { CGSize(width: $0.width, height: $0.height) }
             ?? CGSize(width: source.width, height: source.height)
         var recipe = original
@@ -546,7 +667,8 @@ actor PhotoRenderer {
         let material = FilmEdgeRenderer.materialRecipe(recipe)
         // Holes follow the source stock: cine camera negatives are BH-1866, still film KS-1870.
         guard let geometry = FilmEdgeGeometry(imageSize: crop.size, layout: layout, longEdge: long,
-                                              perforation: .source(filmID: material.filmID))
+                                              perforation: layout.cinePerforations ? .bh1866 : .source(filmID: material.filmID),
+                                              easel: recipe.printLayout ?? PrintLayout())
         else { throw PhotoExporter.Failure.render }
         let originalLong = max(dimensions.width, dimensions.height)
         let decodeMaximum = min(Int(originalLong), max(1, Int(ceil(originalLong * max(geometry.gate.width, geometry.gate.height) / Double(nativeLong)))))
@@ -558,11 +680,9 @@ actor PhotoRenderer {
             recipe: material, allowOvercommit: allowOvercommit, pixelPitchMicrometers: geometry.pixelPitchMicrometers)
         let (library, gpu) = try await renderResources.load()
         let autoEV = try exposure(material, library: library, state: edgeMetering)
-        let input = try SourceImageRenderer.prepare(data: data, fallback: source, recipe: material,
-            maximum: decodeMaximum, sourceType: sourceType, intent: .sceneLinear,
-            description: sourceDescription, framing: recipe,
-            targetSize: CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded())),
-            allowsStore: true)
+        let input = try edgeSource(
+            material, framing: recipe, maximum: decodeMaximum, intent: .sceneLinear,
+            size: CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded())))
         let pipeline = try await renderResources.pipeline(material)
         let composes = material.processingRecipe != recipe.processingRecipe
         // A composed centre fades through the soft gate itself, so the material graph's scene must
@@ -578,14 +698,28 @@ actor PhotoRenderer {
             // Keep LUTs, disabled Develop and every manual cross-family choice exactly as selected.
             // Release FFT work before the second graph; the completed support bitmap is retained.
             await gpu.releaseWorkingCaches()
-            let centerInput = try SourceImageRenderer.prepare(data: data, fallback: source, recipe: recipe,
-                maximum: decodeMaximum, sourceType: sourceType, description: sourceDescription, allowsStore: true)
-            let graded = recipe.look.enabled
-                ? try await frame(centerInput, recipe: recipe, library: library, gpu: gpu, preview: false)
+            // Framed like the support (one pixel per gate position), so leak and fog light can be
+            // added as exposure before the LUT or tone, exactly where the film graph adds it.
+            let gateSize = CGSize(width: max(1, geometry.gate.width.rounded()), height: max(1, geometry.gate.height.rounded()))
+            // The developed centre depends on handling only through leak and fog exposure.
+            var centreKey = recipe
+            if layout.distress.leak <= 0 && layout.distress.edgeFog <= 0 { centreKey.filmEdgeLayout = nil }
+            let center: CGImage
+            if let hit = edgeCentres.first(where: { $0.key == centreKey && $0.size == gateSize }) {
+                center = hit.image
+            } else {
+            let centerInput = try FilmEdgeRenderer.exposeCenter(
+                edgeSource(
+                    recipe, framing: recipe, maximum: decodeMaximum,
+                    intent: recipe.inputMode == .spektrafilm ? .sceneLinear : .developedPhoto, size: gateSize),
+                geometry: geometry)
+            center = recipe.look.enabled
+                ? try await frame(centerInput, recipe: recipe, library: library, gpu: gpu, preview: false,
+                                  framing: (recipe, gateSize, decodeMaximum))
                 : try neutralFrame(centerInput, recipe: recipe)
-            guard let transformed = GeometryRenderer.render(graded, geometry: recipe.geometry),
-                  let center = transformed.cropping(to: recipe.crop.pixelRect(in: CGSize(width: transformed.width, height: transformed.height)))
-            else { throw PhotoExporter.Failure.render }
+            edgeCentres.append((centreKey, gateSize, center))
+            if edgeCentres.count > 3 { edgeCentres.removeFirst() }
+            }
             let paperPrint = !material.bypassesPrint && FilmStock.prints.first { $0.id == material.printID }?.support != "film"
             image = try FilmEdgeRenderer.replacingCenter(image, with: center, geometry: geometry, paperPrint: paperPrint)
         }
@@ -593,6 +727,47 @@ actor PhotoRenderer {
         return try ToneRenderer.render(image, tone: original.tone.outputStage)
     }
 
+    /// Native pixel size of the picture alone (crop, plus its film edge) and of the whole output
+    /// (the sheet at one picture pixel per output pixel), before any export size is applied.
+    func nativeExportSizes(_ original: EditRecipe) -> (picture: CGSize, output: CGSize) {
+        let dimensions = sourceDescription.map { CGSize(width: $0.width, height: $0.height) }
+            ?? CGSize(width: source.width, height: source.height)
+        var recipe = original
+        recipe.constrainFilmEdgeCrop(imageSize: dimensions)
+        let oriented = recipe.geometry.quarterTurns % 2 == 0 ? dimensions
+            : CGSize(width: dimensions.height, height: dimensions.width)
+        let crop = recipe.crop.pixelRect(in: oriented).integral.size
+        var picture = crop
+        if let layout = recipe.renderedFilmEdgeLayout,
+           let geometry = FilmEdgeGeometry(imageSize: crop, layout: layout, longEdge: Int(max(crop.width, crop.height)),
+                                          easel: recipe.printLayout ?? PrintLayout()) {
+            picture = CGSize(width: geometry.width, height: geometry.height)
+        }
+        guard let layout = recipe.printedLayout else { return (picture, picture) }
+        return (picture, PrintCompositor.nativeSize(imageSize: picture, layout: layout, content: recipe.printContent(canvas: picture)))
+    }
+    /// The file's pixel size for this export size, known before rendering.
+    func exportDimensions(_ recipe: EditRecipe, size: PhotoExporter.Size) -> (width: Int, height: Int) {
+        let (picture, output) = nativeExportSizes(recipe)
+        let long = max(output.width, output.height)
+        let target = exportLongEdges(recipe, size: size).output.map(Double.init) ?? long
+        // On paper, the same integer sheet the compositor will make at that long edge.
+        if let layout = recipe.printedLayout,
+           let sheet = PrintGeometry(imageSize: picture, layout: layout, longEdge: CGFloat(target.rounded()),
+                                     content: recipe.printContent(canvas: picture)) {
+            return (Int(sheet.paperSize.width), Int(sheet.paperSize.height))
+        }
+        let factor = target / max(long, 1)
+        return (max(1, Int((output.width * factor).rounded())), max(1, Int((output.height * factor).rounded())))
+    }
+    /// Long-edge caps for the picture render and for the finished output; nil keeps them native.
+    private func exportLongEdges(_ recipe: EditRecipe, size: PhotoExporter.Size) -> (picture: Int?, output: Int?) {
+        let (picture, output) = nativeExportSizes(recipe)
+        let outputLong = max(output.width, output.height), pictureLong = max(picture.width, picture.height)
+        let paper = recipe.printedLayout?.paper.longMillimetres.map { $0 / 25.4 }
+        guard let cap = size.longEdge(native: Int(outputLong), paperLongInches: paper) else { return (nil, nil) }
+        return (Int(ceil(Double(cap) * pictureLong / max(outputLong, 1))), cap)
+    }
     func export(
         _ recipe: EditRecipe, size: PhotoExporter.Size, format: PhotoExporter.Format,
         quality: Double,
@@ -601,6 +776,7 @@ actor PhotoRenderer {
         async throws -> (URL, Int, Int)
     {
         if exportKey != recipe || exportSize != size { exportImage = nil }
+        let caps = exportLongEdges(recipe, size: size)
         let image: CGImage
         if let cached = exportImage {
             image = cached
@@ -610,8 +786,11 @@ actor PhotoRenderer {
             let (_, gpu) = try await renderResources.load()
             await gpu.releaseWorkingCaches()
             do {
-                let edged = try await renderFilmEdge(recipe, maximum: size.maximum, allowOvercommit: allowOvercommit)
-                image = try recipe.printLayout.map { try PrintCompositor.render(edged, layout: $0, maximum: size.maximum) } ?? edged
+                let edged = try await renderFilmEdge(recipe, maximum: caps.picture, allowOvercommit: allowOvercommit)
+                image = try recipe.printedLayout.map {
+                    try PrintCompositor.render(edged, layout: $0, maximum: caps.output, paper: Self.paper(recipe, edged),
+                                               content: recipe.printContent(canvas: CGSize(width: edged.width, height: edged.height)))
+                } ?? edged
             } catch {
                 await gpu.releaseWorkingCaches()
                 throw error
@@ -632,7 +811,7 @@ actor PhotoRenderer {
             let fraction = max(crop.width, crop.height) / max(oriented.width, oriented.height)
             let maximum = min(
                 originalLong,
-                size.maximum.map { Int(ceil(Double($0) / max(fraction, 1e-6))) } ?? originalLong
+                caps.picture.map { Int(ceil(Double($0) / max(fraction, 1e-6))) } ?? originalLong
             )
             let scale = Double(maximum) / Double(originalLong)
             if recipe.look.enabled {
@@ -672,10 +851,10 @@ actor PhotoRenderer {
                     to: recipe.crop.pixelRect(
                         in: CGSize(width: transformed.width, height: transformed.height)))
             else { throw PhotoExporter.Failure.render }
-            if let layout = recipe.printLayout, !layout.isIdentity {
-                image = try PrintCompositor.render(cropped, layout: layout, maximum: size.maximum)
+            if let layout = recipe.printedLayout {
+                image = try PrintCompositor.render(cropped, layout: layout, maximum: caps.output)
             } else {
-                image = try Self.resize(cropped, maximum: size.maximum)
+                image = try Self.resize(cropped, maximum: caps.output)
             }
             exportImage = image
             exportKey = recipe
@@ -710,6 +889,8 @@ actor PhotoRenderer {
         preview = next
         edgeMetering = nextEdge
         alternatePreview = nil
+        edgeSources = []
+        edgeCentres = []
     }
     private static func resize(_ image: CGImage, maximum: Int?) throws -> CGImage {
         guard let maximum, max(image.width, image.height) > maximum else { return image }

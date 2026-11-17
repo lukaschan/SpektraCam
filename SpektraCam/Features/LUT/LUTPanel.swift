@@ -20,13 +20,13 @@ struct LUTPanel: View {
                     value: session.recipe.look.second)
                 Text(
                     String(
-                        localized: "lut.use_luts_made_for_srgb_photos",
+                        localized: "lut.srgb_note",
                         defaultValue: "Use LUTs made for sRGB photos.")
                 ).font(.caption).foregroundStyle(.secondary)
                 Text(
                     String(
-                        localized: "lut.effects_use_portra_400",
-                        defaultValue: "Effects use Portra 400.")
+                        localized: "lut.effects_note",
+                        defaultValue: "Effects use K·P400.")
                 ).font(.caption).foregroundStyle(.secondary)
             }.padding()
         }
@@ -166,7 +166,7 @@ struct LUTLibraryView: View {
             .environment(\.editMode, .constant(editing ? .active : .inactive))
             .searchable(text: $search).navigationTitle(
                 choose == nil
-                    ? String(localized: "lut.lut_manager", defaultValue: "LUT Manager")
+                    ? String(localized: "lut.manager", defaultValue: "LUT Manager")
                     : String(localized: "lut.luts", defaultValue: "LUTs")
             )
             .navigationBarTitleDisplayMode(.inline)
@@ -174,7 +174,7 @@ struct LUTLibraryView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(
-                        String(localized: "lut.close", defaultValue: "Close"), systemImage: "xmark"
+                        String(localized: "common.close", defaultValue: "Close"), systemImage: "xmark"
                     ) { dismiss() }.labelStyle(.iconOnly)
                         .buttonBorderShape(.circle).accessibilityIdentifier("lut.library.close")
                 }
@@ -197,7 +197,7 @@ struct LUTLibraryView: View {
                     ) { showImport = true }
                     .disabled(working).accessibilityIdentifier("lut.import")
                 }
-                ToolbarItem(placement: .bottomBar) { Spacer() }
+                ToolbarSpacer(.flexible, placement: .bottomBar)
                 ToolbarItem(placement: .bottomBar) {
                     Text(
                         String(
@@ -206,7 +206,7 @@ struct LUTLibraryView: View {
                     )
                     .font(.footnote).foregroundStyle(.secondary)
                 }.sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .bottomBar) { Spacer() }
+                ToolbarSpacer(.flexible, placement: .bottomBar)
                 ToolbarItem(placement: .bottomBar) {
                     Button(
                         String(localized: "common.delete", defaultValue: "Delete"),
@@ -216,7 +216,7 @@ struct LUTLibraryView: View {
                     .accessibilityIdentifier("lut.delete")
                     .confirmationDialog(
                         String(
-                            localized: "lut.delete_selected_luts",
+                            localized: "lut.delete_confirm",
                             defaultValue: "Delete selected LUTs?"), isPresented: $confirmDelete,
                         titleVisibility: .visible
                     ) {
@@ -231,7 +231,7 @@ struct LUTLibraryView: View {
                     } message: {
                         Text(
                             String(
-                                localized: "lut.delete_keeps_luts_used_by_saved_edits",
+                                localized: "lut.delete_message",
                                 defaultValue:
                                     "Delete keeps LUTs used by saved edits or Undo. Force Delete clears those LUT references, including Undo/Redo. Other adjustments and originals stay."
                             )
@@ -260,17 +260,10 @@ struct LUTLibraryView: View {
                 Button(String(localized: "common.cancel", defaultValue: "Cancel"), role: .cancel) {
                     renaming = nil
                 }
-                Button(String(localized: "lut.save", defaultValue: "Save")) { saveName() }.disabled(
+                Button(String(localized: "common.save", defaultValue: "Save")) { saveName() }.disabled(
                     name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .alert(
-                String(localized: "lut.lut_library", defaultValue: "LUT Library"),
-                isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })
-            ) {
-                Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) {}
-            } message: {
-                Text(failure ?? "")
-            }
+            .failureAlert(String(localized: "lut.lut_library", defaultValue: "LUT Library"), message: $failure)
         }.presentationDetents([.medium, .large])
     }
     private func row(_ item: InstalledLUT) -> some View {

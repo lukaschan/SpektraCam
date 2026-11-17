@@ -41,7 +41,8 @@ def main():
     print('PASS: Darkroom English/Chinese source coverage; five legacy unused keys allowed', flush=True)
 
     def native(*checks, simulator=False):
-        subprocess.run(['python3', str(ROOT / 'Scripts/core-checks.py'), *checks]
+        # Optimized builds keep every precondition and run the native stages many times faster.
+        subprocess.run(['python3', str(ROOT / 'Scripts/core-checks.py'), *checks, '--optimized']
                        + (['--simulator'] if simulator else []), cwd=ROOT, env=env, check=True)
 
     native('recipe', 'darkroom', 'metal-film', 'geometry', 'source', 'library')
