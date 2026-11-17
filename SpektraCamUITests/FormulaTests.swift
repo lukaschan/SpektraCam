@@ -118,6 +118,10 @@ final class FormulaTests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         capture(app, "formula-manager")
         row.tap()
+        // A formula has its own page: what it carries, sharing, and Rename.
+        XCTAssertTrue(app.buttons["formula.share"].waitForExistence(timeout: 5))
+        capture(app, "formula-detail")
+        app.buttons["formula.detail.rename"].tap()
         let alert = app.alerts.firstMatch
         if !alert.waitForExistence(timeout: 5) { capture(app, "formula-rename-missing") }
         XCTAssertTrue(alert.exists)
@@ -126,6 +130,8 @@ final class FormulaTests: XCTestCase {
         rename.typeText(" 2")
         capture(app, "formula-rename")
         alert.buttons["Save"].tap()
+        XCTAssertTrue(app.navigationBars["Tree test 2"].waitForExistence(timeout: 5))
+        app.navigationBars["Tree test 2"].buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.buttons["formula.row.Tree test 2"].waitForExistence(timeout: 5))
         app.terminate()
         app.launchArguments = ["--ui-test-library"]

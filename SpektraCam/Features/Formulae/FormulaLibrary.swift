@@ -1,5 +1,7 @@
+import CoreTransferable
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
 /// Saved formulae in the user's order. Each is one file, the same file that is shared.
 @MainActor @Observable final class FormulaLibrary {
@@ -23,6 +25,31 @@ import Observation
         }
     }
     func formula(_ id: UUID) -> Formula? { items.first { $0.id == id } }
+    /// The stored file, which is also the file that is shared.
+    nonisolated func fileURL(_ id: UUID) -> URL {
+        directory.appendingPathComponent(id.uuidString).appendingPathExtension(Formula.fileExtension)
+    }
+    enum Conflict { case replace, keepBoth }
+    /// Whether a formula file is new here, already here unchanged, or a different version of
+    /// one that is here.
+    enum Arrival: Equatable { case new, same, changed }
+    func arrival(of data: Data) async -> Arrival {
+        guard let formula = try? Formula(data: data, limit: Formula.sharedLimit), self.formula(formula.id) != nil,
+            let kept = try? Formula.strippingAttachments(data)
+        else { return .new }
+        return await store.matches(formula.id, kept) ? .same : .changed
+    }
+    /// Add a formula file from outside. LUT files it carries are not stored with it; install
+    /// them in the LUT library first.
+    @discardableResult func add(_ data: Data, conflict: Conflict = .replace) async throws -> UUID {
+        let id = try await store.add(data, keepBoth: conflict == .keepBoth)
+        try await load()
+        return id
+    }
+    func replaceLUT(in id: UUID, _ old: String, with new: Formula.LUT) async throws {
+        try await store.replaceLUT(in: id, old, with: new)
+        try await load()
+    }
 
     func load() async throws {
         let saved = try await store.load()
@@ -127,6 +154,33 @@ actor FormulaFiles {
         try write(saved)
         for id in ids { try? FileManager.default.removeItem(at: url(id)) }
     }
+    func matches(_ id: UUID, _ data: Data) -> Bool {
+        guard let stored = try? Data(contentsOf: url(id)),
+            let a = try? JSONSerialization.jsonObject(with: stored) as? NSDictionary,
+            let b = try? JSONSerialization.jsonObject(with: data) as? NSDictionary
+        else { return false }
+        return a == b
+    }
+    func add(_ incoming: Data, keepBoth: Bool) throws -> UUID {
+        var data = try Formula.strippingAttachments(incoming)
+        var formula = try Formula(data: data)
+        if keepBoth, FileManager.default.fileExists(atPath: url(formula.id).path) {
+            let copy = try Formula.duplicating(data, name: formula.name)
+            data = copy.data
+            formula = try Formula(data: data)
+        }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: url(formula.id), options: .atomic)
+        var saved = readIndex()
+        if !saved.order.contains(formula.id) { saved.order.append(formula.id) }
+        try write(saved)
+        return formula.id
+    }
+    func replaceLUT(in id: UUID, _ old: String, with new: Formula.LUT) throws {
+        let data = try Formula.replacingLUT(Data(contentsOf: url(id)), old, with: new)
+        _ = try Formula(data: data)
+        try data.write(to: url(id), options: .atomic)
+    }
     func setFavorite(_ id: UUID, _ favorite: Bool) throws {
         var saved = readIndex()
         saved.favorites.removeAll { $0 == id }
@@ -137,5 +191,56 @@ actor FormulaFiles {
         var saved = readIndex()
         saved.order = ids
         try write(saved)
+    }
+}
+
+extension UTType {
+    /// Declared in Configuration/SpektraCam-Info.plist, with the `.rnformula` extension.
+    nonisolated static let spektraFormula = UTType(exportedAs: "io.github.runzeni.spektracam.formula")
+}
+
+/// A formula as a file for the share sheet. The stored file is sent as it is; LUT files are
+/// added only when the sharer chose to carry them.
+nonisolated struct FormulaFile: Transferable, Sendable {
+    struct Carried: Sendable {
+        let name: String
+        let url: URL
+    }
+    let name: String
+    let source: URL
+    var luts: [Carried] = []
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: .spektraFormula) { file in
+            SentTransferredFile(try file.export())
+        }
+    }
+    /// A copy named after the formula, in a folder of its own so the name is never altered.
+    func export() throws -> URL {
+        var data = try Data(contentsOf: source)
+        if !luts.isEmpty {
+            data = try Formula.attaching(
+                data, luts: luts.compactMap { lut in (try? Data(contentsOf: lut.url)).map { (lut.name, $0) } })
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Formula-" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let safe = name.map { "/:\\".contains($0) ? "-" : $0 }
+        let url = folder.appendingPathComponent(String(safe)).appendingPathExtension(Formula.fileExtension)
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+}
+
+extension FormulaLibrary {
+    /// The file to share. With `carryingLUTs`, the installed LUT files the look uses go inside it.
+    func file(_ formula: Formula, carryingLUTs luts: LUTLibrary? = nil) -> FormulaFile {
+        var carried: [FormulaFile.Carried] = []
+        if let luts, formula.parts.contains(.look) {
+            carried = luts.items.filter { formula.recipe.look.identifiers.contains($0.id) }.map {
+                .init(name: $0.name, url: luts.directory.appendingPathComponent($0.id).appendingPathExtension("cube"))
+            }
+        }
+        return FormulaFile(name: formula.name, source: fileURL(formula.id), luts: carried)
     }
 }

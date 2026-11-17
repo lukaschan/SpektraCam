@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// A named, reusable look: one recipe without its framing, and the parts of it that apply.
@@ -12,7 +13,7 @@ nonisolated struct Formula: Identifiable, Equatable, Sendable {
     static let readable: [EditRecipe.Part: Int] = [.look: 1, .exposure: 1, .darkroom: 1]
 
     /// Enough to ask for the right file: a LUT's id is the SHA-256 of its bytes.
-    struct LUT: Codable, Equatable, Sendable {
+    struct LUT: Codable, Equatable, Identifiable, Sendable {
         let id: String
         var name: String
         var size: Int
@@ -92,8 +93,8 @@ nonisolated struct Formula: Identifiable, Equatable, Sendable {
     }
     /// Read a formula file. Parts written by a newer SpektraCam are listed in `unreadable`
     /// and left out of `parts`; the rest still applies.
-    init(data: Data) throws {
-        guard data.count <= 1024 * 1024,
+    init(data: Data, limit: Int = storedLimit) throws {
+        guard data.count <= limit,
             let file = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let format = (file["format"] as? NSNumber)?.intValue,
             let id = (file["id"] as? String).flatMap(UUID.init(uuidString:)),
@@ -151,6 +152,75 @@ nonisolated struct Formula: Identifiable, Equatable, Sendable {
                     id: id, name: String((entry["name"] as? String ?? "").prefix(200)),
                     size: (entry["size"] as? NSNumber)?.intValue ?? 0)
             }
+    }
+    /// A stored formula is small. A shared one may carry its LUT files.
+    static let storedLimit = 1024 * 1024
+    static let sharedLimit = 40 * 1024 * 1024
+
+    private static func object(_ data: Data) throws -> [String: Any] {
+        guard let file = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw Failure.unreadable
+        }
+        return file
+    }
+    private static func encoded(_ file: [String: Any]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: file, options: [.sortedKeys, .prettyPrinted])
+    }
+    static func hash(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+    /// LUT files carried inside a shared formula, each a `.cube` text. One whose bytes do not
+    /// hash to its id is not what the formula asked for and is dropped.
+    static func attachments(in data: Data) -> [(id: String, name: String, cube: Data)] {
+        guard let file = try? object(data), let entries = file["attachments"] as? [[String: Any]] else {
+            return []
+        }
+        return entries.compactMap { entry in
+            guard let id = entry["id"] as? String, let text = entry["cube"] as? String else { return nil }
+            let cube = Data(text.utf8)
+            guard EditRecipe.validLUT(id), hash(cube) == id else { return nil }
+            return (id, String((entry["name"] as? String ?? "").prefix(200)), cube)
+        }
+    }
+    /// The same file carrying these LUT files, for sharing with someone who lacks them.
+    static func attaching(_ data: Data, luts: [(name: String, cube: Data)]) throws -> Data {
+        var file = try object(data)
+        let entries: [[String: Any]] = luts.compactMap { lut in
+            guard let text = String(data: lut.cube, encoding: .utf8), Data(text.utf8) == lut.cube else {
+                return nil
+            }
+            return ["id": hash(lut.cube), "name": lut.name, "cube": text]
+        }
+        file["attachments"] = entries.isEmpty ? nil : entries
+        return try encoded(file)
+    }
+    /// The file as it is kept: LUT files live in the LUT library, not in each formula.
+    static func strippingAttachments(_ data: Data) throws -> Data {
+        var file = try object(data)
+        guard file["attachments"] != nil else { return data }
+        file["attachments"] = nil
+        return try encoded(file)
+    }
+    /// Point a formula at another LUT. This is the one edit that changes its look, and only
+    /// the user makes it.
+    static func replacingLUT(_ data: Data, _ old: String, with new: LUT) throws -> Data {
+        var file = try object(data)
+        guard var recipe = file["recipe"] as? [String: Any], var look = recipe["look"] as? [String: Any]
+        else { throw Failure.unreadable }
+        for slot in ["first", "second"] {
+            guard var value = look[slot] as? [String: Any], value["id"] as? String == old else { continue }
+            value["id"] = new.id
+            look[slot] = value
+        }
+        recipe["look"] = look
+        file["recipe"] = recipe
+        var references = (file["luts"] as? [[String: Any]] ?? []).filter {
+            let id = $0["id"] as? String
+            return id != old && id != new.id
+        }
+        references.append(["id": new.id, "name": new.name, "size": new.size])
+        file["luts"] = references
+        return try encoded(file)
     }
     /// Change the name and note in a stored file without re-encoding the rest, so fields this
     /// build does not know survive the edit.

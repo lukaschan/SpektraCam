@@ -10887,6 +10887,348 @@
           }
         }
       }
+    },
+    "formula.import.title" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Formula"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加配方"
+          }
+        }
+      }
+    },
+    "formula.import.add" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加"
+          }
+        }
+      }
+    },
+    "formula.import.replace" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "替换"
+          }
+        }
+      }
+    },
+    "formula.import.keep_both" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Both"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留两者"
+          }
+        }
+      }
+    },
+    "formula.import.exists" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another version of this formula is already in your library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "资料库中已有此配方的另一个版本。"
+          }
+        }
+      }
+    },
+    "formula.import.identical" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This formula is already in your library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此配方已在资料库中。"
+          }
+        }
+      }
+    },
+    "formula.import.failed" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t Open Formula"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开配方"
+          }
+        }
+      }
+    },
+    "formula.lut.installed" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已安装"
+          }
+        }
+      }
+    },
+    "formula.lut.included" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Included in this file"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "包含在此文件中"
+          }
+        }
+      }
+    },
+    "formula.lut.not_installed" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not installed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未安装"
+          }
+        }
+      }
+    },
+    "formula.lut.unnamed" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unnamed LUT"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名 LUT"
+          }
+        }
+      }
+    },
+    "formula.lut.import" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import LUT…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入 LUT…"
+          }
+        }
+      }
+    },
+    "formula.lut.choose" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Another LUT…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选取其他 LUT…"
+          }
+        }
+      }
+    },
+    "formula.lut.different" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That is a different LUT. It was added to your LUTs, but this formula still needs its own."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是另一个 LUT。它已添加到 LUT 列表，但此配方仍需要原来的 LUT。"
+          }
+        }
+      }
+    },
+    "formula.lut.note" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A formula cannot be applied until its LUT is installed. Importing the same LUT file links it automatically."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装所需的 LUT 后才能应用配方。导入同一 LUT 文件即可自动关联。"
+          }
+        }
+      }
+    },
+    "formula.share" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Formula"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享配方"
+          }
+        }
+      }
+    },
+    "formula.share.only" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Formula Only"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅共享配方"
+          }
+        }
+      }
+    },
+    "formula.share.with_luts" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share with LUT Files"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连同 LUT 文件共享"
+          }
+        }
+      }
+    },
+    "formula.share.lut_note" : {
+      "comment" : "Formulae: sharing and importing. New copy; human editorial review pending.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Without its LUT files, the other person needs the same LUTs installed. Only include LUT files you are allowed to share."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不含 LUT 文件时，对方需要已安装相同的 LUT。请仅包含你有权共享的 LUT 文件。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

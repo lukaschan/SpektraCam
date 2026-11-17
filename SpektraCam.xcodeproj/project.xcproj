@@ -60,6 +60,7 @@
         "DEVELOPMENT_TEAM": "7GN2969G32",
         "ENABLE_PREVIEWS": "YES",
         "GENERATE_INFOPLIST_FILE": "YES",
+        "INFOPLIST_FILE": "Configuration/SpektraCam-Info.plist",
         "INFOPLIST_KEY_CFBundleDisplayName": "SpektraCam",
         "INFOPLIST_KEY_ITSAppUsesNonExemptEncryption": "NO",
         "INFOPLIST_KEY_NSCameraUsageDescription": "Take RAW photos and save them in the app library.",

@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var libraryPath: [UUID] = []
     @State private var libraryScrollRequest = 0
     @State private var captureImportFailure: String?
+    @State private var formulaArrival: FormulaArrival?
+    @State private var formulaFailure: String?
     @Environment(\.scenePhase) private var scenePhase
     private var checkingCameraControl: Bool {
         #if DEBUG
@@ -53,6 +55,15 @@ struct ContentView: View {
                         await recoverCaptures(library)
                         try? await library.luts.load()
                         try? await library.formulae.load()
+                        #if DEBUG && targetEnvironment(simulator)
+                            // Stand in for the system pickers and "Open in SpektraCam".
+                            let options = ProcessInfo.processInfo.arguments
+                            for (index, option) in options.enumerated() where index + 1 < options.count {
+                                let file = URL(fileURLWithPath: options[index + 1])
+                                if option == "--ui-test-lut" { _ = try? await library.luts.importFile(file) }
+                                if option == "--ui-test-open" { openFormula(file) }
+                            }
+                        #endif
                         try? await library.repairRAWDimensions()
                         #if DEBUG || PERFORMANCE_CHECKS
                             await DarkroomOrientationChecks.run(library)
@@ -84,6 +95,13 @@ struct ContentView: View {
             }
         }
         .task { if !checkingCameraControl && library == nil { openLibrary() } }
+        .onOpenURL(perform: openFormula)
+        .sheet(item: $formulaArrival) { arrival in
+            if let library { FormulaImportSheet(library: library, arrival: arrival) }
+        }
+        .failureAlert(
+            String(localized: "formula.import.failed", defaultValue: "Couldn’t Open Formula"),
+            message: $formulaFailure)
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
             if let library {
                 Task {
@@ -127,6 +145,13 @@ struct ContentView: View {
             }
         } message: {
             Text(library?.saveFailure ?? "")
+        }
+    }
+    /// A `.rnformula` opened from Files, Messages or AirDrop. It is shown first, never added unasked.
+    private func openFormula(_ url: URL) {
+        guard url.isFileURL else { return }
+        do { formulaArrival = try FormulaArrival(url: url) } catch {
+            formulaFailure = error.localizedDescription
         }
     }
     private func recoverCaptures(_ library: PhotoLibrary) async {

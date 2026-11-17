@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 extension Formula {
     /// Why a formula cannot be applied here, or nil when it can.
@@ -16,6 +17,13 @@ extension Formula {
     /// "F·C200 → F·CA II", or the parts alone when there is no Look.
     @MainActor func summary(luts: LUTLibrary) -> String {
         guard parts.contains(.look) else { return parts.map(\.title).joined(separator: " · ") }
+        if recipe.look.enabled, recipe.look.mode == .lut {
+            // A LUT that is not installed is still named, from the formula's own record of it.
+            let names = [recipe.look.first.id, recipe.look.second.id].compactMap { $0 }.map { id in
+                luts.name(id) ?? self.luts.first { $0.id == id }?.name ?? ""
+            }.filter { !$0.isEmpty }
+            return (["3D LUT"] + names).joined(separator: " · ")
+        }
         let names = recipe.lookNames(luts: luts)
         return [names.film, names.print].compactMap { $0 }.joined(separator: " → ")
     }
@@ -234,26 +242,42 @@ struct FormulaLibraryView: View {
     @State private var renaming: Formula?
     @State private var name = ""
     @State private var note = ""
+    @State private var showImport = false
+    @State private var arrival: FormulaArrival?
+    @State private var path: [UUID] = []
     private var formulae: FormulaLibrary { library.formulae }
     private var matches: [Formula] {
         formulae.items.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List(selection: $selection) {
                 ForEach(matches) { formula in
                     if editing {
                         row(formula).tag(formula.id)
                     } else {
                         let favorite = formulae.favorites.contains(formula.id)
+                        // A selectable list takes a tap as a selection, so the row pushes its page itself.
                         Button {
-                            rename(formula)
+                            path.append(formula.id)
                         } label: {
-                            row(formula)
+                            HStack {
+                                row(formula)
+                                Image(systemName: "chevron.forward").font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.tertiary).accessibilityHidden(true)
+                            }
                         }
                         .foregroundStyle(.primary).accessibilityIdentifier("formula.row." + formula.name)
                         .contextMenu {
+                            ShareLink(
+                                item: formulae.file(formula),
+                                preview: SharePreview(formula.name, image: Image(systemName: "flask"))
+                            ) {
+                                Label(
+                                    String(localized: "export.share", defaultValue: "Share"),
+                                    systemImage: "square.and.arrow.up")
+                            }
                             Button(String(localized: "lut.rename", defaultValue: "Rename"), systemImage: "pencil") {
                                 rename(formula)
                             }
@@ -298,6 +322,7 @@ struct FormulaLibraryView: View {
                                 defaultValue: "Save a look as a formula from a photo’s information panel.")))
                 }
             }
+            .navigationDestination(for: UUID.self) { FormulaDetailView(library: library, id: $0) }
             .searchable(text: $search)
             .navigationTitle(String(localized: "formula.formulae", defaultValue: "Formulae"))
             .navigationBarTitleDisplayMode(.inline)
@@ -321,6 +346,12 @@ struct FormulaLibraryView: View {
                     }
                     .disabled(working || formulae.items.isEmpty)
                     .accessibilityIdentifier("formula.library.select")
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button(String(localized: "common.import", defaultValue: "Import"), systemImage: "plus") {
+                        showImport = true
+                    }
+                    .disabled(working).accessibilityIdentifier("formula.import")
                 }
                 ToolbarSpacer(.flexible, placement: .bottomBar)
                 ToolbarItem(placement: .bottomBar) {
@@ -363,6 +394,12 @@ struct FormulaLibraryView: View {
                 }
             }
             .task { do { try await formulae.load() } catch { failure = error.localizedDescription } }
+            .fileImporter(isPresented: $showImport, allowedContentTypes: [.spektraFormula, .json]) { result in
+                do { arrival = try FormulaArrival(url: result.get()) } catch {
+                    failure = error.localizedDescription
+                }
+            }
+            .sheet(item: $arrival) { FormulaImportSheet(library: library, arrival: $0) }
             .alert(
                 String(localized: "formula.rename", defaultValue: "Rename Formula"),
                 isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })

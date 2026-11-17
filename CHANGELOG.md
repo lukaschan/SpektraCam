@@ -4,7 +4,8 @@
 
 - Accent color: Magenta, Orange, Blue or Black & White, chosen in About.
 - Copy Look and Paste Look between photos, in the viewer, editor and library. A look has three parts: Look, Exposure and Darkroom. Crop and rotation are never pasted. A library paste can be undone.
-- Formulae: save a look under a name, apply it to one photo or a selection, and manage formulae beside LUTs in one sheet. Formulae are stored as `.rnformula` files; sharing them comes later.
+- Formulae: save a look under a name, apply it to one photo or a selection, and manage formulae beside LUTs in one sheet. Each formula is a `.rnformula` file.
+- Share a formula from its page in the manager, with or without the LUT files it uses. A formula opened from Files, Messages or AirDrop is previewed before it is added; one that needs a LUT you do not have says so, and links by itself when that LUT is imported.
 
 ## 1.0 — App Store submission candidate
 

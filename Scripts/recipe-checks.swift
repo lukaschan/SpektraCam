@@ -276,6 +276,25 @@ import Foundation
         let area = ParameterDefinition.byPath["film_render.grain.particle_area_um2"]!
         precondition(hostile.recipe.number("film_render.grain.particle_area_um2") >= (area.minimum ?? -.infinity))
         precondition(hostile.recipe.number("enlarger.print_exposure").isFinite)
+        // A shared copy may carry its LUT files; the kept copy never does.
+        let cube = Data("LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n".utf8)
+        let carried = try Formula.attaching(data, luts: [(name: "Warm", cube: cube)])
+        let found = Formula.attachments(in: carried)
+        precondition(found.count == 1 && found[0].cube == cube && found[0].id == Formula.hash(cube))
+        let readCarried = try Formula(data: carried, limit: Formula.sharedLimit)
+        let keptFile = try Formula.strippingAttachments(carried)
+        let readKept = try Formula(data: keptFile)
+        precondition(readCarried == formula && readKept == formula && Formula.attachments(in: keptFile).isEmpty)
+        let untouched = try Formula.strippingAttachments(data)
+        precondition(untouched == data, "A file without LUTs was rewritten")
+        var forged = try JSONSerialization.jsonObject(with: carried) as! [String: Any]
+        forged["attachments"] = [["id": lut, "name": "Warm", "cube": String(decoding: cube, as: UTF8.self)]]
+        let forgedData = try JSONSerialization.data(withJSONObject: forged)
+        precondition(Formula.attachments(in: forgedData).isEmpty, "A LUT that does not match its id was accepted")
+        let other = Formula.LUT(id: Formula.hash(cube), name: "Other", size: 2)
+        let relinked = try Formula(data: Formula.replacingLUT(data, lut, with: other))
+        precondition(relinked.recipe.look.first.id == other.id && relinked.luts == [other])
+        precondition(relinked.recipe.tone.contrast == 1.2 && relinked.id == formula.id)
         file["format"] = 2
         do {
             _ = try Formula(data: JSONSerialization.data(withJSONObject: file))
