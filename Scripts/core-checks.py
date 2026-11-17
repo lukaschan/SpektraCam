@@ -52,7 +52,7 @@ checks['contrast'] = checks['preview']
 checks['tone-response'] = checks['processed-export']
 checks['scene-tone'] = checks['preview']
 checks['raw-order'] = (checks['preview'][0], ['.'])
-checks['library'] = (checks['processed-export'][0] + ['LibraryPhoto','LibraryFiles','LibraryImages','PhotoLibrary','LUTLibrary','EditorDefaults'], ['.'])
+checks['library'] = (checks['processed-export'][0] + ['LibraryPhoto','LibraryFiles','LibraryImages','PhotoLibrary','LUTLibrary','EditorDefaults','FormulaLibrary'], ['.'])
 checks['monochrome-grain'] = (checks['metal-film'][0], ['.'])
 checks['film-noise'] = (checks['metal-film'][0], ['.'])
 checks['film-benchmark'] = (checks['metal-film'][0], ['.'])
@@ -78,7 +78,7 @@ for files, arguments in checks.values():
  if any(f.startswith('Metal') or f == 'ToneRenderer' for f in files) and 'MetalDispatch' not in files: files.append('MetalDispatch')
  if any(f in files for f in ['MetalFilmPipeline','SourceImageRenderer','ToneRenderer']) and 'PixelStore' not in files: files.append('PixelStore')
  if 'EditRecipe' in files:
-  for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout', 'RecipeParts']:
+  for dependency in ['PrintLayout', 'FilmEdgeSelection', 'FilmEdgeLayout', 'RecipeParts', 'Formula']:
    if dependency not in files: files.append(dependency)
  if 'SourceImageRenderer' in files and 'GeometryRenderer' not in files: files.append('GeometryRenderer')
  if 'PhotoRenderer' in files:

@@ -6,6 +6,7 @@ struct EditorInfoBar: View {
     var location: String? = nil
     var onInteraction: (() -> Void)? = nil
     var look: LookActions? = nil
+    var formulae: FormulaStrip? = nil
     private var filmName: String {
         if !session.recipe.look.enabled {
             return String(localized: "photo.original", defaultValue: "Original")
@@ -36,7 +37,7 @@ struct EditorInfoBar: View {
                 title: filmName, subtitle: printName, metadata: session.photo.metadata,
                 location: location,
                 histogram: showingOriginal ? session.originalHistogram : session.histogram,
-                identifier: "editor", onInteraction: onInteraction, look: look)
+                identifier: "editor", onInteraction: onInteraction, look: look, formulae: formulae)
             if session.previewWasReduced {
                 Text(
                     String(

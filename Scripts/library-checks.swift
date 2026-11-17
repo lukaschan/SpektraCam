@@ -227,9 +227,53 @@ import UniformTypeIdentifiers
         _ = try await library!.pasteLook([.look], to: [target.id])
         try await library!.finishEditing(target.id, recipe: framedEdit)
         precondition(library!.pasteUndo == nil, "Undo would discard a later edit")
+        // A saved formula applies like a paste, previews without saving, and is a file on disk.
+        let formula = try Formula(name: "Check", parts: [.look], from: recipe, luts: [])
+        try await library!.formulae.save(formula)
+        precondition(library!.formulae.items == [formula])
+        try await library!.revert([target.id])
+        outcome = try await library!.applyFormula(formula, to: [target.id])
+        let applied = try library!.recipe(target.id)!
+        precondition(outcome.pasted == 1 && applied.mix == 0.6 && applied.source.exposureEV == 0)
+        let same = library!.preview(library!.photo(photo.id)!, applying: formula)
+        precondition(same == library!.photo(photo.id)!, "A photo that already has the look previews as itself")
+        try await library!.undoPaste()
+        let shown = library!.preview(library!.photo(target.id)!, applying: formula)
+        precondition(
+            shown?.hasEdits == true && !library!.photo(target.id)!.hasEdits, "A preview saved an edit")
+        var lutLook = recipe
+        lutLook.look.mode = .lut
+        lutLook.look.first.id = String(repeating: "d", count: 64)
+        let needsLUT = try Formula(name: "Needs LUT", parts: [.look], from: lutLook, luts: [])
+        do {
+            _ = try await library!.applyFormula(needsLUT, to: [target.id])
+            preconditionFailure("A formula was applied without its LUT")
+        } catch CubeLUT.Failure.missing {}
+        precondition(library!.preview(library!.photo(target.id)!, applying: needsLUT) == nil)
+        precondition(!library!.photo(target.id)!.hasEdits)
+        try await library!.formulae.rename(formula.id, name: "Renamed", note: "f/8")
+        let copyID = try await library!.formulae.duplicate(formula.id, name: "Second")
+        try await library!.formulae.setFavorite(copyID, true)
+        precondition(library!.formulae.items.map(\.name) == ["Renamed", "Second"])
+        precondition(library!.formulae.ordered.first?.id == copyID, "A favourite did not lead")
+        try await library!.formulae.move(from: IndexSet(integer: 1), to: 0)
+        library = nil
+        library = try PhotoLibrary(root: root, cache: cache, modelDirectory: dataDirectory)
+        try await library!.formulae.load()
+        precondition(library!.formulae.items.map(\.name) == ["Second", "Renamed"])
+        precondition(library!.formulae.favorites == [copyID])
+        let reread = library!.formulae.formula(formula.id)
+        precondition(reread?.recipe == formula.recipe && reread?.note == "f/8", "Restart changed a formula")
+        try FileManager.default.removeItem(
+            at: library!.formulae.directory.appendingPathComponent("Library.json"))
+        try await library!.formulae.load()
+        precondition(library!.formulae.items.count == 2, "A lost index lost the formulae")
+        try await library!.formulae.remove([copyID, formula.id])
+        precondition(library!.formulae.items.isEmpty)
         try await library!.delete([target.id])
         precondition(library!.photos.count == 1)
         print("PASS: a copied look pastes by part, survives restart and undoes exactly")
+        print("PASS: formulae apply, preview without saving, refuse a missing LUT and survive restart and a lost index")
         try FileManager.default.removeItem(at: cache)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         let rebuilt = try await library!.images.image(library!.photo(photo.id)!, thumbnail: false)

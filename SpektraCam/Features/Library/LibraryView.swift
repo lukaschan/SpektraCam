@@ -76,7 +76,7 @@ struct LibraryView: View {
                                 Text(
                                     String(
                                         localized: "look.pasted_count",
-                                        defaultValue: "Look pasted to \(undo.count) photos"))
+                                        defaultValue: "Look applied to \(undo.count) photos"))
                                 Button(String(localized: "editor.undo", defaultValue: "Undo")) {
                                     working = true
                                     Task {
@@ -113,7 +113,7 @@ struct LibraryView: View {
                 }) {
                     AppInformationView(importFiles: { importFilesAfterInfo = true })
                 }
-                .sheet(isPresented: $showLUTs) { LUTLibraryView(library: library) }
+                .sheet(isPresented: $showLUTs) { LibraryManagerView(library: library) }
                 .sheet(item: $batchRequest) { request in
                     BatchExportPanel(items: request.items, library: library)
                 }
@@ -224,6 +224,7 @@ struct LibraryView: View {
                                 }
                                 .disabled(library.copiedLook == nil || selection.isEmpty)
                                 .accessibilityIdentifier("library.look.paste")
+                                formulaMenu { selection }
                             } label: {
                                 Label(
                                     String(localized: "part.look", defaultValue: "Look"),
@@ -293,13 +294,16 @@ struct LibraryView: View {
                         } label: {
                             if systemVerticalBar {
                                 Label(
-                                    String(localized: "lut.manager", defaultValue: "LUT Manager"),
-                                    systemImage: "cube")
+                                    String(localized: "formula.formulae", defaultValue: "Formulae"),
+                                    systemImage: "flask")
                             } else {
-                                Text(String(localized: "lut.manager", defaultValue: "LUT Manager"))
+                                Text(String(localized: "formula.formulae", defaultValue: "Formulae"))
                             }
                         }
-                        .accessibilityIdentifier("library.luts").disabled(working)
+                        .accessibilityHint(
+                            String(localized: "formula.manager", defaultValue: "Formulae and LUTs")
+                        )
+                        .accessibilityIdentifier("library.formulae").disabled(working)
                     }
                     if systemVerticalBar {
                         ToolbarItem(placement: .bottomBar) {
@@ -470,6 +474,7 @@ struct LibraryView: View {
                                                     showPasteLook = true
                                                 }
                                             }
+                                            formulaMenu { [photo.id] }
                                             Button(
                                                 String(localized: "common.delete", defaultValue: "Delete"),
                                                 systemImage: "trash", role: .destructive
@@ -508,6 +513,34 @@ struct LibraryView: View {
             }
         }
         .background(PhotoTheme.canvas)
+    }
+    /// Saved formulae as a submenu. A formula that cannot be applied here is shown disabled.
+    @ViewBuilder private func formulaMenu(_ targets: @escaping () -> Set<UUID>) -> some View {
+        if !library.formulae.items.isEmpty {
+            Menu(
+                String(localized: "formula.apply", defaultValue: "Apply Formula"), systemImage: "flask"
+            ) {
+                ForEach(library.formulae.ordered) { formula in
+                    Button(formula.name) { applyFormula(formula, to: targets()) }
+                        .disabled(formula.problem(luts: library.luts) != nil)
+                }
+            }
+            .accessibilityIdentifier("library.formula.apply")
+        }
+    }
+    private func applyFormula(_ formula: Formula, to ids: Set<UUID>) {
+        guard !working, !ids.isEmpty else { return }
+        working = true
+        Task {
+            do {
+                if try await library.applyFormula(formula, to: ids).skipped > 0 {
+                    failure = String(
+                        localized: "look.paste.skipped",
+                        defaultValue: "Photos edited with an older film model were skipped.")
+                }
+            } catch { failure = error.localizedDescription }
+            working = false
+        }
     }
     private func copyLook(_ id: UUID) {
         do { try library.copyLook(from: id) } catch { failure = error.localizedDescription }

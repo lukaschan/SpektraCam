@@ -10,6 +10,7 @@ import SwiftData
     let files: LibraryFiles
     let images: LibraryImages
     let luts: LUTLibrary
+    let formulae: FormulaLibrary
     @ObservationIgnored private let container: ModelContainer
     @ObservationIgnored private let context: ModelContext
     @ObservationIgnored private var records: [UUID: LibrarySchemaV1.Record] = [:]
@@ -62,6 +63,7 @@ import SwiftData
         files = try LibraryFiles(root: root, cache: cache, validIDs: Set(initial.map(\.id)))
         images = LibraryImages(files: files, directory: modelDirectory ?? Bundle.main.resourceURL!)
         luts = LUTLibrary(root: root)
+        formulae = FormulaLibrary(root: root)
         photos = initial
         for source in try context.fetch(FetchDescriptor<LibrarySchemaV2.PhotosSource>()) {
             sources[source.assetIdentifier] = source
@@ -232,7 +234,43 @@ import SwiftData
     @discardableResult func pasteLook(_ parts: Set<EditRecipe.Part>, to ids: Set<UUID>) async throws
         -> PasteOutcome
     {
-        guard let clip = copiedLook, !parts.isEmpty else { return PasteOutcome() }
+        guard let clip = copiedLook else { return PasteOutcome() }
+        return try await apply(parts, of: clip.recipe, to: ids)
+    }
+    /// Apply a saved formula the same way. A formula that calls for a LUT that is not installed
+    /// is refused; applying the rest would quietly give a different picture.
+    @discardableResult func applyFormula(
+        _ formula: Formula, parts: Set<EditRecipe.Part>? = nil, to ids: Set<UUID>
+    ) async throws -> PasteOutcome {
+        guard formula.missingLUTs(installed: Set(luts.items.map(\.id))).isEmpty else {
+            throw CubeLUT.Failure.missing
+        }
+        return try await apply(
+            Set(formula.parts).intersection(parts ?? Set(formula.parts)), of: formula.recipe, to: ids)
+    }
+    /// The photo as a formula would leave it, for a thumbnail. Nothing is saved.
+    func preview(_ photo: LibraryPhoto, applying formula: Formula) -> LibraryPhoto? {
+        guard !formula.parts.isEmpty,
+            formula.missingLUTs(installed: Set(luts.items.map(\.id))).isEmpty,
+            let saved = try? recipe(photo.id) ?? EditorDefaults.originalRecipe(temperature: nil),
+            saved.upstreamRevision == formula.recipe.upstreamRevision
+        else { return nil }
+        var next = saved.taking(Set(formula.parts), from: formula.recipe, rawTarget: photo.isRAW)
+        if photo.metadata.width > 0, photo.metadata.height > 0 {
+            next.constrainFilmEdgeCrop(
+                imageSize: CGSize(width: photo.metadata.width, height: photo.metadata.height))
+        }
+        guard next != saved else { return photo }
+        guard let data = try? LibraryPhoto.recipeData(next) else { return nil }
+        var result = photo
+        result.recipeData = data
+        result.renderKey = LibraryPhoto.key(data)
+        return result
+    }
+    private func apply(_ parts: Set<EditRecipe.Part>, of source: EditRecipe, to ids: Set<UUID>) async throws
+        -> PasteOutcome
+    {
+        guard !parts.isEmpty else { return PasteOutcome() }
         try flushPending()
         var outcome = PasteOutcome()
         var changes: [(record: LibrarySchemaV1.Record, data: Data?, key: String, updated: Data)] = []
@@ -241,11 +279,11 @@ import SwiftData
             guard let record = records[id], let photo = photo(id) else { continue }
             let saved = try record.recipeData.map { try JSONDecoder().decode(EditRecipe.self, from: $0) }
             let base = saved ?? EditorDefaults.originalRecipe(temperature: nil)
-            guard base.upstreamRevision == clip.recipe.upstreamRevision else {
+            guard base.upstreamRevision == source.upstreamRevision else {
                 outcome.skipped += 1
                 continue
             }
-            var next = base.taking(parts, from: clip.recipe, rawTarget: photo.isRAW)
+            var next = base.taking(parts, from: source, rawTarget: photo.isRAW)
             if photo.metadata.width > 0, photo.metadata.height > 0 {
                 next.constrainFilmEdgeCrop(
                     imageSize: CGSize(width: photo.metadata.width, height: photo.metadata.height))

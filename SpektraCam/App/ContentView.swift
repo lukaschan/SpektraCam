@@ -52,6 +52,7 @@ struct ContentView: View {
                         #endif
                         await recoverCaptures(library)
                         try? await library.luts.load()
+                        try? await library.formulae.load()
                         try? await library.repairRAWDimensions()
                         #if DEBUG || PERFORMANCE_CHECKS
                             await DarkroomOrientationChecks.run(library)

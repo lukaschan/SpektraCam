@@ -38,6 +38,56 @@ struct LookActionRow: View {
     }
 }
 
+extension EditRecipe {
+    /// Film over print, as the information panel names a look.
+    func lookNames(luts: LUTLibrary) -> (film: String, print: String?) {
+        guard look.enabled else {
+            return (String(localized: "photo.original", defaultValue: "Original"), nil)
+        }
+        if look.mode == .lut {
+            let names = [look.first.id, look.second.id].compactMap { luts.name($0) }
+            return (
+                "3D LUT",
+                names.isEmpty
+                    ? String(localized: "lut.none_selected", defaultValue: "No LUT selected")
+                    : names.joined(separator: " · ")
+            )
+        }
+        return (
+            FilmStock.films.first { $0.id == filmID }?.name
+                ?? String(localized: "film_stock.film", defaultValue: "Film"),
+            bypassesPrint
+                ? String(localized: "develop.direct_scan", defaultValue: "Direct scan")
+                : FilmStock.prints.first { $0.id == printID }?.name
+                    ?? String(localized: "develop.print", defaultValue: "Print")
+        )
+    }
+}
+
+/// One switch per part. A part the source does not have is shown off and disabled.
+struct PartToggles: View {
+    let available: [EditRecipe.Part]
+    @Binding var selection: Set<EditRecipe.Part>
+    let identifier: String
+    var body: some View {
+        ForEach(EditRecipe.Part.allCases) { part in
+            let offered = available.contains(part)
+            Toggle(
+                isOn: Binding(
+                    get: { offered && selection.contains(part) },
+                    set: { if $0 { selection.insert(part) } else { selection.remove(part) } })
+            ) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(part.title)
+                    Text(part.detail).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .disabled(!offered)
+            .accessibilityIdentifier(identifier + "." + part.rawValue)
+        }
+    }
+}
+
 /// Choose which parts of the copied look to paste. Crop and rotation are never offered.
 struct PasteLookSheet: View {
     let library: PhotoLibrary
@@ -50,41 +100,26 @@ struct PasteLookSheet: View {
     @AppStorage("paste.part.darkroom") private var darkroom = true
     @Environment(\.dismiss) private var dismiss
 
-    private func binding(_ part: EditRecipe.Part) -> Binding<Bool> {
-        switch part {
-        case .look: $look
-        case .exposure: $exposure
-        case .darkroom: $darkroom
-        }
+    /// The last choice is remembered for the next paste.
+    private var selection: Binding<Set<EditRecipe.Part>> {
+        Binding(
+            get: {
+                var parts = Set<EditRecipe.Part>()
+                if look { parts.insert(.look) }
+                if exposure { parts.insert(.exposure) }
+                if darkroom { parts.insert(.darkroom) }
+                return parts
+            },
+            set: {
+                look = $0.contains(.look)
+                exposure = $0.contains(.exposure)
+                darkroom = $0.contains(.darkroom)
+            })
     }
-    private var chosen: Set<EditRecipe.Part> {
-        Set(clip.parts.filter { binding($0).wrappedValue })
-    }
-    private var names: (film: String, print: String?) {
-        let recipe = clip.recipe
-        guard recipe.look.enabled else {
-            return (String(localized: "photo.original", defaultValue: "Original"), nil)
-        }
-        if recipe.look.mode == .lut {
-            let luts = [recipe.look.first.id, recipe.look.second.id].compactMap { library.luts.name($0) }
-            return (
-                "3D LUT",
-                luts.isEmpty
-                    ? String(localized: "lut.none_selected", defaultValue: "No LUT selected")
-                    : luts.joined(separator: " · ")
-            )
-        }
-        return (
-            FilmStock.films.first { $0.id == recipe.filmID }?.name
-                ?? String(localized: "film_stock.film", defaultValue: "Film"),
-            recipe.bypassesPrint
-                ? String(localized: "develop.direct_scan", defaultValue: "Direct scan")
-                : FilmStock.prints.first { $0.id == recipe.printID }?.name
-                    ?? String(localized: "develop.print", defaultValue: "Print")
-        )
-    }
+    private var chosen: Set<EditRecipe.Part> { selection.wrappedValue.intersection(clip.parts) }
 
     var body: some View {
+        let names = clip.recipe.lookNames(luts: library.luts)
         NavigationStack {
             List {
                 Section {
@@ -105,19 +140,7 @@ struct PasteLookSheet: View {
                     .accessibilityIdentifier("look.paste.source")
                 }
                 Section {
-                    ForEach(EditRecipe.Part.allCases) { part in
-                        let available = clip.parts.contains(part)
-                        Toggle(
-                            isOn: available ? binding(part) : .constant(false)
-                        ) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(part.title)
-                                Text(part.detail).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        .disabled(!available)
-                        .accessibilityIdentifier("look.paste.part." + part.rawValue)
-                    }
+                    PartToggles(available: clip.parts, selection: selection, identifier: "look.paste.part")
                 } header: {
                     if count > 1 {
                         Text(String(localized: "library.photo_count", defaultValue: "\(count) photos"))

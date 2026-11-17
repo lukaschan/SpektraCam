@@ -83,8 +83,9 @@ import Foundation
         recipe.removeDefaultOverrides()
         precondition(recipe.numbers["camera.exposure_compensation_ev"] == nil)
         try checkParts()
+        try checkFormula()
         print(
-            "PASS: \(all.count) parameter components, physical UI bounds, stock routes, retained values, recipe round-trip and parts"
+            "PASS: \(all.count) parameter components, physical UI bounds, stock routes, retained values, recipe round-trip, parts and formula files"
         )
     }
 
@@ -190,5 +191,96 @@ import Foundation
         precondition(clip.recipe.crop == CropSelection() && clip.recipe.geometry.isIdentity, "A clip kept framing")
         precondition(clip.parts == Part.allCases)
         precondition(clip.removingLUTs(source.look.identifiers).recipe.look.first.id == nil)
+    }
+
+    /// A formula file keeps only its parts, reads back the same, and survives a newer writer.
+    static func checkFormula() throws {
+        let lut = String(repeating: "b", count: 64)
+        var edit = EditRecipe()
+        edit.filmID = "kodak_gold_200"
+        edit.look.mode = .lut
+        edit.look.first.id = lut
+        edit.tone.exposureEV = 0.7
+        edit.tone.contrast = 1.2
+        edit.numbers["enlarger.y_filter_shift"] = 9
+        edit.numbers["film_render.grain.particle_area_um2"] = 0.8
+        var paper = PrintLayout()
+        paper.paper = .fiveBySeven
+        edit.printLayout = paper
+        edit.geometry.rotateLeft()
+        let references = [Formula.LUT(id: lut, name: "Warm", size: 33), Formula.LUT(id: String(repeating: "c", count: 64), name: "Unused", size: 17)]
+
+        let formula = try Formula(name: "  Tungsten night ", note: " f/8 ", parts: [.look, .darkroom], from: edit, luts: references)
+        precondition(formula.name == "Tungsten night" && formula.note == "f/8")
+        precondition(formula.parts == [.look, .darkroom] && formula.unreadable.isEmpty)
+        precondition(formula.recipe.tone.exposureEV == 0 && formula.recipe.numbers["enlarger.y_filter_shift"] == nil,
+            "A part the author left out was written to the file")
+        precondition(formula.recipe.tone.contrast == 1.2 && formula.recipe.printLayout == paper)
+        precondition(formula.recipe.geometry.isIdentity, "A formula kept framing")
+        precondition(formula.luts.map(\.name) == ["Warm"], "Only LUTs the look uses are listed")
+        precondition(formula.missingLUTs(installed: []).map(\.name) == ["Warm"] && formula.missingLUTs(installed: [lut]).isEmpty)
+        precondition((try? Formula(name: " ", parts: [.look], from: edit, luts: [])) == nil, "An empty name was accepted")
+        let lookOnly = try Formula(name: "Look", parts: [.look], from: edit, luts: references)
+        precondition(lookOnly.recipe.printLayout == nil && lookOnly.parts == [.look])
+        let darkroomOnly = try Formula(name: "Border", parts: [.darkroom], from: edit, luts: references)
+        precondition(darkroomOnly.luts.isEmpty && darkroomOnly.missingLUTs(installed: []).isEmpty)
+        precondition(darkroomOnly.recipe.processingRecipe == EditRecipe().processingRecipe)
+
+        let data = try formula.data()
+        let read = try Formula(data: data)
+        precondition(read == formula, "A formula file did not read back the same")
+
+        // A newer SpektraCam: a later Darkroom version, a paper this build cannot name, a part and
+        // fields it has never heard of. The Look still applies and nothing is lost on rename.
+        var file = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        var versions = file["parts"] as! [String: Any]
+        versions["darkroom"] = 2
+        versions["framing"] = 1
+        file["parts"] = versions
+        file["futureField"] = ["kept": true]
+        var stored = file["recipe"] as! [String: Any]
+        var layout = stored["printLayout"] as! [String: Any]
+        layout["paper"] = "elevenByFourteen"
+        stored["printLayout"] = layout
+        file["recipe"] = stored
+        let newer = try JSONSerialization.data(withJSONObject: file)
+        let partial = try Formula(data: newer)
+        precondition(partial.parts == [.look] && partial.unreadable == ["darkroom", "framing"])
+        precondition(partial.recipe.printLayout == nil && partial.recipe.tone.contrast == 1.2)
+        versions["darkroom"] = 1
+        file["parts"] = versions
+        let unnamed = try Formula(data: JSONSerialization.data(withJSONObject: file))
+        precondition(unnamed.parts == [.look] && unnamed.unreadable.contains("darkroom"),
+            "An unknown paper made the whole formula unreadable")
+        let renamed = try Formula.renaming(newer, name: "Renamed", note: "")
+        let kept = try JSONSerialization.jsonObject(with: renamed) as! [String: Any]
+        precondition(kept["name"] as? String == "Renamed" && (kept["futureField"] as? [String: Any])?["kept"] as? Bool == true)
+        precondition(((kept["recipe"] as! [String: Any])["printLayout"] as! [String: Any])["paper"] as? String == "elevenByFourteen",
+            "Renaming stripped settings this build cannot read")
+        let copy = try Formula.duplicating(data, name: "Copy")
+        let duplicate = try Formula(data: copy.data)
+        precondition(duplicate.id == copy.id && duplicate.id != formula.id && duplicate.recipe == formula.recipe)
+
+        // Files are untrusted: unknown paths go, values are held to each control's limits.
+        stored = (try JSONSerialization.jsonObject(with: data) as! [String: Any])["recipe"] as! [String: Any]
+        stored["numbers"] = ["made.up": 4.0, "film_render.grain.particle_area_um2": -50.0, "enlarger.print_exposure": 1e300]
+        stored["mix"] = 7.0
+        var look = stored["look"] as! [String: Any]
+        look["first"] = ["id": "../../etc", "mix": 1.0]
+        stored["look"] = look
+        file = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        file["recipe"] = stored
+        let hostile = try Formula(data: JSONSerialization.data(withJSONObject: file))
+        precondition(hostile.recipe.numbers["made.up"] == nil && hostile.recipe.mix == 1)
+        precondition(hostile.recipe.look.first.id == nil, "A LUT id that is not a hash was kept")
+        let area = ParameterDefinition.byPath["film_render.grain.particle_area_um2"]!
+        precondition(hostile.recipe.number("film_render.grain.particle_area_um2") >= (area.minimum ?? -.infinity))
+        precondition(hostile.recipe.number("enlarger.print_exposure").isFinite)
+        file["format"] = 2
+        do {
+            _ = try Formula(data: JSONSerialization.data(withJSONObject: file))
+            preconditionFailure("A newer file format was read as if it were known")
+        } catch Formula.Failure.newer {}
+        precondition((try? Formula(data: Data("{}".utf8))) == nil && (try? Formula(data: Data("no".utf8))) == nil)
     }
 }

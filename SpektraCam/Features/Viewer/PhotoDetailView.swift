@@ -28,6 +28,7 @@ struct PhotoDetailView: View {
     @State private var confirmRevert = false
     @State private var confirmDelete = false
     @State private var showPasteLook = false
+    @State private var showSaveFormula = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private struct ExportRequest: Identifiable {
         let id = UUID()
@@ -82,7 +83,10 @@ struct PhotoDetailView: View {
                                 failure = error.localizedDescription
                             }
                         },
-                        paste: { showPasteLook = true }, undo: undoPaste)
+                        paste: { showPasteLook = true }, undo: undoPaste),
+                    formulae: FormulaStrip(
+                        library: library, photo: photo, canSave: photo.hasEdits && !working,
+                        identifier: "photo", apply: applyFormula, save: { showSaveFormula = true })
                 )
                 .padding(.horizontal, 12).padding(.top, 4)
                 .opacity(immersive ? 0 : 1).allowsHitTesting(!immersive)
@@ -158,6 +162,9 @@ struct PhotoDetailView: View {
                 PasteLookSheet(library: library, clip: clip, paste: pasteLook)
             }
         }
+        .sheet(isPresented: $showSaveFormula) {
+            if let recipe = savedRecipe { SaveFormulaSheet(library: library, recipe: recipe) }
+        }
         .failureAlert(String(localized: "photo.photo", defaultValue: "Photo"), message: $failure)
     }
     private func pasteLook(_ parts: Set<EditRecipe.Part>) {
@@ -167,6 +174,21 @@ struct PhotoDetailView: View {
             defer { working = false }
             do {
                 if try await library.pasteLook(parts, to: [id]).skipped > 0 {
+                    failure = String(
+                        localized: "look.paste.skipped",
+                        defaultValue: "Photos edited with an older film model were skipped.")
+                }
+            } catch { failure = error.localizedDescription }
+        }
+    }
+    private func applyFormula(_ formula: Formula) {
+        let id = selectedID
+        guard !working else { return }
+        working = true
+        Task {
+            defer { working = false }
+            do {
+                if try await library.applyFormula(formula, to: [id]).skipped > 0 {
                     failure = String(
                         localized: "look.paste.skipped",
                         defaultValue: "Photos edited with an older film model were skipped.")

@@ -28,6 +28,7 @@ struct EditorView: View {
     @State private var toolBeforeDarkroomCrop: EditorTool?
     @State private var showOriginal = false
     @State private var showPasteLook = false
+    @State private var showSaveFormula = false
     @State private var showResetConfirmation = false
     @State private var showRenderProgress = false
     @State private var layout = WorkspaceLayout.stacked
@@ -56,6 +57,9 @@ struct EditorView: View {
         .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .onSystemVerticalBar { systemVerticalBar = $0 }
         .background(EditorNavigationGuard().allowsHitTesting(false))
+        .sheet(isPresented: $showSaveFormula) {
+            SaveFormulaSheet(library: library, recipe: session.recipe)
+        }
         .sheet(isPresented: $showPasteLook) {
             if let clip = library.copiedLook {
                 PasteLookSheet(library: library, clip: clip) { parts in
@@ -304,7 +308,17 @@ struct EditorView: View {
                             look: LookActions(
                                 canCopy: session.hasEdits, canPaste: library.copiedLook != nil,
                                 copy: { library.copyLook(session.recipe, from: photoID) },
-                                paste: { showPasteLook = true }))
+                                paste: { showPasteLook = true }),
+                            formulae: FormulaStrip(
+                                library: library, canSave: session.hasEdits, identifier: "editor",
+                                apply: { formula in
+                                    session.update(key: "formula.apply") {
+                                        $0 = $0.taking(
+                                            Set(formula.parts), from: formula.recipe,
+                                            rawTarget: session.photo.rawTemperature != nil)
+                                    }
+                                },
+                                save: { showSaveFormula = true }))
                         HStack {
                             Spacer()
                             Button(compareTitle, systemImage: "square.on.square") {
