@@ -1,23 +1,14 @@
 # Changelog
 
-## 1.0 — App Store submission candidate, build 11
+## 1.0
 
-- Replace the earlier build 10 submission candidate with the Formulae version, on `release/1.0-formulae`.
-- Localize the formula document type in English and Simplified Chinese, and let the localization checker handle document descriptions alongside permission strings.
+First App Store release (build 11) for iPhone and iPad.
 
-- Accent color: Magenta, Orange, Blue or Black & White, chosen in About.
-- Copy Look and Paste Look between photos, in the viewer, editor and library. A look has three parts: Look, Exposure and Darkroom. Crop and rotation are never pasted. A library paste can be undone.
-- Formulae: save a look under a name, apply it to one photo or a selection, and manage formulae beside LUTs in one sheet. Each formula is a `.rnformula` file.
-- Share a formula from its page in the manager, with or without the LUT files it uses. A formula opened from Files, Messages or AirDrop is previewed before it is added; one that needs a LUT you do not have says so, and links by itself when that LUT is imported.
-- Formula Card: a 1080 × 1350 picture with the formula's name, its process in plain words, an optional photo developed with it, and a QR code that carries the whole formula. Copy Link gives the same formula as a link. Import a formula from a card's picture, a pasted link or an opened link; nothing is uploaded.
-- A formula's page and the import preview list its process: film, print, tone, effects, exposure and darkroom settings.
-
-## Earlier 1.0 submission candidate, build 10
-
-- Freeze the current editor, RAW camera, adaptive iPhone/iPad interface and Darkroom workflow for the first App Store submission (version 1.0, build 10).
-
-- Use abbreviated F· / K· aliases for all 28 film and print profiles, including VoiceOver labels and the LUT effects note. Saved profile IDs and rendering data are preserved.
-- Explain profile aliases, simulation limitations and manufacturer non-affiliation in About, in English and Simplified Chinese.
+- Adaptive iPhone, iPad and iPhone Duo workspace across Library, Viewer, Editor, Darkroom and Camera.
+- Formulae: save reusable looks by part (Look, Exposure, Darkroom; crop and rotation excluded), apply to one or multiple photos with undo, and manage Formulae alongside `.cube` 3D LUTs.
+- Formula sharing: export `.rnformula` files (with or without LUT files), copy `#`-fragment links, or render 1080 × 1350 QR Formula Cards; preview before importing from Files, a card image or a link.
+- Accent color switch in About (Magenta, Orange, Blue, Black & White) and direct original RAW export.
+- Abbreviated `F·` / `K·` profile aliases, simulation disclaimers and bundled licenses in English and Simplified Chinese.
 
 ## 0.3
 

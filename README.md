@@ -30,8 +30,7 @@ Use LUTs for encoded sRGB images; Log/HDR input transforms are not supported.
 
 Save and manage Formulae, with separate Look, Exposure and Darkroom parts. Share a `.rnformula`
 file, a link or a Formula Card. The card's QR code carries the formula itself; LUT files never
-travel in links. The link page must be deployed before external links and Camera-scanned codes
-work; see [the submission handoff](Research/AppStore-v1.0-Submission.md).
+travel in links.
 
 ### 相机兼容性 / Camera compatibility
 
