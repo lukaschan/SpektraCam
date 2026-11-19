@@ -1,11 +1,14 @@
 # Changelog
 
-## 1.0 — App Store submission candidate
+## 1.0
 
-- Freeze the current editor, RAW camera, adaptive iPhone/iPad interface and Darkroom workflow for the first App Store submission (version 1.0, build 10).
+First App Store release (build 11) for iPhone and iPad.
 
-- Use abbreviated F· / K· aliases for all 28 film and print profiles, including VoiceOver labels and the LUT effects note. Saved profile IDs and rendering data are preserved.
-- Explain profile aliases, simulation limitations and manufacturer non-affiliation in About, in English and Simplified Chinese.
+- Adaptive iPhone, iPad and iPhone Duo workspace across Library, Viewer, Editor, Darkroom and Camera.
+- Formulae: save reusable looks by part (Look, Exposure, Darkroom; crop and rotation excluded), apply to one or multiple photos with undo, and manage Formulae alongside `.cube` 3D LUTs.
+- Formula sharing: export `.rnformula` files (with or without LUT files), copy `#`-fragment links, or render 1080 × 1350 QR Formula Cards; preview before importing from Files, a card image or a link.
+- Accent color switch in About (Magenta, Orange, Blue, Black & White) and direct original RAW export.
+- Abbreviated `F·` / `K·` profile aliases, simulation disclaimers and bundled licenses in English and Simplified Chinese.
 
 ## 0.3
 

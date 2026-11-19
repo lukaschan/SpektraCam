@@ -61,7 +61,7 @@ struct ParameterControl: View {
                         Image(systemName: "chevron.up.chevron.down").font(.caption2)
                     }.fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(.glassProminent).foregroundStyle(.white).tint(Color.accentColor)
+                .buttonStyle(.glassProminent).foregroundStyle(.onAccent).tint(Color.accentColor)
                 .accessibilityLabel(definition.title)
                 .accessibilityValue(choiceTitle(session.recipe.choice(definition.id)))
                 .accessibilityIdentifier(definition.id)
@@ -226,7 +226,7 @@ struct DefaultSlider: UIViewRepresentable {
         slider.isUserInteractionEnabled = context.environment.isEnabled
         slider.accessibilityLabel = title
         slider.accessibilityIdentifier = identifier
-        slider.tintColor = slider.isEnabled ? UIColor(Color.accentColor) : .tertiaryLabel
+        slider.tintColor = slider.isEnabled ? context.environment.appAccent.uiColor : .tertiaryLabel
         // Keep UIKit and its tick configuration in the same normalized range.
         let configuration = [
             bounds.lowerBound, bounds.upperBound, defaultValue, fillOrigin ?? defaultValue,
@@ -391,7 +391,7 @@ private struct NumericEntry: View {
                     .labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
                 }
                 Button(String(localized: "common.done", defaultValue: "Done"), action: commit)
-                    .buttonStyle(.glassProminent).disabled(parsed == nil)
+                    .buttonStyle(.glassProminent).foregroundStyle(.onAccent).disabled(parsed == nil)
                     .accessibilityIdentifier("numeric.done")
             }
             HStack(spacing: 10) {

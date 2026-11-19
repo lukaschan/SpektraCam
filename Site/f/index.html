@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>SpektraCam Formula</title>
+<!--
+  The page a formula link or QR code opens: https://runzeni.github.io/spektracam/f#1.<formula>
+  The formula is the part after "#". A browser never sends that part to a server, and this page
+  loads nothing from anywhere, so the formula stays on the device that opens it.
+  Packing "1": the .rnformula JSON, raw DEFLATE, URL-safe Base64 (see Models/FormulaLink.swift).
+-->
+<style>
+  :root { --paper: #f4f1ea; --ink: #1a1a1c; --faint: #6f6c66; --rule: #d9d4c9; --button: #1a1a1c; --on-button: #f4f1ea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #161617; --ink: #f1eee7; --faint: #a19d95; --rule: #34332f; --button: #f1eee7; --on-button: #161617; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  main { max-width: 26rem; margin: 0 auto; padding: 2.5rem 1.25rem 3rem; }
+  .kicker { font-size: .7rem; font-weight: 600; letter-spacing: .16em; color: var(--faint); text-transform: uppercase; }
+  h1 { font-size: 1.7rem; line-height: 1.2; margin: .25rem 0 0; overflow-wrap: anywhere; }
+  .note { color: var(--faint); margin: .35rem 0 0; overflow-wrap: anywhere; }
+  hr { border: 0; border-top: 1px solid var(--ink); margin: 1rem 0 .5rem; }
+  h2 { font-size: .68rem; font-weight: 600; letter-spacing: .12em; color: var(--faint); text-transform: uppercase; margin: 1rem 0 .2rem; }
+  dl { margin: 0; }
+  dl div { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; border-bottom: 1px solid var(--rule); }
+  dt { color: var(--faint); }
+  dd { margin: 0; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .actions { display: grid; gap: .6rem; margin-top: 1.75rem; }
+  a.button, button { display: block; width: 100%; padding: .8rem 1rem; border-radius: 999px; border: 1px solid var(--button); font: inherit; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; }
+  a.button { background: var(--button); color: var(--on-button); }
+  button { background: transparent; color: var(--ink); }
+  a.button:focus-visible, button:focus-visible { outline: 3px solid color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: 2px; }
+  .small { font-size: .8rem; color: var(--faint); margin-top: 1.5rem; }
+  .small a { color: inherit; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="kicker" data-t="kicker">SpektraCam Formula</div>
+  <section id="formula" hidden>
+    <h1 id="name"></h1>
+    <p class="note" id="note" hidden></p>
+    <hr>
+    <div id="process"></div>
+    <div class="actions">
+      <a class="button" id="open" data-t="open">Open in SpektraCam</a>
+      <button id="save" type="button" data-t="save">Download Formula File</button>
+    </div>
+    <p class="small" data-t="private">This formula is carried in the link itself. It was not uploaded, and this page sends nothing anywhere.</p>
+  </section>
+  <section id="problem" hidden>
+    <h1 data-t="problemTitle">No formula here</h1>
+    <p class="note" id="reason"></p>
+  </section>
+  <p class="small"><a href="https://github.com/runzeni/SpektraCam" rel="noreferrer">SpektraCam</a> <span data-t="about">is a free, open-source film emulation app for iPhone and iPad.</span></p>
+</main>
+<script>
+"use strict";
+const zh = (navigator.language || "").toLowerCase().startsWith("zh");
+const text = zh ? {
+  kicker: "SpektraCam 配方", open: "在 SpektraCam 中打开", save: "下载配方文件",
+  private: "此配方就包含在链接本身之中，没有上传到任何地方，本页面也不会发送任何数据。",
+  problemTitle: "这里没有配方", about: "是一款免费、开源的 iPhone 与 iPad 胶片模拟 App。",
+  none: "此链接不包含配方。", broken: "此链接不完整或已损坏。", newer: "此配方需要更新版本的 SpektraCam。",
+  old: "此浏览器无法读取配方。请在 SpektraCam 中打开链接。",
+  look: "个性化", exposure: "曝光", darkroom: "暗房", film: "胶片", print: "印相", scan: "直接扫描",
+  lut: "3D LUT", contrast: "反差曲线", grain: "颗粒", halation: "光晕", on: "开", off: "关", bw: "黑白",
+  ev: "曝光", warmth: "冷暖", tint: "色调", paper: "相纸", edge: "胶片边缘", included: "已包含", asImage: "随影像",
+} : {
+  none: "This link does not carry a formula.", broken: "This link is incomplete or damaged.",
+  newer: "This formula needs a newer version of SpektraCam.",
+  old: "This browser cannot read the formula. Open the link in SpektraCam instead.",
+  look: "Look", exposure: "Exposure", darkroom: "Darkroom", film: "Film", print: "Print", scan: "Direct scan",
+  lut: "3D LUT", contrast: "S-curve", grain: "Grain", halation: "Halation", on: "On", off: "Off", bw: "Black & White",
+  ev: "Exposure", warmth: "Warmth", tint: "Tint", paper: "Paper", edge: "Film edge", included: "Included", asImage: "As image",
+};
+if (zh) document.documentElement.lang = "zh-Hans";
+for (const node of document.querySelectorAll("[data-t]")) if (text[node.dataset.t]) node.textContent = text[node.dataset.t];
+
+// The app's own names for the profiles. Ids not listed here are shown as "—".
+const stocks = {"fujifilm_c200":"F·C200","fujifilm_crystal_archive_typeii":"F·CA II","fujifilm_pro_400h":"F·400H","fujifilm_provia_100f":"F·RDP III","fujifilm_velvia_100":"F·RVP100","fujifilm_xtra_400":"F·X400","kodak_2383":"K·2383","kodak_2393":"K·2393","kodak_ektachrome_100":"K·E100","kodak_ektacolor_edge":"K·EE","kodak_ektar_100":"K·EK100","kodak_endura_premier":"K·EP","kodak_gold_200":"K·G200","kodak_kodachrome_64":"K·K64","kodak_portra_160":"K·P160","kodak_portra_400":"K·P400","kodak_portra_800":"K·P800","kodak_portra_800_push1":"K·P800 +1","kodak_portra_800_push2":"K·P800 +2","kodak_portra_endura":"K·PE","kodak_supra_endura":"K·SE","kodak_ultra_endura":"K·UE","kodak_ultramax_400":"K·U400","kodak_verita_200d":"K·5206 200D","kodak_vision3_200t":"K·5213 200T","kodak_vision3_250d":"K·5207 250D","kodak_vision3_500t":"K·5219 500T","kodak_vision3_50d":"K·5203 50D"};
+const papers = { asImage: text.asImage, fourBySix: "4 × 6", fiveBySeven: "5 × 7", eightByTen: "8 × 10" };
+
+function fail(reason) {
+  document.getElementById("reason").textContent = reason;
+  document.getElementById("problem").hidden = false;
+}
+const signed = (value, digits = 2) => (value > 0 ? "+" : "") + Number(value.toFixed(digits));
+/// One part of the formula. A part with nothing this page can name still says it is included.
+function rows(title, pairs) {
+  pairs = pairs.filter(Boolean);
+  if (!pairs.length) pairs = [[title, text.included]];
+  const heading = document.createElement("h2");
+  heading.textContent = title;
+  const list = document.createElement("dl");
+  for (const [label, value] of pairs) {
+    const row = document.createElement("div"), term = document.createElement("dt"), detail = document.createElement("dd");
+    term.textContent = label;
+    detail.textContent = value;
+    row.append(term, detail);
+    list.append(row);
+  }
+  document.getElementById("process").append(heading, list);
+}
+
+async function show() {
+  const fragment = location.hash.slice(1);
+  if (!fragment) return fail(text.none);
+  if (!fragment.startsWith("1.")) return fail(/^\d+\./.test(fragment) ? text.newer : text.none);
+  if (!("DecompressionStream" in window)) return fail(text.old);
+  let file;
+  try {
+    const packed = Uint8Array.from(atob(fragment.slice(2).replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+    const stream = new Blob([packed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    file = JSON.parse(await new Response(stream).text());
+  } catch { return fail(text.broken); }
+  if (!file || typeof file.name !== "string" || typeof file.recipe !== "object" || typeof file.parts !== "object") return fail(text.broken);
+  if (typeof file.format === "number" && file.format > 1) return fail(text.newer);
+
+  const recipe = file.recipe || {}, parts = file.parts || {};
+  const name = file.name.trim().slice(0, 80) || "Formula";
+  document.title = name + " · SpektraCam";
+  document.getElementById("name").textContent = name;
+  if (typeof file.note === "string" && file.note.trim()) {
+    const note = document.getElementById("note");
+    note.textContent = file.note.trim().slice(0, 400);
+    note.hidden = false;
+  }
+  const tone = recipe.tone || {}, source = recipe.source || {}, look = recipe.look || {}, flags = recipe.flags || {};
+  if ("look" in parts) {
+    const lut = look.mode === "lut";
+    const names = [look.first, look.second].filter(slot => slot && slot.id && slot.mix !== 0)
+      .map(slot => ((file.luts || []).find(entry => entry.id === slot.id) || {}).name || "LUT");
+    rows(text.look, [
+      !lut && [text.film, stocks[recipe.filmID] || "—"],
+      !lut && [text.print, recipe.scanFilm ? text.scan : stocks[recipe.printID] || "—"],
+      lut && [text.lut, names.join(" · ") || "—"],
+      typeof tone.contrast === "number" && tone.contrast !== 1 && [text.contrast, String(Number(tone.contrast.toFixed(2)))],
+      tone.monochrome === true && [text.bw, text.on],
+      [text.grain, flags["film_render.grain.active"] === false ? text.off : text.on],
+      !lut && [text.halation, flags["film_render.halation.active"] === false ? text.off : text.on],
+    ]);
+  }
+  if ("exposure" in parts) {
+    rows(text.exposure, [
+      typeof tone.exposureEV === "number" && tone.exposureEV !== 0 && [text.ev, signed(tone.exposureEV) + " EV"],
+      typeof source.warmth === "number" && source.warmth !== 0 && [text.warmth, signed(source.warmth, 0)],
+      typeof source.tint === "number" && source.tint !== 0 && [text.tint, signed(source.tint, 0)],
+    ]);
+  }
+  if ("darkroom" in parts) {
+    const layout = recipe.printLayout, edge = recipe.filmEdgeLayout;
+    rows(text.darkroom, [
+      edge && [text.edge, edge.format === "roll120" ? "120" : "35 mm"],
+      layout && [text.paper, papers[layout.paper] || "—"],
+    ]);
+  }
+  document.getElementById("open").href = "spektracam://f#" + fragment;
+  document.getElementById("save").addEventListener("click", () => {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }));
+    link.download = name.replace(/[\/:\\]/g, "-") + ".rnformula";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  });
+  document.getElementById("formula").hidden = false;
+}
+show();
+addEventListener("hashchange", () => location.reload());
+</script>
+</body>
+</html>

@@ -25,6 +25,13 @@ The simple RAW camera captures DNG; Apple ProRAW and lens support depend on the 
 You can also choose to bypass the spektrafilm pipeline and use up to two `.cube` 3D LUT slots have separate Mix controls. 
 Use LUTs for encoded sRGB images; Log/HDR input transforms are not supported.
 
+保存与管理配方，按个性化、曝光与暗房分别复制或应用；通过 `.rnformula` 文件、链接或配方卡共享。
+配方卡中的二维码携带配方本身，LUT 文件不会包含在链接中。
+
+Save and manage Formulae, with separate Look, Exposure and Darkroom parts. Share a `.rnformula`
+file, a link or a Formula Card. The card's QR code carries the formula itself; LUT files never
+travel in links.
+
 ### 相机兼容性 / Camera compatibility
 
 镜头和格式按当前设备的 AVFoundation 实际能力检测，不按机型名称判断；只显示可拍摄 RAW 的镜头。

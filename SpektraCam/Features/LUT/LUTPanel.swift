@@ -96,6 +96,8 @@ struct LUTLibraryView: View {
     let library: PhotoLibrary
     var assigned: String? = nil
     var choose: ((String?) -> Void)? = nil
+    /// Set when this list is one tab of the combined Formulae and LUTs manager.
+    var tab: Binding<ManagerTab>? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var selection = Set<String>()
     @State private var editing = false
@@ -178,6 +180,7 @@ struct LUTLibraryView: View {
                     ) { dismiss() }.labelStyle(.iconOnly)
                         .buttonBorderShape(.circle).accessibilityIdentifier("lut.library.close")
                 }
+                if let tab { ToolbarItem(placement: .principal) { ManagerTabPicker(tab: tab) } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(
                         editing
@@ -313,7 +316,9 @@ struct LUTLibraryView: View {
         progress = String(localized: "lut.deleting_luts", defaultValue: "Deleting LUTs…")
         working = true
         let ids = selection
-        let protected = library.usedLUTIdentifiers
+        // Formulae keep their LUTs on a plain delete. A forced delete leaves the formula
+        // asking for the file, and importing it again restores the link.
+        let protected = library.usedLUTIdentifiers.union(library.formulae.lutIdentifiers)
         Task {
             do {
                 if force {

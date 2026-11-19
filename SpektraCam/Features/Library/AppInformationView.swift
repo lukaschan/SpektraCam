@@ -18,6 +18,8 @@ struct AppInformationView: View {
     @AppStorage(EditorDefaults.halationKey) private var defaultHalation = true
     @AppStorage(EditorDefaults.grainKey) private var defaultGrain = true
     @AppStorage(EditorDefaults.monochromeGrainKey) private var defaultMonochromeGrain = false
+    @AppStorage(CameraModel.rememberFlashKey) private var rememberFlash = false
+    @Environment(\.appAccent) private var accent
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -81,6 +83,17 @@ struct AppInformationView: View {
                         String(
                             localized: "about.language_settings_hint",
                             defaultValue: "Change the app language in Settings."))
+                    AccentPicker()
+                    Toggle(
+                        String(localized: "about.remember_flash", defaultValue: "Remember flash status"),
+                        isOn: $rememberFlash
+                    )
+                    .accessibilityIdentifier("about.rememberFlash")
+                    .onChange(of: rememberFlash) { _, enabled in
+                        if !enabled { UserDefaults.standard.removeObject(forKey: "camera.flashOn") }
+                    }
+                    footnote(String(localized: "about.remember_flash_note",
+                        defaultValue: "When off, flash turns off when you leave the camera."))
                     previewPicker(
                         String(localized: "about.library_preview", defaultValue: "Library preview"),
                         selection: $libraryMaximum, identifier: "about.libraryPreview")
@@ -145,7 +158,9 @@ struct AppInformationView: View {
     private func previewPicker(_ title: String, selection: Binding<Int>, identifier: String) -> some View {
         Picker(title, selection: selection) {
             ForEach(PreviewQuality.choices, id: \.self) { Text(verbatim: "\($0) px").tag($0) }
-        }.accessibilityIdentifier(identifier)
+        }
+        .id(accent)  // A menu picker keeps the tint it was built with.
+        .accessibilityIdentifier(identifier)
     }
     private func footnote(_ text: String) -> some View {
         Text(text).font(.footnote).foregroundStyle(.secondary)

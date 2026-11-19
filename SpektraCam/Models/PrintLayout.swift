@@ -146,7 +146,7 @@ nonisolated struct PrintLayout: Codable, Equatable, Sendable {
 /// blade's cut edge is not perfectly straight: it carries the same seeded wear profile as the
 /// camera gate (`FilmEdgeNoise.wear`), smaller. Typical values, not one easel.
 nonisolated enum Easel {
-    static let bladeHeight = 4.5, aperture = 8.0, paperSpread = 0.05
+    static let bladeHeight = 4.5, aperture = 8.0, paperSpread = 0.06
     /// Width of the blade edge's light ramp on the paper, in millimetres.
     static func penumbra(magnification m: Double) -> Double {
         bladeHeight / (aperture * (1 + max(m, 0))) + paperSpread

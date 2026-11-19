@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var libraryPath: [UUID] = []
     @State private var libraryScrollRequest = 0
     @State private var captureImportFailure: String?
+    @State private var formulaArrival: FormulaArrival?
+    @State private var formulaFailure: String?
     @Environment(\.scenePhase) private var scenePhase
     private var checkingCameraControl: Bool {
         #if DEBUG
@@ -42,14 +44,31 @@ struct ContentView: View {
                         #if DEBUG && targetEnvironment(simulator)
                             // Layout checks import a host file directly, without the system picker.
                             let arguments = ProcessInfo.processInfo.arguments
-                            if let flag = arguments.firstIndex(of: "--ui-test-import"), flag + 1 < arguments.count,
-                                library.photos.isEmpty
-                            {
-                                _ = try? await library.importPhoto(URL(fileURLWithPath: arguments[flag + 1]))
+                            if library.photos.isEmpty {
+                                // Each flag is followed by one path; repeat it to import several.
+                                for (index, argument) in arguments.enumerated()
+                                where argument == "--ui-test-import" && index + 1 < arguments.count {
+                                    _ = try? await library.importPhoto(URL(fileURLWithPath: arguments[index + 1]))
+                                }
                             }
                         #endif
                         await recoverCaptures(library)
                         try? await library.luts.load()
+                        try? await library.formulae.load()
+                        #if DEBUG && targetEnvironment(simulator)
+                            await FormulaValidation.run(library)
+                            await FormulaCardChecks.run(library)
+                            // Stand in for the system pickers and "Open in SpektraCam".
+                            let options = ProcessInfo.processInfo.arguments
+                            for (index, option) in options.enumerated() where index + 1 < options.count {
+                                let file = URL(fileURLWithPath: options[index + 1])
+                                if option == "--ui-test-lut" { _ = try? await library.luts.importFile(file) }
+                                if option == "--ui-test-open" { openFormula(file) }
+                                if option == "--ui-test-open-link", let link = URL(string: options[index + 1]) {
+                                    openFormula(link)
+                                }
+                            }
+                        #endif
                         try? await library.repairRAWDimensions()
                         #if DEBUG || PERFORMANCE_CHECKS
                             await DarkroomOrientationChecks.run(library)
@@ -81,6 +100,13 @@ struct ContentView: View {
             }
         }
         .task { if !checkingCameraControl && library == nil { openLibrary() } }
+        .onOpenURL(perform: openFormula)
+        .sheet(item: $formulaArrival) { arrival in
+            if let library { FormulaImportSheet(library: library, arrival: arrival) }
+        }
+        .failureAlert(
+            String(localized: "formula.import.failed", defaultValue: "Couldn’t Open Formula"),
+            message: $formulaFailure)
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
             if let library {
                 Task {
@@ -124,6 +150,17 @@ struct ContentView: View {
             }
         } message: {
             Text(library?.saveFailure ?? "")
+        }
+    }
+    /// A `.rnformula` opened from Files, Messages or AirDrop, or a link that carries a formula.
+    /// It is shown first, never added unasked.
+    private func openFormula(_ url: URL) {
+        guard url.isFileURL || FormulaLink.claims(url.absoluteString) else { return }
+        do {
+            formulaArrival =
+                try url.isFileURL ? FormulaArrival(url: url) : FormulaArrival(link: url.absoluteString)
+        } catch {
+            formulaFailure = error.localizedDescription
         }
     }
     private func recoverCaptures(_ library: PhotoLibrary) async {

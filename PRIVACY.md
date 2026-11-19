@@ -1,6 +1,6 @@
 # SpektraCam Privacy Policy · 隐私政策
 
-Effective 15 November 2026 · 生效日期：2026 年 11 月 15 日
+Effective 17 November 2026 · 生效日期：2026 年 11 月 17 日
 
 ## English
 
@@ -10,6 +10,7 @@ SpektraCam is a free, open-source photo editor and RAW camera. It has no account
 
 - Photos you import or capture, your edits, and the LUT files you add are stored only inside the app on your device. They leave it only when you export, share or save them yourself.
 - Settings such as preview quality and default effects are stored in the app's preferences on your device.
+- Saved formulae also stay on your device. If you choose to share one, its file, link or Formula Card carries the settings and any note you wrote. A card may include a photo you choose. Formula links and QR codes contain the formula after `#`; it is decoded locally, and the fragment is not part of the request to the GitHub Pages website. LUT files are excluded from links and codes, and are shared with a formula file only when you explicitly choose to include them.
 
 **Permissions**
 
@@ -41,6 +42,7 @@ SpektraCam 是一款免费、开源的照片编辑器与 RAW 相机。App 没有
 
 - 你导入或拍摄的照片、所做的编辑，以及添加的 LUT 文件，仅存储在设备上的 App 内。只有在你自行导出、共享或存储时，这些内容才会离开 App。
 - 预览画质、默认效果等设置存储在设备上的 App 偏好设置中。
+- 保存的配方同样保留在设备上。只有在你主动共享时，配方文件、链接或配方卡才会携带设置及你写下的备注。配方卡可以包含你选择的照片。配方链接与二维码将配方放在 `#` 之后，在本地解码；该片段不会随网页请求发送到 GitHub Pages。链接与二维码不包含 LUT 文件；只有你明确选择附带 LUT 时，配方文件才会携带它们。
 
 **权限**
 

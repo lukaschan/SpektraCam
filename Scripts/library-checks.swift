@@ -179,6 +179,155 @@ import UniformTypeIdentifiers
         precondition(reverted == nil && revertedBytes == originalBytes)
         try await library!.finishEditing(photo.id, recipe: recipe)
         print("PASS: revert clears the saved recipe across restart and preserves original bytes")
+        // Copy a look to another photo, undo it, and never let Undo discard a later edit.
+        context.setFillColor(CGColor(red: 0.7, green: 0.2, blue: 0.1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 24, height: 32))
+        let targetSource = temporary.appendingPathComponent("paste-target.jpg")
+        let targetFile = CGImageDestinationCreateWithURL(
+            targetSource as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(targetFile, context.makeImage()!, nil)
+        precondition(CGImageDestinationFinalize(targetFile))
+        let target = try await library!.importPhoto(targetSource)
+        var framedEdit = EditRecipe()
+        framedEdit.look.enabled = false
+        framedEdit.geometry.rotateLeft()
+        framedEdit.tone.exposureEV = -0.5
+        try await library!.finishEditing(target.id, recipe: framedEdit)
+        let framedEditBytes = library!.photo(target.id)!.recipeData
+        try library!.copyLook(from: photo.id)
+        precondition(library!.copiedLook?.sourceID == photo.id)
+        var outcome = try await library!.pasteLook([.look], to: [photo.id, target.id])
+        precondition(outcome.pasted == 1 && outcome.skipped == 0, "A photo's own look changed it")
+        let pasted = try library!.recipe(target.id)!
+        precondition(pasted.mix == 0.6 && pasted.tone.contrast == 1.2 && pasted.monochromeGrain)
+        precondition(
+            pasted.tone.exposureEV == -0.5 && pasted.source.exposureEV == 0, "Look pasted the exposure")
+        precondition(pasted.geometry == framedEdit.geometry, "Paste moved the framing")
+        precondition(library!.pasteUndo?.count == 1 && library!.pasteUndo?.contains(target.id) == true)
+        let untouched = try library!.recipe(photo.id)
+        precondition(untouched == recipe, "Paste changed the source photo")
+        library = nil
+        library = try PhotoLibrary(root: root, cache: cache, modelDirectory: dataDirectory)
+        let reopenedPaste = try library!.recipe(target.id)
+        precondition(reopenedPaste == pasted, "Restart lost the pasted look")
+        try library!.copyLook(from: photo.id)
+        try await library!.finishEditing(target.id, recipe: framedEdit)
+        outcome = try await library!.pasteLook([.look], to: [target.id])
+        precondition(outcome.pasted == 1)
+        try await library!.undoPaste()
+        precondition(
+            library!.photo(target.id)!.recipeData == framedEditBytes && library!.pasteUndo == nil,
+            "Undo did not restore the earlier edit")
+        try await library!.revert([target.id])
+        outcome = try await library!.pasteLook([.look, .exposure], to: [target.id])
+        let withExposure = try library!.recipe(target.id)!
+        precondition(withExposure.source.exposureEV == 1.25 && withExposure.geometry.isIdentity)
+        try await library!.undoPaste()
+        precondition(!library!.photo(target.id)!.hasEdits, "Undo left an edit on an untouched photo")
+        _ = try await library!.pasteLook([.look], to: [target.id])
+        try await library!.finishEditing(target.id, recipe: framedEdit)
+        precondition(library!.pasteUndo == nil, "Undo would discard a later edit")
+        // A saved formula applies like a paste, previews without saving, and is a file on disk.
+        let formula = try Formula(name: "Check", parts: [.look], from: recipe, luts: [])
+        try await library!.formulae.save(formula)
+        precondition(library!.formulae.items == [formula])
+        try await library!.revert([target.id])
+        outcome = try await library!.applyFormula(formula, to: [target.id])
+        let applied = try library!.recipe(target.id)!
+        precondition(outcome.pasted == 1 && applied.mix == 0.6 && applied.source.exposureEV == 0)
+        let same = library!.preview(library!.photo(photo.id)!, applying: formula)
+        precondition(same == library!.photo(photo.id)!, "A photo that already has the look previews as itself")
+        try await library!.undoPaste()
+        let shown = library!.preview(library!.photo(target.id)!, applying: formula)
+        precondition(
+            shown?.hasEdits == true && !library!.photo(target.id)!.hasEdits, "A preview saved an edit")
+        var lutLook = recipe
+        lutLook.look.mode = .lut
+        lutLook.look.first.id = String(repeating: "d", count: 64)
+        let needsLUT = try Formula(name: "Needs LUT", parts: [.look], from: lutLook, luts: [])
+        do {
+            _ = try await library!.applyFormula(needsLUT, to: [target.id])
+            preconditionFailure("A formula was applied without its LUT")
+        } catch CubeLUT.Failure.missing {}
+        precondition(library!.preview(library!.photo(target.id)!, applying: needsLUT) == nil)
+        precondition(!library!.photo(target.id)!.hasEdits)
+        try await library!.formulae.rename(formula.id, name: "Renamed", note: "f/8")
+        let copyID = try await library!.formulae.duplicate(formula.id, name: "Second")
+        try await library!.formulae.setFavorite(copyID, true)
+        precondition(library!.formulae.items.map(\.name) == ["Renamed", "Second"])
+        precondition(library!.formulae.ordered.first?.id == copyID, "A favourite did not lead")
+        try await library!.formulae.move(from: IndexSet(integer: 1), to: 0)
+        library = nil
+        library = try PhotoLibrary(root: root, cache: cache, modelDirectory: dataDirectory)
+        try await library!.formulae.load()
+        precondition(library!.formulae.items.map(\.name) == ["Second", "Renamed"])
+        precondition(library!.formulae.favorites == [copyID])
+        let reread = library!.formulae.formula(formula.id)
+        precondition(reread?.recipe == formula.recipe && reread?.note == "f/8", "Restart changed a formula")
+        try FileManager.default.removeItem(
+            at: library!.formulae.directory.appendingPathComponent("Library.json"))
+        try await library!.formulae.load()
+        precondition(library!.formulae.items.count == 2, "A lost index lost the formulae")
+        // A formula from outside: its LUT file goes to the LUT library, never into the kept file.
+        let sharedCube = Data("LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n".utf8)
+        var sharedLook = recipe
+        sharedLook.look.mode = .lut
+        sharedLook.look.first.id = Formula.hash(sharedCube)
+        let shared = try Formula(
+            name: "Shared", parts: [.look], from: sharedLook,
+            luts: [Formula.LUT(id: Formula.hash(sharedCube), name: "Carried", size: 2)])
+        let sharedFile = try Formula.attaching(try shared.data(), luts: [(name: "Carried", cube: sharedCube)])
+        var arrival = await library!.formulae.arrival(of: sharedFile)
+        precondition(arrival == .new)
+        let sharedID = try await library!.formulae.add(sharedFile)
+        let storedShared = try Data(contentsOf: library!.formulae.fileURL(sharedID))
+        precondition(sharedID == shared.id && Formula.attachments(in: storedShared).isEmpty)
+        precondition(library!.formulae.formula(sharedID) == shared)
+        arrival = await library!.formulae.arrival(of: sharedFile)
+        precondition(arrival == .same, "The same file was not recognised")
+        let editedFile = try Formula.renaming(sharedFile, name: "Shared again", note: "")
+        arrival = await library!.formulae.arrival(of: editedFile)
+        precondition(arrival == .changed)
+        let bothID = try await library!.formulae.add(editedFile, conflict: .keepBoth)
+        precondition(bothID != sharedID && library!.formulae.items.count == 4)
+        _ = try await library!.formulae.add(editedFile)
+        precondition(library!.formulae.formula(sharedID)?.name == "Shared again" && library!.formulae.items.count == 4)
+        precondition(library!.formulae.lutIdentifiers == [Formula.hash(sharedCube)])
+        let otherLUT = Formula.LUT(id: String(repeating: "e", count: 64), name: "Other", size: 17)
+        try await library!.formulae.replaceLUT(in: sharedID, Formula.hash(sharedCube), with: otherLUT)
+        precondition(library!.formulae.formula(sharedID)?.recipe.look.first.id == otherLUT.id)
+        precondition(library!.formulae.formula(sharedID)?.luts == [otherLUT])
+        // The file the share sheet sends: named after the formula, with LUT files only on request.
+        let carriedCubeFile = temporary.appendingPathComponent("Carried.cube")
+        try sharedCube.write(to: carriedCubeFile)
+        let installedLUT = try await library!.luts.importFile(carriedCubeFile)
+        let plainLUT = Formula.LUT(id: installedLUT.id, name: installedLUT.name, size: installedLUT.size)
+        try await library!.formulae.replaceLUT(in: sharedID, otherLUT.id, with: plainLUT)
+        let toShare = library!.formulae.formula(sharedID)!
+        let plain = try library!.formulae.file(toShare).export()
+        precondition(plain.lastPathComponent == "Shared again.rnformula")
+        let plainData = try Data(contentsOf: plain)
+        precondition(Formula.attachments(in: plainData).isEmpty, "LUT files were shared without being asked for")
+        let plainRead = try Formula(data: plainData)
+        precondition(plainRead == toShare)
+        let full = try library!.formulae.file(toShare, carryingLUTs: library!.luts).export()
+        let fullData = try Data(contentsOf: full)
+        precondition(Formula.attachments(in: fullData).map(\.cube) == [sharedCube])
+        let fullRead = try Formula(data: fullData, limit: Formula.sharedLimit)
+        precondition(fullRead == toShare)
+        precondition(library!.usedLUTIdentifiers.isDisjoint(with: [installedLUT.id]))
+        precondition(library!.formulae.lutIdentifiers == [installedLUT.id], "A formula's LUT was not kept from deletion")
+        try await library!.luts.remove([installedLUT.id], protected: [])
+        do {
+            _ = try await library!.formulae.add(Data("not a formula".utf8))
+            preconditionFailure("A file that is not a formula was added")
+        } catch Formula.Failure.unreadable {}
+        try await library!.formulae.remove([copyID, formula.id, sharedID, bothID])
+        precondition(library!.formulae.items.isEmpty)
+        try await library!.delete([target.id])
+        precondition(library!.photos.count == 1)
+        print("PASS: a copied look pastes by part, survives restart and undoes exactly")
+        print("PASS: formulae apply, preview without saving, refuse a missing LUT, survive restart and a lost index, and arrive from outside without their LUT files")
         try FileManager.default.removeItem(at: cache)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         let rebuilt = try await library!.images.image(library!.photo(photo.id)!, thumbnail: false)

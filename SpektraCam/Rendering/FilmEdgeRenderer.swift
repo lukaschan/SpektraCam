@@ -9,6 +9,51 @@ nonisolated enum FilmEdgeRenderer {
     private static let context = CIContext(options: [.workingColorSpace: linear,
         .workingFormat: CIFormat.RGBAf, .cacheIntermediates: false])
 
+    /// Covered paper is the output reference white, independent of scanner glare, LUTs and
+    /// grading. Keep the exposure-space blade simulation; anchor its covered side after tone
+    /// through the very same seeded penumbra, rather than painting a rectangular white frame.
+    /// Only the perimeter is evaluated, and the RGBA8 output uses bounded file-backed storage.
+    static func restoringPaper(_ image: CGImage, geometry: FilmEdgeGeometry,
+                               origin: (x: Int, y: Int) = (0, 0)) throws -> CGImage {
+        guard geometry.distress.enlargerPrint else { return image }
+        let w = image.width, h = image.height
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let store = try PixelStore.render(PixelStore.ciImage(image), width: w, height: h,
+                                         context: context, colorSpace: space, format: .byte)
+        let out = store.base.assumingMemoryBound(to: UInt8.self)
+        let mm = geometry.millimetersPerPixel
+        let half = geometry.carrierHalf
+        let hx = geometry.portrait ? half.across : half.along
+        let hy = geometry.portrait ? half.along : half.across
+        let pad = max(geometry.distress.carrierBlur, geometry.pixelRadius)
+            + 1.6 * geometry.distress.carrierRoughness + geometry.distress.carrierCorner
+        let left = Int(ceil(Double(geometry.width) / 2 + (geometry.easelOffset.x - hx + pad) / mm)) - origin.x
+        let right = Int(floor(Double(geometry.width) / 2 + (geometry.easelOffset.x + hx - pad) / mm)) - origin.x
+        let top = Int(ceil(Double(geometry.height) / 2 + (geometry.easelOffset.y - hy + pad) / mm)) - origin.y
+        let bottom = Int(floor(Double(geometry.height) / 2 + (geometry.easelOffset.y + hy - pad) / mm)) - origin.y
+        let firstEnd = min(max(left, 0), w)
+        let secondStart = min(max(right, firstEnd), w)
+        func shade(_ x: Int, _ y: Int) {
+            let coverage = geometry.carrierCoverage(x: origin.x + x, y: origin.y + y)
+            guard coverage < 1 else { return }
+            let i = (y * w + x) * 4
+            for channel in 0..<3 {
+                out[i + channel] = UInt8((255 - (255 - Double(out[i + channel])) * coverage).rounded())
+            }
+            out[i + 3] = 255
+        }
+        for y in 0..<h {
+            if y % 64 == 0 { try Task.checkCancellation() }
+            if y < top || y >= bottom {
+                for x in 0..<w { shade(x, y) }
+            } else {
+                for x in 0..<firstEnd { shade(x, y) }
+                for x in secondStart..<w { shade(x, y) }
+            }
+        }
+        return try store.image(colorSpace: space)
+    }
+
     /// Manual families use compatible material defaults only for the edge. Develop is preserved.
     static func materialRecipe(_ original: EditRecipe) -> EditRecipe {
         var recipe = original

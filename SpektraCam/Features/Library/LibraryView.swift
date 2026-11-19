@@ -22,6 +22,8 @@ struct LibraryView: View {
     @State private var handledCameraRequest = 0
     @State private var scrollRevision = 0
     @State private var batchRequest: BatchRequest?
+    @State private var pasteTargets: Set<UUID> = []
+    @State private var showPasteLook = false
     @State private var systemVerticalBar = false
     @Environment(\.openCamera) private var openCamera
     private struct BatchRequest: Identifiable {
@@ -68,18 +70,40 @@ struct LibraryView: View {
                 }
                 .onSystemVerticalBar { systemVerticalBar = $0 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    Text(
-                        selecting
-                            ? String(
-                                localized: "library.selected",
-                                defaultValue: "\(selection.count) selected")
-                            : String(
-                                localized: "library.photo_count",
-                                defaultValue: "\(visible.count) photos")
-                    )
-                    .font(.footnote).foregroundStyle(.secondary)
-                    .padding(.vertical, 6).frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("library.count")
+                    VStack(spacing: 2) {
+                        if let undo = library.pasteUndo {
+                            HStack(spacing: 10) {
+                                Text(
+                                    String(
+                                        localized: "look.pasted_count",
+                                        defaultValue: "Look applied to \(undo.count) photos"))
+                                Button(String(localized: "editor.undo", defaultValue: "Undo")) {
+                                    working = true
+                                    Task {
+                                        do { try await library.undoPaste() } catch {
+                                            failure = error.localizedDescription
+                                        }
+                                        working = false
+                                    }
+                                }
+                                .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
+                                .disabled(working).accessibilityIdentifier("library.look.undo")
+                            }
+                            .padding(.top, 6)
+                        }
+                        Text(
+                            selecting
+                                ? String(
+                                    localized: "library.selected",
+                                    defaultValue: "\(selection.count) selected")
+                                : String(
+                                    localized: "library.photo_count",
+                                    defaultValue: "\(visible.count) photos")
+                        )
+                        .foregroundStyle(.secondary).padding(.vertical, 6)
+                        .accessibilityIdentifier("library.count")
+                    }
+                    .font(.footnote).frame(maxWidth: .infinity)
                 }
                 .sheet(isPresented: $showInformation, onDismiss: {
                     if importFilesAfterInfo {
@@ -89,9 +113,15 @@ struct LibraryView: View {
                 }) {
                     AppInformationView(importFiles: { importFilesAfterInfo = true })
                 }
-                .sheet(isPresented: $showLUTs) { LUTLibraryView(library: library) }
+                .sheet(isPresented: $showLUTs) { LibraryManagerView(library: library) }
                 .sheet(item: $batchRequest) { request in
                     BatchExportPanel(items: request.items, library: library)
+                }
+                .sheet(isPresented: $showPasteLook) {
+                    if let clip = library.copiedLook {
+                        PasteLookSheet(
+                            library: library, clip: clip, count: pasteTargets.count, paste: pasteLook)
+                    }
                 }
                 .navigationTitle(String(localized: "library.library", defaultValue: "Library"))
                 .navigationBarTitleDisplayMode(.inline)
@@ -175,6 +205,36 @@ struct LibraryView: View {
                     }
                     ToolbarItem(placement: .bottomBar) {
                         if selecting {
+                            Menu {
+                                Button(
+                                    String(localized: "look.copy", defaultValue: "Copy Look"),
+                                    systemImage: "slider.horizontal.2.square.on.square"
+                                ) { if let id = selection.first { copyLook(id) } }
+                                .disabled(
+                                    selection.count != 1
+                                        || selection.first.flatMap(library.photo)?.hasEdits != true
+                                )
+                                .accessibilityIdentifier("library.look.copy")
+                                Button(
+                                    String(localized: "look.paste", defaultValue: "Paste Look…"),
+                                    systemImage: "slider.horizontal.2.square.badge.arrow.down"
+                                ) {
+                                    pasteTargets = selection
+                                    showPasteLook = true
+                                }
+                                .disabled(library.copiedLook == nil || selection.isEmpty)
+                                .accessibilityIdentifier("library.look.paste")
+                                formulaMenu { selection }
+                            } label: {
+                                Label(
+                                    String(localized: "part.look", defaultValue: "Look"),
+                                    systemImage: "slider.horizontal.2.square.on.square")
+                            }
+                            .disabled(working || selection.isEmpty).accessibilityIdentifier("library.look")
+                        }
+                    }
+                    ToolbarItem(placement: .bottomBar) {
+                        if selecting {
                             Button(
                                 String(localized: "common.revert", defaultValue: "Revert"),
                                 systemImage: "arrow.uturn.backward"
@@ -234,13 +294,16 @@ struct LibraryView: View {
                         } label: {
                             if systemVerticalBar {
                                 Label(
-                                    String(localized: "lut.manager", defaultValue: "LUT Manager"),
-                                    systemImage: "cube")
+                                    String(localized: "formula.formulae", defaultValue: "Formulae"),
+                                    systemImage: "flask")
                             } else {
-                                Text(String(localized: "lut.manager", defaultValue: "LUT Manager"))
+                                Text(String(localized: "formula.formulae", defaultValue: "Formulae"))
                             }
                         }
-                        .accessibilityIdentifier("library.luts").disabled(working)
+                        .accessibilityHint(
+                            String(localized: "formula.manager", defaultValue: "Formulae and LUTs")
+                        )
+                        .accessibilityIdentifier("library.formulae").disabled(working)
                     }
                     if systemVerticalBar {
                         ToolbarItem(placement: .bottomBar) {
@@ -395,6 +458,23 @@ struct LibraryView: View {
                                                 selecting = true
                                                 selection = [photo.id]
                                             }
+                                            if photo.hasEdits {
+                                                Button(
+                                                    String(localized: "look.copy", defaultValue: "Copy Look"),
+                                                    systemImage: "slider.horizontal.2.square.on.square"
+                                                ) { copyLook(photo.id) }
+                                            }
+                                            if library.copiedLook != nil {
+                                                Button(
+                                                    String(
+                                                        localized: "look.paste", defaultValue: "Paste Look…"),
+                                                    systemImage: "slider.horizontal.2.square.badge.arrow.down"
+                                                ) {
+                                                    pasteTargets = [photo.id]
+                                                    showPasteLook = true
+                                                }
+                                            }
+                                            formulaMenu { [photo.id] }
                                             Button(
                                                 String(localized: "common.delete", defaultValue: "Delete"),
                                                 systemImage: "trash", role: .destructive
@@ -433,6 +513,52 @@ struct LibraryView: View {
             }
         }
         .background(PhotoTheme.canvas)
+    }
+    /// Saved formulae as a submenu. A formula that cannot be applied here is shown disabled.
+    @ViewBuilder private func formulaMenu(_ targets: @escaping () -> Set<UUID>) -> some View {
+        if !library.formulae.items.isEmpty {
+            Menu(
+                String(localized: "formula.apply", defaultValue: "Apply Formula"), systemImage: "flask"
+            ) {
+                ForEach(library.formulae.ordered) { formula in
+                    Button(formula.name) { applyFormula(formula, to: targets()) }
+                        .disabled(formula.problem(luts: library.luts) != nil)
+                }
+            }
+            .accessibilityIdentifier("library.formula.apply")
+        }
+    }
+    private func applyFormula(_ formula: Formula, to ids: Set<UUID>) {
+        guard !working, !ids.isEmpty else { return }
+        working = true
+        Task {
+            do {
+                if try await library.applyFormula(formula, to: ids).skipped > 0 {
+                    failure = String(
+                        localized: "look.paste.skipped",
+                        defaultValue: "Photos edited with an older film model were skipped.")
+                }
+            } catch { failure = error.localizedDescription }
+            working = false
+        }
+    }
+    private func copyLook(_ id: UUID) {
+        do { try library.copyLook(from: id) } catch { failure = error.localizedDescription }
+    }
+    private func pasteLook(_ parts: Set<EditRecipe.Part>) {
+        let ids = pasteTargets
+        guard !working else { return }
+        working = true
+        Task {
+            do {
+                if try await library.pasteLook(parts, to: ids).skipped > 0 {
+                    failure = String(
+                        localized: "look.paste.skipped",
+                        defaultValue: "Photos edited with an older film model were skipped.")
+                }
+            } catch { failure = error.localizedDescription }
+            working = false
+        }
     }
     private func dayTitle(_ date: Date) -> String {
         if Calendar.current.isDateInToday(date) {

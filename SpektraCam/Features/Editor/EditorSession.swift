@@ -7,6 +7,7 @@ import OSLog
 @MainActor @Observable final class EditorSession: Identifiable, Hashable {
     let id = UUID()
     let photo: ImportedPhoto
+    let sourceFilename: String?
     let luts: LUTLibrary?
     @ObservationIgnored private let uneditedRecipe: EditRecipe
     var recipe: EditRecipe { didSet { luts?.protect(id, ids: usedLUTIdentifiers) } }
@@ -64,6 +65,7 @@ import OSLog
         resources: FilmRenderResources? = nil, sourceFilename: String? = nil
     ) {
         self.photo = photo
+        self.sourceFilename = sourceFilename
         self.luts = luts
         filmSource = photo.preview
         renderedSource = photo.preview

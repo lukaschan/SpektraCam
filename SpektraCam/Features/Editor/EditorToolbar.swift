@@ -36,6 +36,7 @@ struct EditorToolbar: ToolbarContent {
     var systemVerticalBar = false
     let openDarkroom: () -> Void
     let export: () -> Void
+    @Environment(\.appAccent) private var accent
     private var actionTitle: String {
         darkroomActive
             ? String(localized: "common.export", defaultValue: "Export")
@@ -51,7 +52,7 @@ struct EditorToolbar: ToolbarContent {
                 Button(tool.title, systemImage: tool.symbolName) {
                     activeTool = activeTool == tool ? nil : tool
                 }
-                .tint(activeTool == tool ? Color.accentColor : Color.primary)
+                .tint(activeTool == tool ? Color.accentColor : accent.idle)
                 .accessibilityAddTraits(activeTool == tool ? .isSelected : [])
                 .accessibilityIdentifier("editor.tool." + tool.rawValue)
             }
@@ -143,6 +144,7 @@ struct EditorToolLabel: View {
     let title: String
     let symbol: String
     let selected: Bool
+    @Environment(\.appAccent) private var accent
     var body: some View {
         VStack(spacing: 3) {
             Image(systemName: symbol).font(.system(size: 18, weight: .medium))
@@ -150,7 +152,7 @@ struct EditorToolLabel: View {
             Text(title).font(.system(size: 11, weight: .medium)).lineLimit(1)
                 .minimumScaleFactor(0.8).frame(height: 12)
         }
-        .foregroundStyle(selected ? Color.accentColor : Color.primary)
+        .foregroundStyle(selected ? Color.accentColor : accent.idle)
         .dynamicTypeSize(...DynamicTypeSize.large)
         .frame(width: 44, height: 44).contentShape(.rect)
     }

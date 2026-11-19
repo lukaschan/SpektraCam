@@ -6,11 +6,14 @@ import UIKit
 struct EditorView: View {
     let session: EditorSession
     var locationName: String? = nil
+    /// The library photo being edited, so a copied look can show where it came from.
+    var photoID: UUID? = nil
     let library: PhotoLibrary
     let onFinish: () async throws -> Void
     @State private var closing = false
     @State private var closeFailure: String?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appAccent) private var accent
     @State private var activeTool: EditorTool? = .develop
     @State private var panelExpanded = false
     @State private var inspectorFrame = CGRect.zero
@@ -24,6 +27,8 @@ struct EditorView: View {
     @State private var cropReturnsToDarkroom = false
     @State private var toolBeforeDarkroomCrop: EditorTool?
     @State private var showOriginal = false
+    @State private var showPasteLook = false
+    @State private var showSaveFormula = false
     @State private var showResetConfirmation = false
     @State private var showRenderProgress = false
     @State private var layout = WorkspaceLayout.stacked
@@ -52,6 +57,20 @@ struct EditorView: View {
         .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .onSystemVerticalBar { systemVerticalBar = $0 }
         .background(EditorNavigationGuard().allowsHitTesting(false))
+        .sheet(isPresented: $showSaveFormula) {
+            SaveFormulaSheet(library: library, recipe: session.recipe)
+        }
+        .sheet(isPresented: $showPasteLook) {
+            if let clip = library.copiedLook {
+                PasteLookSheet(library: library, clip: clip) { parts in
+                    // One history step: the editor's own Undo takes the paste back.
+                    session.update(key: "look.paste") {
+                        $0 = $0.taking(
+                            parts, from: clip.recipe, rawTarget: session.photo.rawTemperature != nil)
+                    }
+                }
+            }
+        }
         .navigationTitle(
             showDarkroom
                 ? String(localized: "darkroom.title", defaultValue: "Darkroom")
@@ -285,14 +304,28 @@ struct EditorView: View {
                     VStack(spacing: 8) {
                         EditorInfoBar(
                             session: session, showingOriginal: showOriginal, location: locationName,
-                            onInteraction: { if panelExpanded { setExpanded(false) } })
+                            onInteraction: { if panelExpanded { setExpanded(false) } },
+                            look: LookActions(
+                                canCopy: session.hasEdits, canPaste: library.copiedLook != nil,
+                                copy: { library.copyLook(session.recipe, from: photoID) },
+                                paste: { showPasteLook = true }),
+                            formulae: FormulaStrip(
+                                library: library, canSave: session.hasEdits, identifier: "editor",
+                                apply: { formula in
+                                    session.update(key: "formula.apply") {
+                                        $0 = $0.taking(
+                                            Set(formula.parts), from: formula.recipe,
+                                            rawTarget: session.photo.rawTemperature != nil)
+                                    }
+                                },
+                                save: { showSaveFormula = true }))
                         HStack {
                             Spacer()
                             Button(compareTitle, systemImage: "square.on.square") {
                                 showOriginal.toggle()
                                 if panelExpanded { setExpanded(false) }
                             }
-                            .tint(showOriginal ? Color.accentColor : Color.primary)
+                            .tint(showOriginal ? Color.accentColor : accent.idle)
                             .accessibilityAddTraits(showOriginal ? .isSelected : [])
                             .photoActionStyle()
                             .accessibilityLabel(compareTitle)

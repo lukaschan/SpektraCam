@@ -4,7 +4,6 @@
     "CFBundleDisplayName" : {
       "comment" : "Bundle display name",
       "extractionState" : "extracted_with_value",
-      "shouldTranslate" : false,
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12,12 +11,12 @@
             "value" : "SpektraCam"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "CFBundleName" : {
       "comment" : "Bundle name",
       "extractionState" : "extracted_with_value",
-      "shouldTranslate" : false,
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -25,7 +24,8 @@
             "value" : "SpektraCam"
           }
         }
-      }
+      },
+      "shouldTranslate" : false
     },
     "NSCameraUsageDescription" : {
       "comment" : "App explanation in the iOS permission prompt. iOS supplies the prompt buttons. Explain the purpose clearly.",
@@ -77,6 +77,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用于将编辑后的照片存储到你的照片图库。"
+          }
+        }
+      }
+    },
+    "SpektraCam Formula" : {
+      "comment" : "Name of the formula document type shown by iOS when opening a shared .rnformula file.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SpektraCam Formula"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SpektraCam 配方"
           }
         }
       }

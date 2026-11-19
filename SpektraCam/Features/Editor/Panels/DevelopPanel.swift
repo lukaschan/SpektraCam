@@ -178,7 +178,7 @@ struct DevelopPanel: View {
             Image(systemName: "checkmark").font(.caption.weight(.semibold))
                 .frame(width: 12).opacity(selected ? 1 : 0).accessibilityHidden(true)
         }
-        .foregroundStyle(selected ? Color.white : Color.primary)
+        .foregroundStyle(selected ? AnyShapeStyle(.onAccent) : AnyShapeStyle(.primary))
         .padding(.horizontal, 6).frame(maxWidth: .infinity, minHeight: stockSelectionHeight)
     }
     private func stockRows(

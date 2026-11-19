@@ -613,10 +613,13 @@ final class EditorInteractionTests: XCTestCase {
     }
     @MainActor func testLUTManagerPresentation() throws {
         let app = importPhoto()
-        let manager = app.buttons["library.luts"]
+        let manager = app.buttons["library.formulae"]
         XCTAssertTrue(manager.waitForExistence(timeout: 5))
         XCTAssertLessThan(app.staticTexts["library.count"].frame.maxY, manager.frame.minY)
         manager.tap()
+        // Formulae lead; the LUTs are the second tab of the same sheet.
+        XCTAssertTrue(app.buttons["formula.library.close"].waitForExistence(timeout: 5))
+        app.segmentedControls["manager.tab"].buttons["LUTs"].tap()
         XCTAssertTrue(app.buttons["lut.import"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["lut.delete"].isEnabled)
         XCTAssertFalse(

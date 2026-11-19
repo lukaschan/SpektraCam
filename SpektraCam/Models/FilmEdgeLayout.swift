@@ -595,7 +595,7 @@ nonisolated struct FilmEdgeGeometry: Sendable {
         portrait ? (fy, -fx) : (fx, fy)
     }
     private var gateHalf: (Double, Double) { (gate.width * millimetersPerPixel / 2, gate.height * millimetersPerPixel / 2) }
-    private var pixelRadius: Double { 0.56 * millimetersPerPixel }
+    var pixelRadius: Double { 0.56 * millimetersPerPixel }
     private func seed(_ stream: UInt32) -> UInt32 { Self.streamSeed(distress.seed, stream) }
 
     /// Signed distance to the camera aperture in film x/y (> 0 outside). Film that is not flat

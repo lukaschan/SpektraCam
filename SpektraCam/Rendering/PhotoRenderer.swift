@@ -643,7 +643,8 @@ actor PhotoRenderer {
         try Task.checkCancellation()
         let film = try result.image(colorSpace: CGColorSpace(name: CGColorSpace.extendedSRGB)!)
         return Detail(
-            image: try ToneRenderer.render(film, tone: original.tone.outputStage),
+            image: try FilmEdgeRenderer.restoringPaper(
+                ToneRenderer.render(film, tone: original.tone.outputStage), geometry: geometry, origin: (x0, y0)),
             rect: CGRect(
                 x: Double(x0) / Double(width), y: Double(y0) / Double(height),
                 width: Double(x1 - x0) / Double(width), height: Double(y1 - y0) / Double(height)))
@@ -724,7 +725,8 @@ actor PhotoRenderer {
             image = try FilmEdgeRenderer.replacingCenter(image, with: center, geometry: geometry, paperPrint: paperPrint)
         }
         try Task.checkCancellation()
-        return try ToneRenderer.render(image, tone: original.tone.outputStage)
+        return try FilmEdgeRenderer.restoringPaper(
+            ToneRenderer.render(image, tone: original.tone.outputStage), geometry: geometry)
     }
 
     /// Native pixel size of the picture alone (crop, plus its film edge) and of the whole output

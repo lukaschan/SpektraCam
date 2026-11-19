@@ -23,11 +23,10 @@ struct PhotoDetailView: View {
     @State private var failure: String?
     @State private var layout = WorkspaceLayout.stacked
     @State private var systemVerticalBar = false
-    /// A tap on the photo clears everything but the photo; another brings it back.
-    @State private var immersive = false
     @State private var confirmRevert = false
     @State private var confirmDelete = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showPasteLook = false
+    @State private var showSaveFormula = false
     private struct ExportRequest: Identifiable {
         let id = UUID()
         let session: EditorSession?
@@ -44,13 +43,11 @@ struct PhotoDetailView: View {
     }
     var body: some View {
         ZStack {
-            AlbumPager(photos: photos, images: library.images, selection: $selectedID) {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { immersive.toggle() }
-            }
+            AlbumPager(photos: photos, images: library.images, selection: $selectedID)
             if working { ProgressView().padding().background(.regularMaterial, in: .capsule) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(immersive ? Color.black : PhotoTheme.canvas)
+        .background(PhotoTheme.canvas)
         .overlay(alignment: .bottom) {
             PhotoViewerControls(
                 photos: photos, images: library.images, selection: $selectedID,
@@ -60,21 +57,30 @@ struct PhotoDetailView: View {
                 showsActions: !systemVerticalBar
             )
             .padding(.horizontal, 16).padding(.bottom, 12)
-            .opacity(immersive ? 0 : 1).allowsHitTesting(!immersive)
         }
         .onSystemVerticalBar { systemVerticalBar = $0 }
-        .toolbarVisibility(immersive ? .hidden : .automatic, for: .navigationBar, .bottomBar)
-        .statusBarHidden(immersive)
         .onGeometryChange(for: WorkspaceLayout.self) { WorkspaceLayout($0.size) } action: { layout = $0 }
         .overlay(alignment: .top) {
             if let photo {
                 let recipe = savedRecipe
                 PhotoInfoPanel(
                     title: filmTitle(recipe), subtitle: printTitle(recipe), metadata: displayMetadata,
-                    location: photo.locationName, histogram: histogram, identifier: "photo"
+                    location: photo.locationName, histogram: histogram, identifier: "photo",
+                    look: LookActions(
+                        canCopy: photo.hasEdits && !working,
+                        canPaste: library.copiedLook != nil && !working,
+                        canUndo: library.pasteUndo?.contains(photo.id) == true && !working,
+                        copy: {
+                            do { try library.copyLook(from: photo.id) } catch {
+                                failure = error.localizedDescription
+                            }
+                        },
+                        paste: { showPasteLook = true }, undo: undoPaste),
+                    formulae: FormulaStrip(
+                        library: library, photo: photo, canSave: photo.hasEdits && !working,
+                        identifier: "photo", apply: applyFormula, save: { showSaveFormula = true })
                 )
                 .padding(.horizontal, 12).padding(.top, 4)
-                .opacity(immersive ? 0 : 1).allowsHitTesting(!immersive)
             }
         }
         .navigationTitle(String(localized: "photo.photo", defaultValue: "Photo"))
@@ -128,7 +134,9 @@ struct PhotoDetailView: View {
             histogram = .empty
         }
         .navigationDestination(item: $editor) { session in
-            EditorView(session: session, locationName: photo?.locationName, library: library) {
+            EditorView(
+                session: session, locationName: photo?.locationName, photoID: selectedID, library: library
+            ) {
                 let recipe = session.hasEdits ? session.recipe : nil
                 try await library.finishEditing(selectedID, recipe: recipe)
             }
@@ -140,7 +148,51 @@ struct PhotoDetailView: View {
                 ExportPanel(originalURL: request.originalURL, sourceFilename: request.sourceFilename)
             }
         }
+        .sheet(isPresented: $showPasteLook) {
+            if let clip = library.copiedLook {
+                PasteLookSheet(library: library, clip: clip, paste: pasteLook)
+            }
+        }
+        .sheet(isPresented: $showSaveFormula) {
+            if let recipe = savedRecipe { SaveFormulaSheet(library: library, recipe: recipe) }
+        }
         .failureAlert(String(localized: "photo.photo", defaultValue: "Photo"), message: $failure)
+    }
+    private func pasteLook(_ parts: Set<EditRecipe.Part>) {
+        let id = selectedID
+        working = true
+        Task {
+            defer { working = false }
+            do {
+                if try await library.pasteLook(parts, to: [id]).skipped > 0 {
+                    failure = String(
+                        localized: "look.paste.skipped",
+                        defaultValue: "Photos edited with an older film model were skipped.")
+                }
+            } catch { failure = error.localizedDescription }
+        }
+    }
+    private func applyFormula(_ formula: Formula) {
+        let id = selectedID
+        guard !working else { return }
+        working = true
+        Task {
+            defer { working = false }
+            do {
+                if try await library.applyFormula(formula, to: [id]).skipped > 0 {
+                    failure = String(
+                        localized: "look.paste.skipped",
+                        defaultValue: "Photos edited with an older film model were skipped.")
+                }
+            } catch { failure = error.localizedDescription }
+        }
+    }
+    private func undoPaste() {
+        working = true
+        Task {
+            defer { working = false }
+            do { try await library.undoPaste() } catch { failure = error.localizedDescription }
+        }
     }
     @ToolbarContentBuilder private var sideBarActions: some ToolbarContent {
         ToolbarItem(placement: .bottomBar) {
@@ -359,7 +411,7 @@ private struct PhotoViewerControls: View {
                            systemImage: "camera.filters", action: develop)
                         .labelStyle(.iconOnly).font(.system(size: 20, weight: .medium))
                         .buttonStyle(.glassProminent).buttonBorderShape(.circle).controlSize(.large)
-                        .foregroundStyle(.white).frame(width: 56, height: 56)
+                        .foregroundStyle(.onAccent).frame(width: 56, height: 56)
                         .accessibilityIdentifier("photo.develop")
                     Button {
                         confirmRevert = true
@@ -437,7 +489,7 @@ private struct PhotoViewerControls: View {
                     horizontal: true, vertical: false
                 )
                 .padding(.horizontal, 24)
-        }.buttonStyle(.glassProminent).foregroundStyle(.white).accessibilityIdentifier("photo.develop")
+        }.buttonStyle(.glassProminent).foregroundStyle(.onAccent).accessibilityIdentifier("photo.develop")
     }
     private var exportButton: some View {
         Button(action: export) {

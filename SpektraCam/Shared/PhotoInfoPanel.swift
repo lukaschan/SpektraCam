@@ -10,6 +10,10 @@ struct PhotoInfoPanel: View {
     let histogram: PhotoHistogram
     let identifier: String
     var onInteraction: (() -> Void)? = nil
+    /// Copy and paste for the look named in the title. Formulae will join them here.
+    var look: LookActions? = nil
+    /// Saved formulae for this photo, below the look's own actions.
+    var formulae: FormulaStrip? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = false
     @State private var channels = false
@@ -85,6 +89,14 @@ struct PhotoInfoPanel: View {
                 ScrollView {
                     VStack(spacing: 8) {
                         Divider()
+                        if let look {
+                            LookActionRow(actions: look, identifier: identifier)
+                            Divider()
+                        }
+                        if let formulae {
+                            formulae
+                            Divider()
+                        }
                         LabeledContent(
                             String(localized: "photo_info.location", defaultValue: "Location"),
                             value: location ?? unavailable
@@ -125,7 +137,7 @@ struct PhotoInfoPanel: View {
                             detailsHeight = $0
                         }
                 }
-                .frame(height: min(detailsHeight, 280))
+                .frame(height: min(detailsHeight, 470))
                 .contentShape(.rect).onTapGesture(perform: toggleDetails)
                 .accessibilityIdentifier(identifier + ".details")
                 .transition(.opacity)

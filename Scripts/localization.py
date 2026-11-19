@@ -130,7 +130,7 @@ def verify_sources(data, extracted=None):
     for key, entry in data['InfoPlist']['strings'].items():
         if not entry.get('shouldTranslate', True):
             continue
-        if permissions.get(key) != english(entry):
+        if key.startswith('NS') and key.endswith('UsageDescription') and permissions.get(key) != english(entry):
             raise ValueError('Permission explanation changed: ' + key)
     if extracted:
         seen = {}
@@ -255,8 +255,10 @@ def export_sheet(data, path):
         if uses:
             filename, line = uses[0]
             context += f' Source: {filename}:{line} ({len(uses)} use' + ('s).' if len(uses) != 1 else ').')
-        else:
+        elif native_key.startswith('NS') and native_key.endswith('UsageDescription'):
             context += ' Source: project.xcproj / INFOPLIST_KEY_' + native_key + '.'
+        else:
+            context += ' Source: Configuration/SpektraCam-Info.plist (document/type description).'
         target = old.get(key, ('', '', ''))[1] or chinese(entry)
         rendered[key] = f'| `{key}` | {encode(english(entry))} | {encode(target)} | {encode(context)} <!-- source:{fingerprint(entry)} --> |'
         lines.append(rendered[key])
